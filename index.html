@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criador de Calendário</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+        
+        // Ícones Lucide (substitutos simples)
+        const Download = () => <span>⬇️</span>;
+        const Plus = () => <span>➕</span>;
+        const Trash2 = () => <span>🗑️</span>;
+        const CalendarDays = () => <span>📅</span>;
+        const Edit2 = () => <span>✏️</span>;
+        const Save = () => <span>💾</span>;
+        const Database = () => <span>💾</span>;
+        
+        const CalendarCreator = () => {
+          const [year, setYear] = useState(2026);
+          const [month, setMonth] = useState(0);
+          const [events, setEvents] = useState([]);
+          const [colorOptions, setColorOptions] = useState([]);
+          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '' });
+          const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
+          const [editingColor, setEditingColor] = useState(null);
+          const [editLabel, setEditLabel] = useState('');
+          const [editColorValue, setEditColorValue] = useState('');
+          const [deletingCategory, setDeletingCategory] = useState(null);
+          const [lastSaved, setLastSaved] = useState(null);
+          const calendarRef = useRef(null);
+
+          useEffect(() => {
+            try {
+              const savedEvents = JSON.parse(localStorage.getItem('calendar_events') || '[]');
+              const savedCategories = JSON.parse(localStorage.getItem('calendar_categories') || '[]');
+              
+              if (savedEvents.length > 0) setEvents(savedEvents);
+              if (savedCategories.length > 0) setColorOptions(savedCategories);
+              
+              const savedTime = localStorage.getItem('calendar_last_saved');
+              if (savedTime) setLastSaved(new Date(savedTime));
+            } catch (error) {
+              console.error('Erro ao carregar dados salvos:', error);
+            }
+          }, []);
+
+          useEffect(() => {
+            if (events.length > 0 || colorOptions.length > 0) {
+              try {
+                localStorage.setItem('calendar_events', JSON.stringify(events));
+                localStorage.setItem('calendar_categories', JSON.stringify(colorOptions));
+                localStorage.setItem('calendar_last_saved', new Date().toISOString());
+                setLastSaved(new Date());
+              } catch (error) {
+                console.error('Erro ao salvar:', error);
+              }
+            }
+          }, [events, colorOptions]);
+
+          const months = [
+            'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
+            'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
+          ];
+
+          const weekDays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+
+          const getDaysInMonth = (year, month) => {
+            return new Date(year, month + 1, 0).getDate();
+          };
+
+          const getFirstDayOfMonth = (year, month) => {
+            return new Date(year, month, 1).getDay();
+          };
+
+          const getTextColor = (bgColor) => {
+            const hex = bgColor.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness > 155 ? '#000000' : '#ffffff';
+          };
+
+          const addEvent = () => {
+            const dayNum = parseInt(newEvent.day);
+            const daysInCurrentMonth = getDaysInMonth(year, month);
+            
+            if (!newEvent.day || !newEvent.text || !newEvent.color) {
+              alert('Por favor, preencha todos os campos (dia, descrição e categoria)');
+              return;
+            }
+            
+            if (dayNum < 1 || dayNum > daysInCurrentMonth) {
+              alert(`O dia deve estar entre 1 e ${daysInCurrentMonth} para ${months[month]}`);
+              return;
+            }
+            
+            setEvents([...events, { 
+              ...newEvent, 
+              day: dayNum,
+              month: month,
+              year: year
+            }]);
+            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '' });
+          };
+
+          const removeEvent = (index) => {
+            setEvents(events.filter((_, i) => i !== index));
+          };
+
+          const addCategory = () => {
+            if (newCategory.label.trim()) {
+              const id = Date.now().toString();
+              setColorOptions([...colorOptions, { id, label: newCategory.label, color: newCategory.color }]);
+              setNewCategory({ label: '', color: '#3b82f6' });
+            }
+          };
+
+          const startEditCategory = (category) => {
+            setEditingColor(category.id);
+            setEditLabel(category.label);
+            setEditColorValue(category.color);
+          };
+
+          const saveEditCategory = () => {
+            setColorOptions(colorOptions.map(c => 
+              c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c
+            ));
+            setEditingColor(null);
+            setEditLabel('');
+            setEditColorValue('');
+          };
+
+          const cancelEdit = () => {
+            setEditingColor(null);
+            setEditLabel('');
+            setEditColorValue('');
+          };
+
+          const removeCategory = (id) => {
+            setColorOptions(prev => prev.filter(c => c.id !== id));
+            setEvents(prev => prev.filter(e => e.color !== id));
+            setDeletingCategory(null);
+            if (editingColor === id) {
+              setEditingColor(null);
+            }
+          };
+
+          const clearAllData = () => {
+            if (confirm('⚠️ Isso apagará TODOS os eventos e categorias salvos. Deseja continuar?')) {
+              localStorage.removeItem('calendar_events');
+              localStorage.removeItem('calendar_categories');
+              localStorage.removeItem('calendar_last_saved');
+              setEvents([]);
+              setColorOptions([]);
+              setLastSaved(null);
+              alert('✅ Todos os dados foram apagados!');
+            }
+          };
+
+          const exportData = () => {
+            const data = {
+              events: events,
+              categories: colorOptions,
+              exportDate: new Date().toISOString()
+            };
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `calendario-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+          };
+
+          const importData = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const data = JSON.parse(e.target.result);
+                if (data.events && data.categories) {
+                  setEvents(data.events);
+                  setColorOptions(data.categories);
+                  alert('✅ Dados importados com sucesso!');
+                } else {
+                  alert('❌ Arquivo inválido!');
+                }
+              } catch (error) {
+                alert('❌ Erro ao importar arquivo!');
+                console.error(error);
+              }
+            };
+            reader.readAsText(file);
+          };
+
+          const exportAsImage = async () => {
+            try {
+              if (!window.html2canvas) {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                document.head.appendChild(script);
+                await new Promise((resolve, reject) => {
+                  script.onload = resolve;
+                  script.onerror = reject;
+                });
+              }
+              
+              // Capturar o calendário em alta resolução
+              const canvas = await window.html2canvas(calendarRef.current, {
+                scale: 3,
+                backgroundColor: '#1e1e2e',
+                useCORS: true,
+                allowTaint: true
+              });
+              
+              // Criar canvas final em 1920x1080
+              const finalCanvas = document.createElement('canvas');
+              finalCanvas.width = 1920;
+              finalCanvas.height = 1080;
+              const ctx = finalCanvas.getContext('2d');
+              
+              // Preencher fundo
+              ctx.fillStyle = '#1e1e2e';
+              ctx.fillRect(0, 0, 1920, 1080);
+              
+              // Calcular escala para caber mantendo proporção
+              const scale = Math.min(1920 / canvas.width, 1080 / canvas.height);
+              const scaledWidth = canvas.width * scale;
+              const scaledHeight = canvas.height * scale;
+              const x = (1920 - scaledWidth) / 2;
+              const y = (1080 - scaledHeight) / 2;
+              
+              // Desenhar calendário centralizado
+              ctx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
+              
+              finalCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `calendario-${months[month]}-${year}-1920x1080.png`;
+                link.click();
+              });
+            } catch (error) {
+              console.error('Erro ao exportar:', error);
+              alert('Erro ao exportar imagem. Verifique o console para mais detalhes.');
+            }
+          };
+
+          const exportAsPDF = async () => {
+            try {
+              if (!window.html2canvas) {
+                const scriptCanvas = document.createElement('script');
+                scriptCanvas.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                document.head.appendChild(scriptCanvas);
+                await new Promise((resolve, reject) => {
+                  scriptCanvas.onload = resolve;
+                  scriptCanvas.onerror = reject;
+                });
+              }
+              
+              if (!window.jspdf) {
+                const scriptPDF = document.createElement('script');
+                scriptPDF.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                document.head.appendChild(scriptPDF);
+                await new Promise((resolve, reject) => {
+                  scriptPDF.onload = resolve;
+                  scriptPDF.onerror = reject;
+                });
+              }
+              
+              // Capturar o calendário em alta resolução
+              const canvas = await window.html2canvas(calendarRef.current, {
+                scale: 3,
+                backgroundColor: '#1e1e2e',
+                useCORS: true,
+                allowTaint: true
+              });
+              
+              // Criar canvas final em 1920x1080
+              const finalCanvas = document.createElement('canvas');
+              finalCanvas.width = 1920;
+              finalCanvas.height = 1080;
+              const ctx = finalCanvas.getContext('2d');
+              
+              // Preencher fundo
+              ctx.fillStyle = '#1e1e2e';
+              ctx.fillRect(0, 0, 1920, 1080);
+              
+              // Calcular escala para caber mantendo proporção
+              const scale = Math.min(1920 / canvas.width, 1080 / canvas.height);
+              const scaledWidth = canvas.width * scale;
+              const scaledHeight = canvas.height * scale;
+              const x = (1920 - scaledWidth) / 2;
+              const y = (1080 - scaledHeight) / 2;
+              
+              // Desenhar calendário centralizado
+              ctx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
+              
+              const imgData = finalCanvas.toDataURL('image/png');
+              
+              // PDF em formato landscape 1920x1080
+              const pdf = new window.jspdf.jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [1920, 1080]
+              });
+              
+              pdf.addImage(imgData, 'PNG', 0, 0, 1920, 1080);
+              pdf.save(`calendario-${months[month]}-${year}-1920x1080.pdf`);
+            } catch (error) {
+              console.error('Erro ao exportar:', error);
+              alert('Erro ao exportar PDF. Verifique o console para mais detalhes.');
+            }
+          };
+
+          const getEventsForDay = (day) => {
+            return events.filter(e => e.day === day && e.month === month && e.year === year);
+          };
+
+          const renderCalendar = () => {
+            const daysInMonth = getDaysInMonth(year, month);
+            const firstDay = getFirstDayOfMonth(year, month);
+            const days = [];
+
+            for (let i = 0; i < firstDay; i++) {
+              days.push(<div key={`empty-${i}`} className="aspect-square"></div>);
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+              const dayEvents = getEventsForDay(day);
+              days.push(
+                <div key={day} className="aspect-square bg-white rounded-lg p-2 relative">
+                  <div className="font-bold text-sm mb-1">{day}</div>
+                  <div className="space-y-1 overflow-hidden">
+                    {dayEvents.map((event, idx) => {
+                      const color = colorOptions.find(c => c.id === event.color);
+                      if (!color) return null;
+                      const textColor = getTextColor(color.color);
+                      return (
+                        <div
+                          key={idx}
+                          style={{ backgroundColor: color.color, color: textColor }}
+                          className="text-xs px-2 py-1 rounded-full text-center leading-tight break-words"
+                        >
+                          {event.text}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+
+            return days;
+          };
+
+          const getLegendItems = () => {
+            const currentMonthEvents = events.filter(e => e.month === month && e.year === year);
+            const uniqueColors = [...new Set(currentMonthEvents.map(e => e.color))];
+            return colorOptions.filter(c => uniqueColors.includes(c.id));
+          };
+
+          return (
+            <div className="min-h-screen bg-white p-8">
+              <div className="max-w-7xl mx-auto space-y-6">
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h1 className="text-2xl font-bold flex items-center gap-2">
+                        <CalendarDays />
+                        Criador de Calendário
+                      </h1>
+                      {lastSaved && (
+                        <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                          <Database />
+                          Último salvamento: {lastSaved.toLocaleString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <label className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm cursor-pointer hover:bg-blue-700 flex items-center gap-2">
+                        <Database />
+                        Importar Dados
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={importData}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        onClick={exportData}
+                        className="bg-green-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-green-700 flex items-center gap-2"
+                      >
+                        <Download />
+                        Exportar Dados
+                      </button>
+                      <button
+                        onClick={clearAllData}
+                        className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-red-700 flex items-center gap-2"
+                      >
+                        <Trash2 />
+                        Limpar Tudo
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Ano</label>
+                      <input
+                        type="number"
+                        value={year}
+                        onChange={(e) => setYear(parseInt(e.target.value) || 2026)}
+                        className="w-full border rounded-lg px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Mês</label>
+                      <select
+                        value={month}
+                        onChange={(e) => setMonth(parseInt(e.target.value))}
+                        className="w-full border rounded-lg px-3 py-2"
+                      >
+                        {months.map((m, i) => (
+                          <option key={i} value={i}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 mb-4">
+                    <h3 className="font-bold mb-3">Gerenciar Categorias</h3>
+                    
+                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                      <p className="text-sm font-medium mb-3">➕ Adicionar Nova Categoria</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          placeholder="Nome da categoria"
+                          value={newCategory.label}
+                          onChange={(e) => setNewCategory({...newCategory, label: e.target.value})}
+                          className="border-2 rounded-lg px-3 py-2"
+                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={newCategory.color}
+                            onChange={(e) => setNewCategory({...newCategory, color: e.target.value})}
+                            className="w-12 h-10 rounded cursor-pointer border-2"
+                          />
+                          <input
+                            type="text"
+                            value={newCategory.color}
+                            onChange={(e) => setNewCategory({...newCategory, color: e.target.value})}
+                            className="flex-1 border-2 rounded-lg px-3 py-2 font-mono text-sm"
+                            placeholder="#3b82f6"
+                          />
+                        </div>
+                        <button
+                          onClick={addCategory}
+                          className="bg-blue-600 text-white rounded-lg px-4 py-2 flex items-center justify-center gap-2 hover:bg-blue-700 font-medium"
+                        >
+                          <Plus />
+                          Adicionar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {colorOptions.map((color) => {
+                        const eventsCount = events.filter(e => e.color === color.id).length;
+                        
+                        return (
+                          <div key={color.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border">
+                            {deletingCategory === color.id ? (
+                              <>
+                                <div className="flex-1 text-sm">
+                                  <p className="font-bold text-red-600 mb-1">⚠️ Confirmar exclusão?</p>
+                                  <p className="text-gray-600">
+                                    {eventsCount > 0 
+                                      ? `Isso removerá ${eventsCount} evento(s) associado(s)`
+                                      : 'Esta categoria será removida'}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => removeCategory(color.id)}
+                                  className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 font-medium"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  onClick={() => setDeletingCategory(null)}
+                                  className="bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500"
+                                >
+                                  Cancelar
+                                </button>
+                              </>
+                            ) : editingColor === color.id ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={editLabel}
+                                  onChange={(e) => setEditLabel(e.target.value)}
+                                  className="flex-1 border-2 rounded px-3 py-2 text-sm"
+                                  placeholder="Nome da categoria"
+                                />
+                                <input
+                                  type="color"
+                                  value={editColorValue}
+                                  onChange={(e) => setEditColorValue(e.target.value)}
+                                  className="w-12 h-10 rounded cursor-pointer border-2"
+                                />
+                                <button
+                                  onClick={saveEditCategory}
+                                  className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 flex items-center gap-1"
+                                >
+                                  <Save />
+                                  Salvar
+                                </button>
+                                <button
+                                  onClick={cancelEdit}
+                                  className="bg-gray-400 text-white px-3 py-2 rounded text-sm hover:bg-gray-500"
+                                >
+                                  Cancelar
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <div
+                                  style={{ backgroundColor: color.color, color: getTextColor(color.color) }}
+                                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm"
+                                >
+                                  {color.label}
+                                  {eventsCount > 0 && (
+                                    <span className="ml-2 text-xs opacity-75">({eventsCount} eventos)</span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => startEditCategory(color)}
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1 px-3 py-2 hover:bg-blue-50 rounded"
+                                >
+                                  <Edit2 />
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setDeletingCategory(color.id);
+                                  }}
+                                  className="text-red-600 hover:text-red-800 px-2 hover:bg-red-50 rounded"
+                                  title="Excluir categoria"
+                                >
+                                  <Trash2 />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h3 className="font-bold mb-3">Adicionar Evento</h3>
+                    {colorOptions.length === 0 && (
+                      <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                        ⚠️ Você precisa criar pelo menos uma categoria antes de adicionar eventos
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <input
+                        type="number"
+                        placeholder="Dia"
+                        min="1"
+                        max="31"
+                        value={newEvent.day}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 31)) {
+                            setNewEvent({...newEvent, day: value});
+                          }
+                        }}
+                        className="border rounded-lg px-3 py-2"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Descrição"
+                        value={newEvent.text}
+                        onChange={(e) => setNewEvent({...newEvent, text: e.target.value})}
+                        className="border rounded-lg px-3 py-2"
+                      />
+                      <select
+                        value={newEvent.color}
+                        onChange={(e) => setNewEvent({...newEvent, color: e.target.value})}
+                        className="border rounded-lg px-3 py-2"
+                        disabled={colorOptions.length === 0}
+                      >
+                        <option value="">Selecione uma categoria</option>
+                        {colorOptions.map(c => (
+                          <option key={c.id} value={c.id}>{c.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={addEvent}
+                        disabled={colorOptions.length === 0}
+                        className={`${colorOptions.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg px-4 py-2 flex items-center justify-center gap-2`}
+                      >
+                        <Plus />
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h3 className="font-bold mb-3">Eventos Cadastrados - {months[month]} {year} ({events.filter(e => e.month === month && e.year === year).length})</h3>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {events.filter(e => e.month === month && e.year === year).map((event, idx) => {
+                        const color = colorOptions.find(c => c.id === event.color);
+                        if (!color) return null;
+                        const textColor = getTextColor(color.color);
+                        const originalIndex = events.findIndex(e => 
+                          e.day === event.day && 
+                          e.text === event.text && 
+                          e.color === event.color &&
+                          e.month === event.month &&
+                          e.year === event.year
+                        );
+                        return (
+                          <div key={idx} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-sm">Dia {event.day}</span>
+                              <span 
+                                style={{ backgroundColor: color.color, color: textColor }}
+                                className="px-3 py-1 rounded-full text-xs"
+                              >
+                                {event.text}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => removeEvent(originalIndex)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={exportAsImage}
+                      className="flex-1 bg-green-600 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 hover:bg-green-700"
+                    >
+                      <Download />
+                      Exportar como Imagem
+                    </button>
+                    <button
+                      onClick={exportAsPDF}
+                      className="flex-1 bg-purple-600 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 hover:bg-purple-700"
+                    >
+                      <Download />
+                      Exportar como PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div ref={calendarRef} className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-8 shadow-xl">
+                  <div className="flex justify-between items-center mb-6 text-white">
+                    <h2 className="text-3xl font-bold">{year}</h2>
+                    <h2 className="text-4xl font-bold">{months[month]}</h2>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-3 mb-3">
+                    {weekDays.map(day => (
+                      <div key={day} className="bg-black text-white rounded-lg py-2 text-center font-bold text-sm">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-3 mb-6">
+                    {renderCalendar()}
+                  </div>
+
+                  {getLegendItems().length > 0 && (
+                    <div className="bg-white rounded-lg p-4">
+                      <h3 className="font-bold mb-3">Legenda</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {getLegendItems().map(item => {
+                          const textColor = getTextColor(item.color);
+                          return (
+                            <div
+                              key={item.id}
+                              style={{ backgroundColor: item.color, color: textColor }}
+                              className="rounded-lg px-4 py-2 text-center font-medium text-sm"
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CalendarCreator />);
+    </script>
+</body>
+</html>
