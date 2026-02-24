@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Calendário</title>
+    <title>Criador de Calendário de Conteúdo</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body className="bg-gray-100">
     <div id="root"></div>
     
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
         
-        // Ícones Lucide (substitutos simples)
+        // Ícones
         const Download = () => <span>⬇️</span>;
         const Plus = () => <span>➕</span>;
         const Trash2 = () => <span>🗑️</span>;
@@ -36,50 +36,127 @@
           const [editColorValue, setEditColorValue] = useState('');
           const [deletingCategory, setDeletingCategory] = useState(null);
           const [lastSaved, setLastSaved] = useState(null);
-          const calendarRef = useRef(null);
+          const [eventStatuses, setEventStatuses] = useState({});
+          const [companies, setCompanies] = useState([]);
+          const [selectedCompany, setSelectedCompany] = useState(null);
+          const [newCompanyName, setNewCompanyName] = useState('');
+          const [editingCompany, setEditingCompany] = useState(null);
+          const [editCompanyName, setEditCompanyName] = useState('');
 
           useEffect(() => {
             try {
-              const savedEvents = JSON.parse(localStorage.getItem('calendar_events') || '[]');
-              const savedCategories = JSON.parse(localStorage.getItem('calendar_categories') || '[]');
-              
-              if (savedEvents.length > 0) setEvents(savedEvents);
-              if (savedCategories.length > 0) setColorOptions(savedCategories);
-              
-              const savedTime = localStorage.getItem('calendar_last_saved');
-              if (savedTime) setLastSaved(new Date(savedTime));
+              const savedCompanies = JSON.parse(localStorage.getItem('calendar_companies') || '[]');
+              if (savedCompanies.length > 0) {
+                setCompanies(savedCompanies);
+                setSelectedCompany(savedCompanies[0].id);
+              }
             } catch (error) {
-              console.error('Erro ao carregar dados salvos:', error);
+              console.error('Erro ao carregar empresas:', error);
             }
           }, []);
 
           useEffect(() => {
-            if (events.length > 0 || colorOptions.length > 0) {
-              try {
-                localStorage.setItem('calendar_events', JSON.stringify(events));
-                localStorage.setItem('calendar_categories', JSON.stringify(colorOptions));
-                localStorage.setItem('calendar_last_saved', new Date().toISOString());
-                setLastSaved(new Date());
-              } catch (error) {
-                console.error('Erro ao salvar:', error);
-              }
+            if (!selectedCompany) return;
+            try {
+              const companyData = JSON.parse(localStorage.getItem(`company_${selectedCompany}`) || '{}');
+              setEvents(companyData.events || []);
+              setColorOptions(companyData.categories || []);
+              setEventStatuses(companyData.statuses || {});
+              if (companyData.lastSaved) setLastSaved(new Date(companyData.lastSaved));
+            } catch (error) {
+              console.error('Erro ao carregar dados da empresa:', error);
             }
-          }, [events, colorOptions]);
+          }, [selectedCompany]);
+
+          useEffect(() => {
+            if (!selectedCompany || (events.length === 0 && colorOptions.length === 0 && Object.keys(eventStatuses).length === 0)) return;
+            try {
+              const companyData = {
+                events: events,
+                categories: colorOptions,
+                statuses: eventStatuses,
+                lastSaved: new Date().toISOString()
+              };
+              localStorage.setItem(`company_${selectedCompany}`, JSON.stringify(companyData));
+              setLastSaved(new Date());
+            } catch (error) {
+              console.error('Erro ao salvar:', error);
+            }
+          }, [events, colorOptions, eventStatuses, selectedCompany]);
 
           const months = [
             'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
             'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
           ];
 
-          const weekDays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+          const fullWeekDays = ['DOMINGO', 'SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO'];
 
-          const getDaysInMonth = (year, month) => {
-            return new Date(year, month + 1, 0).getDate();
+          const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+          const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+
+          const toggleEventStatus = (eventIndex, status) => {
+            const eventKey = `event_${eventIndex}`;
+            setEventStatuses(prev => {
+              const current = prev[eventKey];
+              if (current === status) {
+                const newStatuses = {...prev};
+                delete newStatuses[eventKey];
+                return newStatuses;
+              } else {
+                return {...prev, [eventKey]: status};
+              }
+            });
           };
 
-          const getFirstDayOfMonth = (year, month) => {
-            return new Date(year, month, 1).getDay();
+          const getEventStatus = (eventIndex) => eventStatuses[`event_${eventIndex}`] || null;
+
+          const getStatusColor = (originalColor, status) => {
+            if (status === 'done') return '#22c55e'; // Verde
+            if (status === 'late') return '#ef4444'; // Vermelho
+            return originalColor;
           };
+
+          const addCompany = () => {
+            if (newCompanyName.trim()) {
+              const id = Date.now().toString();
+              const newCompany = { id, name: newCompanyName.trim() };
+              const updatedCompanies = [...companies, newCompany];
+              setCompanies(updatedCompanies);
+              localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+              setSelectedCompany(id);
+              setNewCompanyName('');
+              localStorage.setItem(`company_${id}`, JSON.stringify({ events: [], categories: [], statuses: {}, lastSaved: new Date().toISOString() }));
+            }
+          };
+
+          const removeCompany = (companyId) => {
+            if (confirm('⚠️ ATENÇÃO: Isso apagará a empresa e TODOS os eventos e categorias dela. Deseja realmente excluir esta empresa?')) {
+              const updatedCompanies = companies.filter(c => c.id !== companyId);
+              setCompanies(updatedCompanies);
+              localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+              localStorage.removeItem(`company_${companyId}`);
+              
+              if (selectedCompany === companyId) {
+                if (updatedCompanies.length > 0) {
+                  setSelectedCompany(updatedCompanies[0].id);
+                } else {
+                  setSelectedCompany(null);
+                  setEvents([]); 
+                  setColorOptions([]); 
+                  setEventStatuses({});
+                }
+              }
+            }
+          };
+
+          const startEditCompany = (company) => { setEditingCompany(company.id); setEditCompanyName(company.name); };
+          const saveEditCompany = () => {
+            const updatedCompanies = companies.map(c => c.id === editingCompany ? { ...c, name: editCompanyName.trim() } : c );
+            setCompanies(updatedCompanies);
+            localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+            setEditingCompany(null); setEditCompanyName('');
+          };
+          const cancelEditCompany = () => { setEditingCompany(null); setEditCompanyName(''); };
 
           const getTextColor = (bgColor) => {
             const hex = bgColor.replace('#', '');
@@ -93,631 +170,551 @@
           const addEvent = () => {
             const dayNum = parseInt(newEvent.day);
             const daysInCurrentMonth = getDaysInMonth(year, month);
+            if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha todos os campos!');
+            if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido para ${months[month]}`);
             
-            if (!newEvent.day || !newEvent.text || !newEvent.color) {
-              alert('Por favor, preencha todos os campos (dia, descrição e categoria)');
-              return;
-            }
-            
-            if (dayNum < 1 || dayNum > daysInCurrentMonth) {
-              alert(`O dia deve estar entre 1 e ${daysInCurrentMonth} para ${months[month]}`);
-              return;
-            }
-            
-            setEvents([...events, { 
-              ...newEvent, 
-              day: dayNum,
-              month: month,
-              year: year
-            }]);
+            setEvents([...events, { ...newEvent, day: dayNum, month: month, year: year }]);
             setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '' });
           };
 
-          const removeEvent = (index) => {
-            setEvents(events.filter((_, i) => i !== index));
-          };
+          const removeEvent = (index) => setEvents(events.filter((_, i) => i !== index));
 
           const addCategory = () => {
             if (newCategory.label.trim()) {
-              const id = Date.now().toString();
-              setColorOptions([...colorOptions, { id, label: newCategory.label, color: newCategory.color }]);
+              setColorOptions([...colorOptions, { id: Date.now().toString(), label: newCategory.label, color: newCategory.color }]);
               setNewCategory({ label: '', color: '#3b82f6' });
             }
           };
 
-          const startEditCategory = (category) => {
-            setEditingColor(category.id);
-            setEditLabel(category.label);
-            setEditColorValue(category.color);
-          };
-
+          const startEditCategory = (category) => { setEditingColor(category.id); setEditLabel(category.label); setEditColorValue(category.color); };
           const saveEditCategory = () => {
-            setColorOptions(colorOptions.map(c => 
-              c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c
-            ));
-            setEditingColor(null);
-            setEditLabel('');
-            setEditColorValue('');
+            setColorOptions(colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c ));
+            setEditingColor(null); setEditLabel(''); setEditColorValue('');
           };
-
-          const cancelEdit = () => {
-            setEditingColor(null);
-            setEditLabel('');
-            setEditColorValue('');
-          };
+          const cancelEdit = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
           const removeCategory = (id) => {
             setColorOptions(prev => prev.filter(c => c.id !== id));
             setEvents(prev => prev.filter(e => e.color !== id));
             setDeletingCategory(null);
-            if (editingColor === id) {
-              setEditingColor(null);
-            }
+            if (editingColor === id) setEditingColor(null);
           };
 
           const clearAllData = () => {
-            if (confirm('⚠️ Isso apagará TODOS os eventos e categorias salvos. Deseja continuar?')) {
-              localStorage.removeItem('calendar_events');
-              localStorage.removeItem('calendar_categories');
-              localStorage.removeItem('calendar_last_saved');
-              setEvents([]);
-              setColorOptions([]);
-              setLastSaved(null);
-              alert('✅ Todos os dados foram apagados!');
+            if (confirm('⚠️ Apagar TODOS os eventos e categorias desta empresa atual? (A empresa não será excluída, apenas os dados)')) {
+              setEvents([]); setColorOptions([]); setEventStatuses({});
+              
+              const companyData = {
+                events: [],
+                categories: [],
+                statuses: {},
+                lastSaved: new Date().toISOString()
+              };
+              localStorage.setItem(`company_${selectedCompany}`, JSON.stringify(companyData));
             }
           };
 
           const exportData = () => {
-            const data = {
-              events: events,
-              categories: colorOptions,
-              exportDate: new Date().toISOString()
-            };
-            const dataStr = JSON.stringify(data, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
+            const dataStr = JSON.stringify({ events, categories: colorOptions, exportDate: new Date().toISOString() }, null, 2);
             const link = document.createElement('a');
-            link.href = url;
-            link.download = `calendario-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.href = URL.createObjectURL(new Blob([dataStr], { type: 'application/json' }));
+            link.download = `backup-dados-${new Date().toISOString().split('T')[0]}.json`;
             link.click();
           };
 
-          const importData = (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
+          const getEventsForDay = (day) => events.filter(e => e.day === day && e.month === month && e.year === year);
+          const getLegendItems = () => {
+            const currentEvents = events.filter(e => e.month === month && e.year === year);
+            const uniqueColors = [...new Set(currentEvents.map(e => e.color))];
+            return colorOptions.filter(c => uniqueColors.includes(c.id));
+          };
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              try {
-                const data = JSON.parse(e.target.result);
-                if (data.events && data.categories) {
-                  setEvents(data.events);
-                  setColorOptions(data.categories);
-                  alert('✅ Dados importados com sucesso!');
-                } else {
-                  alert('❌ Arquivo inválido!');
-                }
-              } catch (error) {
-                alert('❌ Erro ao importar arquivo!');
-                console.error(error);
+          // LÓGICA DE AGRUPAMENTO POR SEMANAS
+          const getWeeks = () => {
+            const weeks = [];
+            let currentWeek = new Array(7).fill(null);
+            const daysInMonth = getDaysInMonth(year, month);
+            let currentDayOfWeek = getFirstDayOfMonth(year, month);
+
+            for (let day = 1; day <= daysInMonth; day++) {
+              currentWeek[currentDayOfWeek] = day;
+              currentDayOfWeek++;
+              if (currentDayOfWeek === 7) {
+                weeks.push(currentWeek);
+                currentWeek = new Array(7).fill(null);
+                currentDayOfWeek = 0;
               }
-            };
-            reader.readAsText(file);
+            }
+            if (currentDayOfWeek > 0) weeks.push(currentWeek);
+            return weeks;
+          };
+
+          const drawCalendarToCanvas = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const weeks = getWeeks();
+            const canvasWidth = 1920;
+            const padding = 60;
+            const contentWidth = canvasWidth - (padding * 2);
+            const colWidth = contentWidth / 7;
+            const eventHeight = 36;
+            const eventSpacing = 8;
+            
+            // 1. CALCULAR ALTURA DINÂMICA
+            let totalHeight = padding + 60; // Titulo
+            totalHeight += 80; // Cabeçalho dos dias da semana
+            
+            weeks.forEach(week => {
+              totalHeight += 40; // Barra preta de números
+              let maxEventsInWeek = 0;
+              week.forEach(day => {
+                if (day) maxEventsInWeek = Math.max(maxEventsInWeek, getEventsForDay(day).length);
+              });
+              totalHeight += (maxEventsInWeek * (eventHeight + eventSpacing)) + 40; 
+            });
+            
+            const legendItems = getLegendItems();
+            totalHeight += legendItems.length > 0 ? 120 : 40;
+            
+            // Configurar Canvas com altura dinâmica
+            const finalHeight = Math.max(1080, totalHeight);
+            canvas.width = canvasWidth;
+            canvas.height = finalHeight;
+            
+            // Fundo Branco
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvasWidth, finalHeight);
+            
+            let currentY = padding;
+            
+            // CABEÇALHO PRINCIPAL
+            const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${months[month]} ${year} ${companyName ? `| ${companyName.toUpperCase()}` : ''}`, padding, currentY + 40);
+            
+            currentY += 100;
+
+            // DIAS DA SEMANA
+            ctx.textAlign = 'center';
+            fullWeekDays.forEach((day, i) => {
+              const x = padding + (i * colWidth);
+              const pillMargin = 10;
+              
+              ctx.fillStyle = '#000000';
+              ctx.beginPath();
+              ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25);
+              ctx.fill();
+              
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 20px Arial';
+              ctx.fillText(day, x + (colWidth / 2), currentY + 33);
+            });
+            
+            currentY += 80;
+
+            // DESENHAR SEMANAS
+            weeks.forEach(week => {
+              ctx.fillStyle = '#000000';
+              ctx.beginPath();
+              ctx.roundRect(padding, currentY, contentWidth, 36, 18);
+              ctx.fill();
+              
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 22px Arial';
+              ctx.textAlign = 'left';
+              
+              week.forEach((day, i) => {
+                if (day) {
+                  const x = padding + (i * colWidth);
+                  ctx.fillText(day.toString(), x + 25, currentY + 25);
+                }
+              });
+              
+              currentY += 50;
+              let maxWeekHeight = 0;
+              
+              week.forEach((day, i) => {
+                if (!day) return;
+                
+                const dayEvents = getEventsForDay(day);
+                let eventY = currentY;
+                const x = padding + (i * colWidth);
+                const eventMargin = 10;
+                
+                dayEvents.forEach(event => {
+                  const color = colorOptions.find(c => c.id === event.color);
+                  if (!color) return;
+                  
+                  const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                  const status = getEventStatus(originalIndex);
+                  const finalColor = getStatusColor(color.color, status);
+                  const textColor = getTextColor(finalColor);
+                  
+                  const eventX = x + eventMargin;
+                  const eventW = colWidth - (eventMargin * 2);
+                  
+                  ctx.fillStyle = finalColor;
+                  ctx.beginPath();
+                  ctx.roundRect(eventX, eventY, eventW, eventHeight, eventHeight / 2);
+                  ctx.fill();
+                  
+                  ctx.fillStyle = textColor;
+                  ctx.font = 'bold 16px Arial';
+                  ctx.textAlign = 'center';
+                  
+                  let displayText = event.text;
+                  if (status === 'done') displayText += ' ✓';
+                  if (status === 'late') displayText += ' ⚠';
+                  
+                  const maxTextWidth = eventW - 30;
+                  let finalText = displayText;
+                  while (ctx.measureText(finalText).width > maxTextWidth && finalText.length > 3) {
+                    finalText = finalText.slice(0, -4) + '...';
+                  }
+                  
+                  ctx.fillText(finalText, eventX + (eventW / 2), eventY + 24);
+                  
+                  eventY += eventHeight + eventSpacing;
+                });
+                
+                maxWeekHeight = Math.max(maxWeekHeight, eventY - currentY);
+              });
+              
+              currentY += maxWeekHeight + 30; 
+            });
+
+            // LEGENDA NO RODAPÉ
+            if (legendItems.length > 0) {
+              currentY += 20;
+              ctx.fillStyle = '#000000';
+              ctx.font = 'bold 24px Arial';
+              ctx.textAlign = 'left';
+              ctx.fillText('LEGENDA:', padding, currentY + 30);
+              
+              const itemsPerRow = 5;
+              const itemWidth = (contentWidth - 150) / itemsPerRow;
+              
+              legendItems.forEach((item, idx) => {
+                const row = Math.floor(idx / itemsPerRow);
+                const col = idx % itemsPerRow;
+                const itemX = padding + 140 + (col * (itemWidth + 10));
+                const itemY = currentY + (row * 45);
+                
+                ctx.fillStyle = item.color;
+                ctx.beginPath();
+                ctx.roundRect(itemX, itemY, itemWidth, 36, 18);
+                ctx.fill();
+                
+                ctx.fillStyle = getTextColor(item.color);
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                
+                let label = item.label;
+                while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
+                
+                ctx.fillText(label, itemX + (itemWidth / 2), itemY + 24);
+              });
+            }
+            
+            return { canvas, finalHeight };
           };
 
           const exportAsImage = async () => {
             try {
-              if (!window.html2canvas) {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-                document.head.appendChild(script);
-                await new Promise((resolve, reject) => {
-                  script.onload = resolve;
-                  script.onerror = reject;
-                });
-              }
-              
-              // Capturar o calendário em alta resolução
-              const canvas = await window.html2canvas(calendarRef.current, {
-                scale: 3,
-                backgroundColor: '#1e1e2e',
-                useCORS: true,
-                allowTaint: true
-              });
-              
-              // Criar canvas final em 1920x1080
-              const finalCanvas = document.createElement('canvas');
-              finalCanvas.width = 1920;
-              finalCanvas.height = 1080;
-              const ctx = finalCanvas.getContext('2d');
-              
-              // Preencher fundo
-              ctx.fillStyle = '#1e1e2e';
-              ctx.fillRect(0, 0, 1920, 1080);
-              
-              // Calcular escala para caber mantendo proporção
-              const scale = Math.min(1920 / canvas.width, 1080 / canvas.height);
-              const scaledWidth = canvas.width * scale;
-              const scaledHeight = canvas.height * scale;
-              const x = (1920 - scaledWidth) / 2;
-              const y = (1080 - scaledHeight) / 2;
-              
-              // Desenhar calendário centralizado
-              ctx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
-              
-              finalCanvas.toBlob((blob) => {
+              const { canvas } = drawCalendarToCanvas();
+              canvas.toBlob((blob) => {
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `calendario-${months[month]}-${year}-1920x1080.png`;
+                const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
+                link.download = `calendario-${companyName}-${months[month]}-${year}.png`;
                 link.click();
-              });
+                URL.revokeObjectURL(url);
+              }, 'image/png', 1.0);
             } catch (error) {
-              console.error('Erro ao exportar:', error);
-              alert('Erro ao exportar imagem. Verifique o console para mais detalhes.');
+              alert('Erro ao exportar imagem.');
             }
           };
 
           const exportAsPDF = async () => {
             try {
-              if (!window.html2canvas) {
-                const scriptCanvas = document.createElement('script');
-                scriptCanvas.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-                document.head.appendChild(scriptCanvas);
-                await new Promise((resolve, reject) => {
-                  scriptCanvas.onload = resolve;
-                  scriptCanvas.onerror = reject;
-                });
-              }
-              
               if (!window.jspdf) {
                 const scriptPDF = document.createElement('script');
                 scriptPDF.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
                 document.head.appendChild(scriptPDF);
-                await new Promise((resolve, reject) => {
-                  scriptPDF.onload = resolve;
-                  scriptPDF.onerror = reject;
-                });
+                await new Promise((resolve) => scriptPDF.onload = resolve);
               }
+              const { canvas, finalHeight } = drawCalendarToCanvas();
+              const imgData = canvas.toDataURL('image/png', 1.0);
               
-              // Capturar o calendário em alta resolução
-              const canvas = await window.html2canvas(calendarRef.current, {
-                scale: 3,
-                backgroundColor: '#1e1e2e',
-                useCORS: true,
-                allowTaint: true
-              });
-              
-              // Criar canvas final em 1920x1080
-              const finalCanvas = document.createElement('canvas');
-              finalCanvas.width = 1920;
-              finalCanvas.height = 1080;
-              const ctx = finalCanvas.getContext('2d');
-              
-              // Preencher fundo
-              ctx.fillStyle = '#1e1e2e';
-              ctx.fillRect(0, 0, 1920, 1080);
-              
-              // Calcular escala para caber mantendo proporção
-              const scale = Math.min(1920 / canvas.width, 1080 / canvas.height);
-              const scaledWidth = canvas.width * scale;
-              const scaledHeight = canvas.height * scale;
-              const x = (1920 - scaledWidth) / 2;
-              const y = (1080 - scaledHeight) / 2;
-              
-              // Desenhar calendário centralizado
-              ctx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
-              
-              const imgData = finalCanvas.toDataURL('image/png');
-              
-              // PDF em formato landscape 1920x1080
               const pdf = new window.jspdf.jsPDF({
-                orientation: 'landscape',
+                orientation: finalHeight > 1920 ? 'portrait' : 'landscape',
                 unit: 'px',
-                format: [1920, 1080]
+                format: [1920, finalHeight],
+                compress: true
               });
               
-              pdf.addImage(imgData, 'PNG', 0, 0, 1920, 1080);
-              pdf.save(`calendario-${months[month]}-${year}-1920x1080.pdf`);
+              pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight, '', 'FAST');
+              const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
+              pdf.save(`calendario-${companyName}-${months[month]}-${year}.pdf`);
             } catch (error) {
-              console.error('Erro ao exportar:', error);
-              alert('Erro ao exportar PDF. Verifique o console para mais detalhes.');
+              alert('Erro ao exportar PDF.');
             }
           };
 
-          const getEventsForDay = (day) => {
-            return events.filter(e => e.day === day && e.month === month && e.year === year);
-          };
-
-          const renderCalendar = () => {
-            const daysInMonth = getDaysInMonth(year, month);
-            const firstDay = getFirstDayOfMonth(year, month);
-            const days = [];
-
-            for (let i = 0; i < firstDay; i++) {
-              days.push(<div key={`empty-${i}`} className="aspect-square"></div>);
-            }
-
-            for (let day = 1; day <= daysInMonth; day++) {
-              const dayEvents = getEventsForDay(day);
-              days.push(
-                <div key={day} className="aspect-square bg-white rounded-lg p-2 relative">
-                  <div className="font-bold text-sm mb-1">{day}</div>
-                  <div className="space-y-1 overflow-hidden">
-                    {dayEvents.map((event, idx) => {
-                      const color = colorOptions.find(c => c.id === event.color);
-                      if (!color) return null;
-                      const textColor = getTextColor(color.color);
-                      return (
-                        <div
-                          key={idx}
-                          style={{ backgroundColor: color.color, color: textColor }}
-                          className="text-xs px-2 py-1 rounded-full text-center leading-tight break-words"
-                        >
-                          {event.text}
-                        </div>
-                      );
-                    })}
-                  </div>
+          // RENDERIZAÇÃO DA TELA (CALENDÁRIO VIRTUAL)
+          const renderCalendarUI = () => {
+            const weeks = getWeeks();
+            return (
+              <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
+                <div className="mb-8 border-b pb-4">
+                  <h2 className="text-4xl font-black text-gray-900 uppercase tracking-tight">
+                    {months[month]} {year} <span className="text-gray-400 font-medium">|</span> {companies.find(c => c.id === selectedCompany)?.name}
+                  </h2>
                 </div>
-              );
-            }
 
-            return days;
-          };
+                {/* Cabeçalho dos Dias */}
+                <div className="grid grid-cols-7 gap-4 mb-6">
+                  {fullWeekDays.map(day => (
+                    <div key={day} className="bg-black text-white text-center py-3 rounded-full font-bold text-sm tracking-wide shadow-md">
+                      {day}
+                    </div>
+                  ))}
+                </div>
 
-          const getLegendItems = () => {
-            const currentMonthEvents = events.filter(e => e.month === month && e.year === year);
-            const uniqueColors = [...new Set(currentMonthEvents.map(e => e.color))];
-            return colorOptions.filter(c => uniqueColors.includes(c.id));
+                {/* Linhas das Semanas */}
+                <div className="space-y-8">
+                  {weeks.map((week, wIdx) => (
+                    <div key={wIdx} className="flex flex-col">
+                      {/* Barra de Números */}
+                      <div className="bg-black rounded-full h-10 flex items-center px-4 mb-4 shadow-md">
+                        {week.map((day, dIdx) => (
+                          <div key={dIdx} className="flex-1 text-white font-bold text-lg px-2">
+                            {day || ''}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Colunas de Eventos */}
+                      <div className="grid grid-cols-7 gap-4">
+                        {week.map((day, dIdx) => (
+                          <div key={dIdx} className="flex flex-col gap-2 min-h-[60px]">
+                            {day && getEventsForDay(day).map((event, eIdx) => {
+                              const color = colorOptions.find(c => c.id === event.color);
+                              if (!color) return null;
+                              
+                              const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                              const status = getEventStatus(originalIndex);
+                              const finalColor = getStatusColor(color.color, status);
+                              const textColor = getTextColor(finalColor);
+                              
+                              return (
+                                <div
+                                  key={eIdx}
+                                  style={{ backgroundColor: finalColor, color: textColor }}
+                                  className="rounded-full px-4 py-2 text-xs font-bold text-center truncate shadow-sm transition-transform hover:scale-105 cursor-default"
+                                  title={event.text}
+                                >
+                                  {event.text}
+                                  {status === 'done' && <span className="ml-1">✓</span>}
+                                  {status === 'late' && <span className="ml-1">⚠</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Legenda Visual */}
+                {getLegendItems().length > 0 && (
+                  <div className="mt-12 pt-6 border-t">
+                    <h3 className="font-bold text-xl mb-4 text-gray-800">LEGENDA</h3>
+                    <div className="flex flex-wrap gap-3">
+                      {getLegendItems().map(item => (
+                        <div key={item.id} style={{ backgroundColor: item.color, color: getTextColor(item.color) }} className="rounded-full px-6 py-2 text-sm font-bold shadow-sm">
+                          {item.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
           };
 
           return (
-            <div className="min-h-screen bg-white p-8">
+            <div className="min-h-screen bg-gray-100 p-4 md:p-8">
               <div className="max-w-7xl mx-auto space-y-6">
-                <div className="bg-white rounded-lg p-6 shadow-lg">
-                  <div className="flex justify-between items-start mb-4">
+                
+                {/* PAINEL DE CONTROLE */}
+                <div className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                     <div>
-                      <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <CalendarDays />
-                        Criador de Calendário
+                      <h1 className="text-3xl font-black flex items-center gap-3 text-gray-800">
+                        <CalendarDays /> Criador de Calendário Upli
                       </h1>
-                      {lastSaved && (
-                        <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                          <Database />
-                          Último salvamento: {lastSaved.toLocaleString('pt-BR')}
-                        </p>
-                      )}
+                      {lastSaved && <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Database /> Auto-salvo: {lastSaved.toLocaleString('pt-BR')}</p>}
                     </div>
-                    <div className="flex gap-2">
-                      <label className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm cursor-pointer hover:bg-blue-700 flex items-center gap-2">
-                        <Database />
-                        Importar Dados
-                        <input
-                          type="file"
-                          accept=".json"
-                          onChange={importData}
-                          className="hidden"
-                        />
-                      </label>
-                      <button
-                        onClick={exportData}
-                        className="bg-green-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-green-700 flex items-center gap-2"
-                      >
-                        <Download />
-                        Exportar Dados
-                      </button>
-                      <button
-                        onClick={clearAllData}
-                        className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-red-700 flex items-center gap-2"
-                      >
-                        <Trash2 />
-                        Limpar Tudo
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Ano</label>
-                      <input
-                        type="number"
-                        value={year}
-                        onChange={(e) => setYear(parseInt(e.target.value) || 2026)}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Mês</label>
-                      <select
-                        value={month}
-                        onChange={(e) => setMonth(parseInt(e.target.value))}
-                        className="w-full border rounded-lg px-3 py-2"
-                      >
-                        {months.map((m, i) => (
-                          <option key={i} value={i}>{m}</option>
-                        ))}
-                      </select>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <button onClick={exportData} className="flex-1 md:flex-none bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 shadow-sm"><Download /> Backup</button>
+                      <button onClick={clearAllData} className="flex-1 md:flex-none bg-yellow-500 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-yellow-600 transition flex items-center justify-center gap-2 shadow-sm" disabled={!selectedCompany} title="Limpar eventos da tela (Mantém a empresa)"><Trash2 /> Limpar Eventos</button>
                     </div>
                   </div>
 
-                  <div className="border-t pt-4 mb-4">
-                    <h3 className="font-bold mb-3">Gerenciar Categorias</h3>
-                    
-                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                      <p className="text-sm font-medium mb-3">➕ Adicionar Nova Categoria</p>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <input
-                          type="text"
-                          placeholder="Nome da categoria"
-                          value={newCategory.label}
-                          onChange={(e) => setNewCategory({...newCategory, label: e.target.value})}
-                          className="border-2 rounded-lg px-3 py-2"
-                        />
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={newCategory.color}
-                            onChange={(e) => setNewCategory({...newCategory, color: e.target.value})}
-                            className="w-12 h-10 rounded cursor-pointer border-2"
-                          />
-                          <input
-                            type="text"
-                            value={newCategory.color}
-                            onChange={(e) => setNewCategory({...newCategory, color: e.target.value})}
-                            className="flex-1 border-2 rounded-lg px-3 py-2 font-mono text-sm"
-                            placeholder="#3b82f6"
-                          />
-                        </div>
-                        <button
-                          onClick={addCategory}
-                          className="bg-blue-600 text-white rounded-lg px-4 py-2 flex items-center justify-center gap-2 hover:bg-blue-700 font-medium"
-                        >
-                          <Plus />
-                          Adicionar
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {colorOptions.map((color) => {
-                        const eventsCount = events.filter(e => e.color === color.id).length;
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* COLUNA ESQUERDA: Empresas e Data */}
+                    <div className="space-y-6">
+                      <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                        <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
                         
-                        return (
-                          <div key={color.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border">
-                            {deletingCategory === color.id ? (
-                              <>
-                                <div className="flex-1 text-sm">
-                                  <p className="font-bold text-red-600 mb-1">⚠️ Confirmar exclusão?</p>
-                                  <p className="text-gray-600">
-                                    {eventsCount > 0 
-                                      ? `Isso removerá ${eventsCount} evento(s) associado(s)`
-                                      : 'Esta categoria será removida'}
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() => removeCategory(color.id)}
-                                  className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 font-medium"
-                                >
-                                  Confirmar
-                                </button>
-                                <button
-                                  onClick={() => setDeletingCategory(null)}
-                                  className="bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500"
-                                >
-                                  Cancelar
-                                </button>
-                              </>
-                            ) : editingColor === color.id ? (
-                              <>
-                                <input
-                                  type="text"
-                                  value={editLabel}
-                                  onChange={(e) => setEditLabel(e.target.value)}
-                                  className="flex-1 border-2 rounded px-3 py-2 text-sm"
-                                  placeholder="Nome da categoria"
-                                />
-                                <input
-                                  type="color"
-                                  value={editColorValue}
-                                  onChange={(e) => setEditColorValue(e.target.value)}
-                                  className="w-12 h-10 rounded cursor-pointer border-2"
-                                />
-                                <button
-                                  onClick={saveEditCategory}
-                                  className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 flex items-center gap-1"
-                                >
-                                  <Save />
-                                  Salvar
-                                </button>
-                                <button
-                                  onClick={cancelEdit}
-                                  className="bg-gray-400 text-white px-3 py-2 rounded text-sm hover:bg-gray-500"
-                                >
-                                  Cancelar
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <div
-                                  style={{ backgroundColor: color.color, color: getTextColor(color.color) }}
-                                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm"
-                                >
-                                  {color.label}
-                                  {eventsCount > 0 && (
-                                    <span className="ml-2 text-xs opacity-75">({eventsCount} eventos)</span>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => startEditCategory(color)}
-                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1 px-3 py-2 hover:bg-blue-50 rounded"
-                                >
-                                  <Edit2 />
-                                  Editar
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setDeletingCategory(color.id);
-                                  }}
-                                  className="text-red-600 hover:text-red-800 px-2 hover:bg-red-50 rounded"
-                                  title="Excluir categoria"
-                                >
-                                  <Trash2 />
-                                </button>
-                              </>
-                            )}
+                        {/* Adicionar Empresa */}
+                        <div className="flex gap-2 mb-4">
+                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addCompany()} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none" />
+                          <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 font-bold hover:bg-black transition">Adicionar</button>
+                        </div>
+                        
+                        {/* Lista de Empresas com botão de Excluir */}
+                        {companies.length > 0 && (
+                          <div className="flex flex-col gap-2 mt-4 max-h-48 overflow-y-auto pr-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Empresas Cadastradas:</label>
+                            {companies.map(company => (
+                              <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 transition ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                                
+                                {editingCompany === company.id ? (
+                                  <div className="flex items-center gap-2 w-full">
+                                    <input type="text" value={editCompanyName} onChange={e => setEditCompanyName(e.target.value)} className="flex-1 border-2 rounded px-2 py-1 text-sm outline-none" onKeyPress={e => e.key === 'Enter' && saveEditCompany()} />
+                                    <button onClick={saveEditCompany} className="bg-green-600 text-white px-3 py-1 rounded text-sm font-bold">Salvar</button>
+                                    <button onClick={cancelEditCompany} className="bg-gray-400 text-white px-3 py-1 rounded text-sm font-bold">Cancelar</button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div 
+                                      className="flex-1 font-bold cursor-pointer truncate" 
+                                      onClick={() => setSelectedCompany(company.id)}
+                                    >
+                                      {company.name} {selectedCompany === company.id && <span className="text-blue-500 text-xs ml-2">(Selecionada)</span>}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button onClick={() => startEditCompany(company)} className="text-blue-500 hover:text-blue-700 p-2 rounded hover:bg-blue-100 transition" title="Editar nome"><Edit2 /></button>
+                                      
+                                      {/* BOTÃO EXCLUIR EMPRESA EXPLÍCITO */}
+                                      <button 
+                                        onClick={() => removeCompany(company.id)} 
+                                        className="text-white bg-red-500 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1 transition shadow-sm"
+                                        title="Excluir esta empresa e tudo dentro dela"
+                                      >
+                                        <Trash2 /> Excluir
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <h3 className="font-bold mb-3">Adicionar Evento</h3>
-                    {colorOptions.length === 0 && (
-                      <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                        ⚠️ Você precisa criar pelo menos uma categoria antes de adicionar eventos
+                        )}
                       </div>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <input
-                        type="number"
-                        placeholder="Dia"
-                        min="1"
-                        max="31"
-                        value={newEvent.day}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 31)) {
-                            setNewEvent({...newEvent, day: value});
-                          }
-                        }}
-                        className="border rounded-lg px-3 py-2"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Descrição"
-                        value={newEvent.text}
-                        onChange={(e) => setNewEvent({...newEvent, text: e.target.value})}
-                        className="border rounded-lg px-3 py-2"
-                      />
-                      <select
-                        value={newEvent.color}
-                        onChange={(e) => setNewEvent({...newEvent, color: e.target.value})}
-                        className="border rounded-lg px-3 py-2"
-                        disabled={colorOptions.length === 0}
-                      >
-                        <option value="">Selecione uma categoria</option>
-                        {colorOptions.map(c => (
-                          <option key={c.id} value={c.id}>{c.label}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={addEvent}
-                        disabled={colorOptions.length === 0}
-                        className={`${colorOptions.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg px-4 py-2 flex items-center justify-center gap-2`}
-                      >
-                        <Plus />
-                        Adicionar
-                      </button>
+
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <label className="block text-sm font-bold text-gray-700 mb-2">Mês</label>
+                          <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold bg-white outline-none cursor-pointer">
+                            {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-sm font-bold text-gray-700 mb-2">Ano</label>
+                          <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value) || 2026)} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold outline-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* COLUNA DIREITA: Categorias e Eventos */}
+                    <div className="space-y-6">
+                      <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
+                        <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
+                        <div className="flex gap-2 mb-4">
+                          <input type="text" placeholder="Ex: REELS, DESIGN..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500" />
+                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0" />
+                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold hover:bg-blue-700 transition">Adicionar</button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                          {colorOptions.map(color => (
+                            <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                              {color.label}
+                              <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black" title="Remover Categoria">×</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-green-50 p-5 rounded-xl border border-green-100">
+                        <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Evento</h3>
+                        <div className="flex gap-2">
+                          <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-20 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
+                          <input type="text" placeholder="O que vai rolar?" value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none focus:border-green-500" />
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none font-bold bg-white">
+                            <option value="">Escolha a categoria...</option>
+                            {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                          </select>
+                          <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 font-bold hover:bg-green-700 transition shadow-sm">Postar</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="border-t pt-4 mt-4">
-                    <h3 className="font-bold mb-3">Eventos Cadastrados - {months[month]} {year} ({events.filter(e => e.month === month && e.year === year).length})</h3>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {events.filter(e => e.month === month && e.year === year).map((event, idx) => {
+                  {/* LISTA DE EVENTOS RÁPIDA (GERENCIAMENTO) */}
+                  <div className="mt-8 border-t pt-6">
+                    <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts Cadastrados ({events.filter(e => e.month === month && e.year === year).length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-48 overflow-y-auto pr-2">
+                      {events.filter(e => e.month === month && e.year === year).sort((a,b) => a.day - b.day).map((event, idx) => {
                         const color = colorOptions.find(c => c.id === event.color);
                         if (!color) return null;
-                        const textColor = getTextColor(color.color);
-                        const originalIndex = events.findIndex(e => 
-                          e.day === event.day && 
-                          e.text === event.text && 
-                          e.color === event.color &&
-                          e.month === event.month &&
-                          e.year === event.year
-                        );
+                        const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                        const status = getEventStatus(originalIndex);
+                        
                         return (
-                          <div key={idx} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-sm">Dia {event.day}</span>
-                              <span 
-                                style={{ backgroundColor: color.color, color: textColor }}
-                                className="px-3 py-1 rounded-full text-xs"
-                              >
-                                {event.text}
-                              </span>
+                          <div key={idx} className="bg-white border rounded-lg p-3 shadow-sm flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded">D{event.day}</span>
+                              <span style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="text-xs font-bold px-2 py-1 rounded-full truncate flex-1">{event.text}</span>
                             </div>
-                            <button
-                              onClick={() => removeEvent(originalIndex)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 />
-                            </button>
+                            <div className="flex justify-between items-center mt-1">
+                              <div className="flex gap-1">
+                                <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
+                                <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
+                              </div>
+                              <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 transition"><Trash2 /></button>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
 
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      onClick={exportAsImage}
-                      className="flex-1 bg-green-600 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 hover:bg-green-700"
-                    >
-                      <Download />
-                      Exportar como Imagem
-                    </button>
-                    <button
-                      onClick={exportAsPDF}
-                      className="flex-1 bg-purple-600 text-white rounded-lg px-4 py-3 flex items-center justify-center gap-2 hover:bg-purple-700"
-                    >
-                      <Download />
-                      Exportar como PDF
-                    </button>
-                  </div>
-                </div>
-
-                <div ref={calendarRef} className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-8 shadow-xl">
-                  <div className="flex justify-between items-center mb-6 text-white">
-                    <h2 className="text-3xl font-bold">{year}</h2>
-                    <h2 className="text-4xl font-bold">{months[month]}</h2>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-3 mb-3">
-                    {weekDays.map(day => (
-                      <div key={day} className="bg-black text-white rounded-lg py-2 text-center font-bold text-sm">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-3 mb-6">
-                    {renderCalendar()}
-                  </div>
-
-                  {getLegendItems().length > 0 && (
-                    <div className="bg-white rounded-lg p-4">
-                      <h3 className="font-bold mb-3">Legenda</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {getLegendItems().map(item => {
-                          const textColor = getTextColor(item.color);
-                          return (
-                            <div
-                              key={item.id}
-                              style={{ backgroundColor: item.color, color: textColor }}
-                              className="rounded-lg px-4 py-2 text-center font-medium text-sm"
-                            >
-                              {item.label}
-                            </div>
-                          );
-                        })}
-                      </div>
+                  {/* BOTÕES DE EXPORTAÇÃO */}
+                  {selectedCompany && (
+                    <div className="flex flex-col md:flex-row gap-4 mt-8 pt-6 border-t border-gray-200">
+                      <button onClick={exportAsImage} className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl px-6 py-4 flex items-center justify-center gap-3 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-lg">
+                        <Download /> Baixar Imagem (Calendário)
+                      </button>
+                      <button onClick={exportAsPDF} className="flex-1 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-xl px-6 py-4 flex items-center justify-center gap-3 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-lg">
+                        <Download /> Baixar PDF (Alta Qualidade)
+                      </button>
                     </div>
                   )}
                 </div>
+
+                {/* ÁREA DE PRÉ-VISUALIZAÇÃO DO CALENDÁRIO */}
+                {selectedCompany && renderCalendarUI()}
+
               </div>
             </div>
           );
