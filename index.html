@@ -17,24 +17,28 @@
         
         // Ícones
         const Download = () => <span>⬇️</span>;
+        const Upload = () => <span>📤</span>;
         const Plus = () => <span>➕</span>;
         const Trash2 = () => <span>🗑️</span>;
         const CalendarDays = () => <span>📅</span>;
         const Edit2 = () => <span>✏️</span>;
         const Save = () => <span>💾</span>;
         const Database = () => <span>💾</span>;
+        const Clock = () => <span className="mr-1 opacity-80">⏰</span>;
         
         const CalendarCreator = () => {
           const [year, setYear] = useState(2026);
           const [month, setMonth] = useState(0);
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
-          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '' });
+          const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
+          
+          // Estados para edição de Categoria
           const [editingColor, setEditingColor] = useState(null);
           const [editLabel, setEditLabel] = useState('');
           const [editColorValue, setEditColorValue] = useState('');
-          const [deletingCategory, setDeletingCategory] = useState(null);
+          
           const [lastSaved, setLastSaved] = useState(null);
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
@@ -170,11 +174,11 @@
           const addEvent = () => {
             const dayNum = parseInt(newEvent.day);
             const daysInCurrentMonth = getDaysInMonth(year, month);
-            if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha todos os campos!');
+            if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha todos os campos obrigatórios (Dia, Descrição e Categoria)!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido para ${months[month]}`);
             
             setEvents([...events, { ...newEvent, day: dayNum, month: month, year: year }]);
-            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '' });
+            setNewEvent({ day: '', time: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '' });
           };
 
           const removeEvent = (index) => setEvents(events.filter((_, i) => i !== index));
@@ -186,18 +190,27 @@
             }
           };
 
-          const startEditCategory = (category) => { setEditingColor(category.id); setEditLabel(category.label); setEditColorValue(category.color); };
-          const saveEditCategory = () => {
-            setColorOptions(colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c ));
-            setEditingColor(null); setEditLabel(''); setEditColorValue('');
-          };
-          const cancelEdit = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
-
           const removeCategory = (id) => {
             setColorOptions(prev => prev.filter(c => c.id !== id));
             setEvents(prev => prev.filter(e => e.color !== id));
-            setDeletingCategory(null);
-            if (editingColor === id) setEditingColor(null);
+            if (editingColor === id) cancelEditCategory();
+          };
+
+          const startEditCategory = (category) => {
+            setEditingColor(category.id);
+            setEditLabel(category.label);
+            setEditColorValue(category.color);
+          };
+
+          const saveEditCategory = () => {
+            setColorOptions(colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c));
+            setEditingColor(null);
+          };
+
+          const cancelEditCategory = () => {
+            setEditingColor(null);
+            setEditLabel('');
+            setEditColorValue('');
           };
 
           const clearAllData = () => {
@@ -212,6 +225,95 @@
               };
               localStorage.setItem(`company_${selectedCompany}`, JSON.stringify(companyData));
             }
+          };
+
+          const handleFileUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const content = event.target.result;
+              const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+              
+              if (lines.length < 2) {
+                  alert('O arquivo deve ter pelo menos 2 linhas: a primeira com o nome da empresa e a segunda com um evento.');
+                  e.target.value = '';
+                  return;
+              }
+
+              const compName = lines[0];
+              
+              let updatedCompanies = [...companies];
+              let company = updatedCompanies.find(c => c.name.toLowerCase() === compName.toLowerCase());
+              let compId;
+              
+              if (!company) {
+                compId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+                company = { id: compId, name: compName };
+                updatedCompanies.push(company);
+              } else {
+                compId = company.id;
+              }
+
+              const rawData = localStorage.getItem(`company_${compId}`);
+              let compData = rawData ? JSON.parse(rawData) : { events: [], categories: [], statuses: {} };
+
+              lines.slice(1).forEach(line => {
+                const parts = line.split(';');
+                let catName, dayNum, timeStr, desc;
+
+                if (parts.length === 3) {
+                    catName = parts[0].trim();
+                    dayNum = parseInt(parts[1].trim());
+                    timeStr = '';
+                    desc = parts[2].trim();
+                } else if (parts.length >= 4) {
+                    catName = parts[0].trim();
+                    dayNum = parseInt(parts[1].trim());
+                    timeStr = parts[2].trim();
+                    desc = parts.slice(3).join(';').trim();
+                } else {
+                    return;
+                }
+
+                if (!catName || isNaN(dayNum) || !desc) return;
+
+                let category = compData.categories.find(c => c.label.toLowerCase() === catName.toLowerCase());
+                if (!category) {
+                  const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                  category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: randomColor };
+                  compData.categories.push(category);
+                }
+
+                compData.events.push({
+                  day: dayNum,
+                  time: timeStr,
+                  text: desc,
+                  color: category.id,
+                  month: month,
+                  year: year
+                });
+              });
+
+              compData.lastSaved = new Date().toISOString();
+              localStorage.setItem(`company_${compId}`, JSON.stringify(compData));
+              localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+
+              setCompanies(updatedCompanies);
+              
+              if (selectedCompany === compId) {
+                setEvents(compData.events);
+                setColorOptions(compData.categories);
+                setEventStatuses(compData.statuses || {});
+              } else {
+                setSelectedCompany(compId);
+              }
+
+              alert(`Eventos importados com sucesso para a empresa: ${compName}!`);
+              e.target.value = ''; 
+            };
+            reader.readAsText(file);
           };
 
           const exportData = () => {
@@ -229,7 +331,6 @@
             return colorOptions.filter(c => uniqueColors.includes(c.id));
           };
 
-          // LÓGICA DE AGRUPAMENTO POR SEMANAS
           const getWeeks = () => {
             const weeks = [];
             let currentWeek = new Array(7).fill(null);
@@ -249,6 +350,25 @@
             return weeks;
           };
 
+          const getLines = (ctx, text, maxWidth) => {
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i];
+                const width = ctx.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) {
+                    currentLine += " " + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+          };
+
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -258,37 +378,65 @@
             const padding = 60;
             const contentWidth = canvasWidth - (padding * 2);
             const colWidth = contentWidth / 7;
-            const eventHeight = 36;
             const eventSpacing = 8;
             
-            // 1. CALCULAR ALTURA DINÂMICA
-            let totalHeight = padding + 60; // Titulo
-            totalHeight += 80; // Cabeçalho dos dias da semana
+            ctx.font = 'bold 14px Arial';
+            
+            // 1. CÁLCULO DE ALTURA PRECISÃO 100%
+            let totalHeight = padding; 
+            totalHeight += 100; // Título
+            totalHeight += 80; // Dias da semana
             
             weeks.forEach(week => {
-              totalHeight += 40; // Barra preta de números
-              let maxEventsInWeek = 0;
+              totalHeight += 50; // Barra preta numeração
+              let maxWeekHeightCalc = 0;
+              
               week.forEach(day => {
-                if (day) maxEventsInWeek = Math.max(maxEventsInWeek, getEventsForDay(day).length);
+                if (day) {
+                  const dayEvents = getEventsForDay(day);
+                  let colHeight = 0;
+                  
+                  dayEvents.forEach(event => {
+                    let displayText = event.text;
+                    if (event.time) displayText = `⏰ ${event.time} ` + displayText;
+                    
+                    const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                    const status = getEventStatus(originalIndex);
+                    if (status === 'done') displayText += ' ✓';
+                    if (status === 'late') displayText += ' ⚠';
+                    
+                    const lines = getLines(ctx, displayText, (colWidth) - 40); 
+                    
+                    const dynamicHeight = (lines.length * 18) + 24; 
+                    colHeight += dynamicHeight + eventSpacing;
+                  });
+                  maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
+                }
               });
-              totalHeight += (maxEventsInWeek * (eventHeight + eventSpacing)) + 40; 
+              totalHeight += maxWeekHeightCalc + 30; // Margem inferior da semana
             });
             
             const legendItems = getLegendItems();
-            totalHeight += legendItems.length > 0 ? 120 : 40;
+            if (legendItems.length > 0) {
+              totalHeight += 40; // Margem antes da legenda
+              const itemsPerRow = 5;
+              const legendRows = Math.ceil(legendItems.length / itemsPerRow);
+              totalHeight += legendRows * 45; // Altura total de todas as linhas de legenda
+              totalHeight += padding; // Margem final de respiro
+            } else {
+              totalHeight += padding; // Margem final caso não tenha legenda
+            }
             
-            // Configurar Canvas com altura dinâmica
             const finalHeight = Math.max(1080, totalHeight);
             canvas.width = canvasWidth;
             canvas.height = finalHeight;
             
-            // Fundo Branco
+            // 2. RENDERIZAÇÃO
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
             
             let currentY = padding;
             
-            // CABEÇALHO PRINCIPAL
             const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
             ctx.fillStyle = '#000000';
             ctx.font = 'bold 48px Arial';
@@ -297,7 +445,6 @@
             
             currentY += 100;
 
-            // DIAS DA SEMANA
             ctx.textAlign = 'center';
             fullWeekDays.forEach((day, i) => {
               const x = padding + (i * colWidth);
@@ -315,7 +462,6 @@
             
             currentY += 80;
 
-            // DESENHAR SEMANAS
             weeks.forEach(week => {
               ctx.fillStyle = '#000000';
               ctx.beginPath();
@@ -343,6 +489,7 @@
                 let eventY = currentY;
                 const x = padding + (i * colWidth);
                 const eventMargin = 10;
+                const eventW = colWidth - (eventMargin * 2);
                 
                 dayEvents.forEach(event => {
                   const color = colorOptions.find(c => c.id === event.color);
@@ -353,31 +500,37 @@
                   const finalColor = getStatusColor(color.color, status);
                   const textColor = getTextColor(finalColor);
                   
-                  const eventX = x + eventMargin;
-                  const eventW = colWidth - (eventMargin * 2);
-                  
-                  ctx.fillStyle = finalColor;
-                  ctx.beginPath();
-                  ctx.roundRect(eventX, eventY, eventW, eventHeight, eventHeight / 2);
-                  ctx.fill();
-                  
-                  ctx.fillStyle = textColor;
-                  ctx.font = 'bold 16px Arial';
-                  ctx.textAlign = 'center';
-                  
+                  ctx.font = 'bold 14px Arial';
                   let displayText = event.text;
+                  if (event.time) displayText = `⏰ ${event.time} ` + displayText;
                   if (status === 'done') displayText += ' ✓';
                   if (status === 'late') displayText += ' ⚠';
                   
-                  const maxTextWidth = eventW - 30;
-                  let finalText = displayText;
-                  while (ctx.measureText(finalText).width > maxTextWidth && finalText.length > 3) {
-                    finalText = finalText.slice(0, -4) + '...';
-                  }
+                  const lines = getLines(ctx, displayText, eventW - 20);
                   
-                  ctx.fillText(finalText, eventX + (eventW / 2), eventY + 24);
+                  const lineHeight = 18;
+                  const topPadding = 12;
+                  const bottomPadding = 12;
+                  const totalTextHeight = lines.length * lineHeight;
+                  const dynamicHeight = totalTextHeight + topPadding + bottomPadding;
                   
-                  eventY += eventHeight + eventSpacing;
+                  ctx.fillStyle = finalColor;
+                  ctx.beginPath();
+                  ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 18);
+                  ctx.fill();
+                  
+                  ctx.fillStyle = textColor;
+                  ctx.textAlign = 'center';
+                  
+                  let textY = eventY + topPadding + 12; 
+
+                  ctx.font = 'bold 14px Arial';
+                  lines.forEach(line => {
+                      ctx.fillText(line, x + (colWidth / 2), textY);
+                      textY += lineHeight;
+                  });
+                  
+                  eventY += dynamicHeight + eventSpacing;
                 });
                 
                 maxWeekHeight = Math.max(maxWeekHeight, eventY - currentY);
@@ -386,21 +539,21 @@
               currentY += maxWeekHeight + 30; 
             });
 
-            // LEGENDA NO RODAPÉ
+            // DESENHAR LEGENDA
             if (legendItems.length > 0) {
-              currentY += 20;
+              currentY += 40;
               ctx.fillStyle = '#000000';
               ctx.font = 'bold 24px Arial';
               ctx.textAlign = 'left';
-              ctx.fillText('LEGENDA:', padding, currentY + 30);
+              ctx.fillText('LEGENDA:', padding, currentY + 24);
               
               const itemsPerRow = 5;
-              const itemWidth = (contentWidth - 150) / itemsPerRow;
+              const itemWidth = (contentWidth - 150 - ((itemsPerRow - 1) * 10)) / itemsPerRow;
               
               legendItems.forEach((item, idx) => {
                 const row = Math.floor(idx / itemsPerRow);
                 const col = idx % itemsPerRow;
-                const itemX = padding + 140 + (col * (itemWidth + 10));
+                const itemX = padding + 150 + (col * (itemWidth + 10));
                 const itemY = currentY + (row * 45);
                 
                 ctx.fillStyle = item.color;
@@ -465,104 +618,110 @@
             }
           };
 
-          // RENDERIZAÇÃO DA TELA (CALENDÁRIO VIRTUAL)
           const renderCalendarUI = () => {
             const weeks = getWeeks();
             return (
-              <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
+              <div className="bg-white rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200">
                 <div className="mb-8 border-b pb-4">
-                  <h2 className="text-4xl font-black text-gray-900 uppercase tracking-tight">
+                  <h2 className="text-2xl md:text-4xl font-black text-gray-900 uppercase tracking-tight">
                     {months[month]} {year} <span className="text-gray-400 font-medium">|</span> {companies.find(c => c.id === selectedCompany)?.name}
                   </h2>
                 </div>
 
-                {/* Cabeçalho dos Dias */}
-                <div className="grid grid-cols-7 gap-4 mb-6">
-                  {fullWeekDays.map(day => (
-                    <div key={day} className="bg-black text-white text-center py-3 rounded-full font-bold text-sm tracking-wide shadow-md">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Linhas das Semanas */}
-                <div className="space-y-8">
-                  {weeks.map((week, wIdx) => (
-                    <div key={wIdx} className="flex flex-col">
-                      {/* Barra de Números */}
-                      <div className="bg-black rounded-full h-10 flex items-center px-4 mb-4 shadow-md">
-                        {week.map((day, dIdx) => (
-                          <div key={dIdx} className="flex-1 text-white font-bold text-lg px-2">
-                            {day || ''}
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {/* Colunas de Eventos */}
-                      <div className="grid grid-cols-7 gap-4">
-                        {week.map((day, dIdx) => (
-                          <div key={dIdx} className="flex flex-col gap-2 min-h-[60px]">
-                            {day && getEventsForDay(day).map((event, eIdx) => {
-                              const color = colorOptions.find(c => c.id === event.color);
-                              if (!color) return null;
-                              
-                              const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                              const status = getEventStatus(originalIndex);
-                              const finalColor = getStatusColor(color.color, status);
-                              const textColor = getTextColor(finalColor);
-                              
-                              return (
-                                <div
-                                  key={eIdx}
-                                  style={{ backgroundColor: finalColor, color: textColor }}
-                                  className="rounded-full px-4 py-2 text-xs font-bold text-center truncate shadow-sm transition-transform hover:scale-105 cursor-default"
-                                  title={event.text}
-                                >
-                                  {event.text}
-                                  {status === 'done' && <span className="ml-1">✓</span>}
-                                  {status === 'late' && <span className="ml-1">⚠</span>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Legenda Visual */}
-                {getLegendItems().length > 0 && (
-                  <div className="mt-12 pt-6 border-t">
-                    <h3 className="font-bold text-xl mb-4 text-gray-800">LEGENDA</h3>
-                    <div className="flex flex-wrap gap-3">
-                      {getLegendItems().map(item => (
-                        <div key={item.id} style={{ backgroundColor: item.color, color: getTextColor(item.color) }} className="rounded-full px-6 py-2 text-sm font-bold shadow-sm">
-                          {item.label}
+                <div className="overflow-x-auto pb-4">
+                  <div className="min-w-[800px]">
+                    
+                    <div className="grid grid-cols-7 gap-4 mb-6">
+                      {fullWeekDays.map(day => (
+                        <div key={day} className="bg-black text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
+                          {day}
                         </div>
                       ))}
                     </div>
+
+                    <div className="space-y-8">
+                      {weeks.map((week, wIdx) => (
+                        <div key={wIdx} className="flex flex-col">
+                          <div className="bg-black rounded-full h-10 flex items-center px-4 mb-4 shadow-md">
+                            {week.map((day, dIdx) => (
+                              <div key={dIdx} className="flex-1 text-white font-bold text-lg px-2">
+                                {day || ''}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="grid grid-cols-7 gap-4">
+                            {week.map((day, dIdx) => (
+                              <div key={dIdx} className="flex flex-col gap-2 min-h-[60px]">
+                                {day && getEventsForDay(day).map((event, eIdx) => {
+                                  const color = colorOptions.find(c => c.id === event.color);
+                                  if (!color) return null;
+                                  
+                                  const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                  const status = getEventStatus(originalIndex);
+                                  const finalColor = getStatusColor(color.color, status);
+                                  const textColor = getTextColor(finalColor);
+                                  
+                                  return (
+                                    <div
+                                      key={eIdx}
+                                      style={{ backgroundColor: finalColor, color: textColor }}
+                                      className="rounded-xl px-2 py-2 text-[10px] md:text-[11px] font-bold text-center shadow-sm transition-transform hover:scale-105 cursor-default flex flex-col items-center justify-center break-words whitespace-normal leading-tight"
+                                      title={event.text}
+                                    >
+                                      <span>
+                                          {event.time && <span className="opacity-90 font-black mr-1"><Clock /> {event.time}</span>}
+                                          {event.text}
+                                          {status === 'done' && <span className="ml-1">✓</span>}
+                                          {status === 'late' && <span className="ml-1">⚠</span>}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {getLegendItems().length > 0 && (
+                      <div className="mt-12 pt-6 border-t">
+                        <h3 className="font-bold text-xl mb-4 text-gray-800">LEGENDA</h3>
+                        <div className="flex flex-wrap gap-3">
+                          {getLegendItems().map(item => (
+                            <div key={item.id} style={{ backgroundColor: item.color, color: getTextColor(item.color) }} className="rounded-full px-6 py-2 text-sm font-bold shadow-sm">
+                              {item.label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             );
           };
 
           return (
-            <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+            <div className="min-h-screen bg-gray-100 p-2 md:p-8">
               <div className="max-w-7xl mx-auto space-y-6">
                 
-                {/* PAINEL DE CONTROLE */}
-                <div className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-200">
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
                     <div>
-                      <h1 className="text-3xl font-black flex items-center gap-3 text-gray-800">
+                      <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800">
                         <CalendarDays /> Criador de Calendário Upli
                       </h1>
                       {lastSaved && <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Database /> Auto-salvo: {lastSaved.toLocaleString('pt-BR')}</p>}
                     </div>
-                    <div className="flex gap-2 w-full md:w-auto">
-                      <button onClick={exportData} className="flex-1 md:flex-none bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 shadow-sm"><Download /> Backup</button>
+                    <div className="flex flex-wrap gap-2 w-full xl:w-auto">
+                      <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="L1: Empresa | L2+: Categoria;Dia;Horário;Descrição">
+                        <Upload /> Importar TXT
+                        <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+                      </label>
+
+                      <button onClick={exportData} className="flex-1 md:flex-none bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 shadow-sm"><Download /> Backup JSON</button>
                       <button onClick={clearAllData} className="flex-1 md:flex-none bg-yellow-500 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-yellow-600 transition flex items-center justify-center gap-2 shadow-sm" disabled={!selectedCompany} title="Limpar eventos da tela (Mantém a empresa)"><Trash2 /> Limpar Eventos</button>
                     </div>
                   </div>
@@ -570,21 +729,19 @@
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* COLUNA ESQUERDA: Empresas e Data */}
                     <div className="space-y-6">
-                      <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                      <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200">
                         <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
                         
-                        {/* Adicionar Empresa */}
                         <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addCompany()} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none" />
-                          <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 font-bold hover:bg-black transition">Adicionar</button>
+                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addCompany()} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none w-full" />
+                          <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 font-bold hover:bg-black transition">Add</button>
                         </div>
                         
-                        {/* Lista de Empresas com botão de Excluir */}
                         {companies.length > 0 && (
                           <div className="flex flex-col gap-2 mt-4 max-h-48 overflow-y-auto pr-2">
                             <label className="text-xs font-bold text-gray-500 uppercase">Empresas Cadastradas:</label>
                             {companies.map(company => (
-                              <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 transition ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                              <div key={company.id} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between border-2 rounded-lg p-2 transition gap-2 sm:gap-0 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
                                 
                                 {editingCompany === company.id ? (
                                   <div className="flex items-center gap-2 w-full">
@@ -595,15 +752,13 @@
                                 ) : (
                                   <>
                                     <div 
-                                      className="flex-1 font-bold cursor-pointer truncate" 
+                                      className="flex-1 font-bold cursor-pointer truncate w-full sm:w-auto" 
                                       onClick={() => setSelectedCompany(company.id)}
                                     >
-                                      {company.name} {selectedCompany === company.id && <span className="text-blue-500 text-xs ml-2">(Selecionada)</span>}
+                                      {company.name} {selectedCompany === company.id && <span className="text-blue-500 text-xs sm:ml-2 block sm:inline">(Selecionada)</span>}
                                     </div>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 w-full sm:w-auto justify-end">
                                       <button onClick={() => startEditCompany(company)} className="text-blue-500 hover:text-blue-700 p-2 rounded hover:bg-blue-100 transition" title="Editar nome"><Edit2 /></button>
-                                      
-                                      {/* BOTÃO EXCLUIR EMPRESA EXPLÍCITO */}
                                       <button 
                                         onClick={() => removeCompany(company.id)} 
                                         className="text-white bg-red-500 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1 transition shadow-sm"
@@ -620,7 +775,7 @@
                         )}
                       </div>
 
-                      <div className="flex gap-4">
+                      <div className="flex flex-col sm:flex-row gap-4">
                         <div className="flex-1">
                           <label className="block text-sm font-bold text-gray-700 mb-2">Mês</label>
                           <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold bg-white outline-none cursor-pointer">
@@ -636,41 +791,58 @@
 
                     {/* COLUNA DIREITA: Categorias e Eventos */}
                     <div className="space-y-6">
-                      <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
+                      <div className="bg-blue-50 p-4 md:p-5 rounded-xl border border-blue-100">
                         <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
                         <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Ex: REELS, DESIGN..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500" />
-                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0" />
-                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold hover:bg-blue-700 transition">Adicionar</button>
+                          <input type="text" placeholder="Ex: REELS..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500 w-full" />
+                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
+                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold hover:bg-blue-700 transition">Add</button>
                         </div>
-                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                          {colorOptions.map(color => (
-                            <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                              {color.label}
-                              <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black" title="Remover Categoria">×</button>
-                            </div>
-                          ))}
+                        
+                        {/* LISTA DE CATEGORIAS COM BOTÃO EDITAR */}
+                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                          {colorOptions.map(color => {
+                            if (editingColor === color.id) {
+                              return (
+                                <div key={color.id} className="flex items-center gap-1 bg-white border-2 border-blue-400 p-1 rounded-full shadow-sm">
+                                  <input type="color" value={editColorValue} onChange={e => setEditColorValue(e.target.value)} className="w-6 h-6 p-0 border-0 rounded-full cursor-pointer ml-1"/>
+                                  <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-24 text-xs font-bold border rounded px-2 py-1 outline-none"/>
+                                  <button onClick={saveEditCategory} className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-xs hover:bg-green-600">✓</button>
+                                  <button onClick={cancelEditCategory} className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-xs hover:bg-red-600 mr-1">×</button>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group">
+                                {color.label}
+                                <button onClick={() => startEditCategory(color)} className="ml-1 opacity-70 hover:opacity-100 transition-opacity" title="Editar Cor/Nome"><Edit2 /></button>
+                                <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm" title="Remover Categoria">×</button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      <div className="bg-green-50 p-5 rounded-xl border border-green-100">
-                        <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Evento</h3>
-                        <div className="flex gap-2">
-                          <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-20 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
+                      <div className="bg-green-50 p-4 md:p-5 rounded-xl border border-green-100">
+                        <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Evento Manual</h3>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-16 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
+                          <input type="time" placeholder="Horário" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} className="w-full sm:w-28 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
                           <input type="text" placeholder="O que vai rolar?" value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none focus:border-green-500" />
                         </div>
-                        <div className="flex gap-2 mt-2">
-                          <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none font-bold bg-white">
+                        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                          <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none font-bold bg-white w-full">
                             <option value="">Escolha a categoria...</option>
                             {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                           </select>
-                          <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 font-bold hover:bg-green-700 transition shadow-sm">Postar</button>
+                          <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold hover:bg-green-700 transition shadow-sm w-full sm:w-auto">Postar</button>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* LISTA DE EVENTOS RÁPIDA (GERENCIAMENTO) */}
+                  {/* LISTA DE EVENTOS RÁPIDA */}
                   <div className="mt-8 border-t pt-6">
                     <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts Cadastrados ({events.filter(e => e.month === month && e.year === year).length})</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-48 overflow-y-auto pr-2">
@@ -683,13 +855,15 @@
                         return (
                           <div key={idx} className="bg-white border rounded-lg p-3 shadow-sm flex flex-col gap-2">
                             <div className="flex items-center gap-2">
-                              <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded">D{event.day}</span>
-                              <span style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="text-xs font-bold px-2 py-1 rounded-full truncate flex-1">{event.text}</span>
+                              <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded flex-shrink-0">
+                                D{event.day} {event.time && <span className="ml-1 text-[10px] opacity-70">({event.time})</span>}
+                              </span>
+                              <span style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="text-xs font-bold px-2 py-1 rounded-full flex-1 break-words whitespace-normal leading-tight">{event.text}</span>
                             </div>
                             <div className="flex justify-between items-center mt-1">
                               <div className="flex gap-1">
-                                <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
-                                <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
+                                <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
+                                <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
                               </div>
                               <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 transition"><Trash2 /></button>
                             </div>
@@ -699,20 +873,18 @@
                     </div>
                   </div>
 
-                  {/* BOTÕES DE EXPORTAÇÃO */}
                   {selectedCompany && (
                     <div className="flex flex-col md:flex-row gap-4 mt-8 pt-6 border-t border-gray-200">
-                      <button onClick={exportAsImage} className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl px-6 py-4 flex items-center justify-center gap-3 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-lg">
-                        <Download /> Baixar Imagem (Calendário)
+                      <button onClick={exportAsImage} className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-center gap-2 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-sm md:text-lg">
+                        <Download /> Imagem (Calendário)
                       </button>
-                      <button onClick={exportAsPDF} className="flex-1 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-xl px-6 py-4 flex items-center justify-center gap-3 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-lg">
-                        <Download /> Baixar PDF (Alta Qualidade)
+                      <button onClick={exportAsPDF} className="flex-1 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-center gap-2 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-sm md:text-lg">
+                        <Download /> PDF (Alta Qualidade)
                       </button>
                     </div>
                   )}
                 </div>
 
-                {/* ÁREA DE PRÉ-VISUALIZAÇÃO DO CALENDÁRIO */}
                 {selectedCompany && renderCalendarUI()}
 
               </div>
