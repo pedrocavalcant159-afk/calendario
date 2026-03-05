@@ -28,7 +28,7 @@
         
         const CalendarCreator = () => {
           const [year, setYear] = useState(2026);
-          const [month, setMonth] = useState(0);
+          const [month, setMonth] = useState(2); // Começando em Março
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
           const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '' });
@@ -227,6 +227,7 @@
             }
           };
 
+          // --- LÓGICA DE IMPORTAÇÃO APENAS COM LEITURA DO HEX ---
           const handleFileUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -261,28 +262,49 @@
 
               lines.slice(1).forEach(line => {
                 const parts = line.split(';');
-                let catName, dayNum, timeStr, desc;
+                if (parts.length < 3) return;
 
-                if (parts.length === 3) {
-                    catName = parts[0].trim();
-                    dayNum = parseInt(parts[1].trim());
-                    timeStr = '';
-                    desc = parts[2].trim();
-                } else if (parts.length >= 4) {
-                    catName = parts[0].trim();
-                    dayNum = parseInt(parts[1].trim());
-                    timeStr = parts[2].trim();
-                    desc = parts.slice(3).join(';').trim();
+                let catName = parts[0].trim();
+                let catColor = null;
+                let dayNumStr, timeStr, desc;
+
+                // Verifica se a segunda coluna é uma cor (começa com #)
+                if (parts[1].trim().startsWith('#')) {
+                    catColor = parts[1].trim();
+                    dayNumStr = parts[2] ? parts[2].trim() : '';
+                    
+                    if (parts.length === 4) {
+                        timeStr = '';
+                        desc = parts[3].trim();
+                    } else if (parts.length > 4) {
+                        timeStr = parts[3].trim();
+                        desc = parts.slice(4).join(';').trim();
+                    } else {
+                        return;
+                    }
                 } else {
-                    return;
+                    // Se não tiver cor no TXT
+                    dayNumStr = parts[1].trim();
+                    if (parts.length === 3) {
+                        timeStr = '';
+                        desc = parts[2].trim();
+                    } else if (parts.length > 3) {
+                        timeStr = parts[2].trim();
+                        desc = parts.slice(3).join(';').trim();
+                    } else {
+                        return;
+                    }
                 }
 
+                const dayNum = parseInt(dayNumStr);
                 if (!catName || isNaN(dayNum) || !desc) return;
 
                 let category = compData.categories.find(c => c.label.toLowerCase() === catName.toLowerCase());
                 if (!category) {
-                  const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-                  category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: randomColor };
+                  // Usa o hex do arquivo ou gera um aleatório se não existir
+                  let finalColor = catColor || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                  
+                  category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: finalColor };
                   compData.categories.push(category);
                 }
 
@@ -771,7 +793,7 @@
                       {lastSaved && <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Database /> Auto-salvo: {lastSaved.toLocaleString('pt-BR')}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2 w-full xl:w-auto">
-                      <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="L1: Empresa | L2+: Categoria;Dia;Horário;Descrição">
+                      <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="L1: Empresa | L2+: Categoria; #cor; Dia; Horário; Descrição">
                         <Upload /> Importar TXT
                         <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
                       </label>
