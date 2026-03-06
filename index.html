@@ -17,7 +17,7 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        // --- SUAS CHAVES DO FIREBASE (JÁ CONFIGURADAS) ---
+        // --- SUAS CHAVES DO FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
           authDomain: "calendario-upli.firebaseapp.com",
@@ -28,7 +28,7 @@
           measurementId: "G-6YXY6KY98T"
         };
 
-        // Inicializando o Banco de Dados (com proteção)
+        // Inicializando o Banco de Dados
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -37,7 +37,7 @@
 
         const { useState, useEffect } = React;
         
-        // Ícones
+        // Ícones (O erro estava aqui, o navegador não estava achando o Database)
         const Download = () => <span>⬇️</span>;
         const Upload = () => <span>📤</span>;
         const Trash2 = () => <span>🗑️</span>;
@@ -45,6 +45,7 @@
         const Edit2 = () => <span>✏️</span>;
         const LogOut = () => <span>🚪</span>;
         const Clock = () => <span className="mr-1 opacity-80">⏰</span>;
+        const Database = () => <span>☁️</span>;
         
         const CalendarCreator = () => {
           // --- SISTEMA DE LOGIN ---
@@ -64,7 +65,7 @@
           const handleLogin = (e) => {
              e.preventDefault();
              auth.signInWithEmailAndPassword(email, password).catch(err => {
-                 alert("Erro ao entrar: Verifique o e-mail e a senha cadastrados no Firebase.");
+                 alert("Erro ao entrar: Verifique o e-mail e a senha.");
              });
           };
 
@@ -92,42 +93,36 @@
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
 
-          // --- PUXAR DADOS DO BANCO DE DADOS EM TEMPO REAL (COM PROTEÇÃO ANTI-TELA BRANCA) ---
+          // --- PUXAR DADOS DO BANCO DE DADOS (COM PROTEÇÃO ANTI-CRASH) ---
           useEffect(() => {
             if (!user) return;
             const unsubscribe = db.collection('companies').onSnapshot(snapshot => {
-                try {
-                    const fetchedCompanies = [];
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        // Força a existência das variáveis mesmo que o banco venha vazio
-                        fetchedCompanies.push({ 
-                            id: doc.id, 
-                            name: data.name || 'Nova Empresa', 
-                            events: data.events || [],
-                            categories: data.categories || [],
-                            statuses: data.statuses || {}
-                        });
+                const fetchedCompanies = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    fetchedCompanies.push({ 
+                        id: doc.id, 
+                        name: data.name || 'Empresa Sem Nome', 
+                        events: data.events || [],
+                        categories: data.categories || [],
+                        statuses: data.statuses || {}
                     });
-                    
-                    // Ordenar por nome de forma segura
-                    fetchedCompanies.sort((a,b) => String(a.name).localeCompare(String(b.name)));
-                    setCompanies(fetchedCompanies);
-
-                    if (!selectedCompany && fetchedCompanies.length > 0) {
-                        setSelectedCompany(fetchedCompanies[0].id);
-                    }
-                } catch (error) {
-                    console.error("Erro ao ler banco de dados:", error);
-                }
+                });
+                
+                fetchedCompanies.sort((a,b) => String(a.name).localeCompare(String(b.name)));
+                setCompanies(fetchedCompanies);
             }, error => {
-                console.error("Erro de permissão no banco:", error);
-                alert("Falta de permissão no banco de dados. Confira se as regras estão em Modo de Teste.");
+                console.error("Erro no Firestore:", error);
             });
             return () => unsubscribe();
-          }, [user, selectedCompany]);
+          }, [user]);
 
-          // --- ATUALIZAR A TELA QUANDO SELECIONA A EMPRESA OU ALGUÉM EDITA ---
+          useEffect(() => {
+              if (companies.length > 0 && !companies.find(c => c.id === selectedCompany)) {
+                  setSelectedCompany(companies[0].id);
+              }
+          }, [companies, selectedCompany]);
+
           useEffect(() => {
               if (selectedCompany) {
                   const comp = companies.find(c => c.id === selectedCompany);
@@ -141,7 +136,6 @@
               }
           }, [selectedCompany, companies]);
 
-          // --- FUNÇÃO CENTRAL PARA SALVAR NA NUVEM ---
           const saveToCloud = (updates) => {
               if (!selectedCompany) return;
               db.collection('companies').doc(selectedCompany).set(updates, { merge: true }).catch(err => alert("Erro ao salvar na nuvem!"));
@@ -171,7 +165,7 @@
           const getStatusColor = (originalColor, status) => {
             if (status === 'done') return '#22c55e'; 
             if (status === 'late') return '#ef4444'; 
-            return originalColor;
+            return originalColor || '#cccccc';
           };
 
           const addCompany = () => {
@@ -203,7 +197,9 @@
           const cancelEditCompany = () => { setEditingCompany(null); setEditCompanyName(''); };
 
           const getTextColor = (bgColor) => {
+            if (!bgColor) return '#000000';
             const hex = bgColor.replace('#', '');
+            if (hex.length < 6) return '#000000';
             const r = parseInt(hex.substr(0, 2), 16);
             const g = parseInt(hex.substr(2, 2), 16);
             const b = parseInt(hex.substr(4, 2), 16);
@@ -230,10 +226,10 @@
           const startEditEvent = (event, originalIndex) => {
             setEditingEventIndex(originalIndex);
             setEditEventForm({
-                day: event.day,
+                day: event.day || '',
                 time: event.time || '',
-                text: event.text,
-                color: event.color
+                text: event.text || '',
+                color: event.color || ''
             });
           };
 
@@ -274,8 +270,8 @@
 
           const startEditCategory = (category) => {
             setEditingColor(category.id);
-            setEditLabel(category.label);
-            setEditColorValue(category.color);
+            setEditLabel(category.label || '');
+            setEditColorValue(category.color || '#000000');
           };
 
           const saveEditCategory = () => {
@@ -420,11 +416,11 @@
             ctx.font = 'bold 14px Arial';
             
             let totalHeight = padding; 
-            totalHeight += 100; // Título
-            totalHeight += 80; // Dias da semana
+            totalHeight += 100; 
+            totalHeight += 80; 
             
             weeks.forEach(week => {
-              totalHeight += 50; // Barra preta numeração
+              totalHeight += 50; 
               let maxWeekHeightCalc = 0;
               
               week.forEach(day => {
@@ -574,7 +570,6 @@
               currentY += maxWeekHeight + 30; 
             });
 
-            // DESENHAR LEGENDA
             if (legendItems.length > 0) {
               currentY += 40;
               ctx.fillStyle = '#000000';
@@ -591,7 +586,7 @@
                 const itemX = padding + 150 + (col * (itemWidth + 10));
                 const itemY = currentY + (row * 45);
                 
-                ctx.fillStyle = item.color;
+                ctx.fillStyle = item.color || '#000000';
                 ctx.beginPath();
                 ctx.roundRect(itemX, itemY, itemWidth, 36, 18);
                 ctx.fill();
@@ -600,7 +595,7 @@
                 ctx.font = 'bold 16px Arial';
                 ctx.textAlign = 'center';
                 
-                let label = item.label;
+                let label = item.label || '';
                 while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
                 
                 ctx.fillText(label, itemX + (itemWidth / 2), itemY + 24);
@@ -666,10 +661,8 @@
                   </h2>
                 </div>
 
-                {/* VISUALIZAÇÃO PARA PC (GRADE) */}
                 <div className="hidden md:block overflow-x-auto pb-4">
                   <div className="min-w-[800px]">
-                    
                     <div className="grid grid-cols-7 gap-4 mb-6">
                       {fullWeekDays.map(day => (
                         <div key={day} className="bg-black text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
@@ -726,7 +719,6 @@
                   </div>
                 </div>
 
-                {/* VISUALIZAÇÃO PARA CELULAR (LISTA DE AGENDA VERTICAL) */}
                 <div className="block md:hidden space-y-3 mt-2">
                   {daysArray.map(day => {
                     const dayEvents = getEventsForDay(day);
@@ -777,13 +769,12 @@
                   })}
                 </div>
 
-                {/* LEGENDA */}
                 {getLegendItems().length > 0 && (
                   <div className="mt-8 md:mt-12 pt-6 border-t">
                     <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800">LEGENDA</h3>
                     <div className="flex flex-wrap gap-2 md:gap-3">
                       {getLegendItems().map(item => (
-                        <div key={item.id} style={{ backgroundColor: item.color, color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-1 md:py-2 text-xs md:text-sm font-bold shadow-sm">
+                        <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-1 md:py-2 text-xs md:text-sm font-bold shadow-sm">
                           {item.label}
                         </div>
                       ))}
@@ -816,7 +807,6 @@
               );
           }
 
-          // Preparando os eventos do mês agrupados por categoria
           const eventsWithOriginalIndex = (events || []).map((ev, index) => ({ ...ev, originalIndex: index }));
           const currentMonthEventsList = eventsWithOriginalIndex.filter(e => e.month === month && e.year === year);
 
@@ -830,7 +820,7 @@
                       <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800">
                         <CalendarDays /> Criador de Calendário UPLI
                       </h1>
-                      <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><Database /> Sincronizado na Nuvem ao vivo</p>
+                      <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><Database /> Conectado à Nuvem Firebase</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
                       <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="Importar TXT com cores">
@@ -910,7 +900,7 @@
                       <div className="bg-blue-50 p-4 md:p-5 rounded-xl border border-blue-100">
                         <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
                         <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Ex: REELS..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500 w-full" />
+                          <input type="text" placeholder="Ex: REELS..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none focus:border-blue-50 w-full" />
                           <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
                           <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold hover:bg-blue-700 transition">Add</button>
                         </div>
@@ -929,7 +919,7 @@
                             }
                             
                             return (
-                              <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group">
+                              <div key={color.id} style={{backgroundColor: color.color || '#000000', color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group">
                                 {color.label}
                                 <button onClick={() => startEditCategory(color)} className="ml-1 opacity-70 hover:opacity-100 transition-opacity" title="Editar Cor/Nome"><Edit2 /></button>
                                 <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm" title="Remover Categoria">×</button>
@@ -969,7 +959,7 @@
 
                         return (
                           <div key={category.id} className="bg-white border rounded-xl p-4 shadow-sm">
-                            <h4 className="font-black text-lg mb-3 border-b pb-2" style={{ color: category.color }}>{category.label}</h4>
+                            <h4 className="font-black text-lg mb-3 border-b pb-2" style={{ color: category.color || '#000000' }}>{category.label}</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                               {catEvents.map((event) => {
                                 const originalIndex = event.originalIndex;
@@ -1002,7 +992,7 @@
                                       <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded flex-shrink-0 mt-0.5">
                                         D{event.day} {event.time && <span className="ml-1 text-[10px] opacity-70">({event.time})</span>}
                                       </span>
-                                      <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md flex-1 break-words whitespace-normal leading-tight">
+                                      <span style={{backgroundColor: category.color || '#000000', color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md flex-1 break-words whitespace-normal leading-tight">
                                         {event.text}
                                       </span>
                                     </div>
