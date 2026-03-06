@@ -37,6 +37,7 @@
             }
         }
 
+        // --- SUAS CHAVES DO FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
           authDomain: "calendario-upli.firebaseapp.com",
@@ -61,7 +62,6 @@
         const CalendarDays = () => <span>📅</span>;
         const Edit2 = () => <span>✏️</span>;
         const LogOut = () => <span>🚪</span>;
-        const Clock = () => <span className="mr-1 opacity-80">⏰</span>;
         const DatabaseIcon = () => <span>☁️</span>;
         const MessageSquare = () => <span className="text-[10px]">💬</span>;
         const FilterIcon = () => <span>🔍</span>;
@@ -130,7 +130,8 @@
           const [month, setMonth] = useState(2); 
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
-          const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '', notes: '' });
+          // Removido o Time, mantendo apenas Data, Texto, Cor e Notas
+          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           
           const [editingColor, setEditingColor] = useState(null);
@@ -138,7 +139,7 @@
           const [editColorValue, setEditColorValue] = useState('');
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', time: '', text: '', color: '', notes: '' });
+          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '' });
           const [expandedNoteIndex, setExpandedNoteIndex] = useState(null); 
           
           const [eventStatuses, setEventStatuses] = useState({});
@@ -258,7 +259,7 @@
             
             const updatedEvents = [...events, { ...newEvent, day: dayNum, month: month, year: year }];
             saveToCloud({ events: updatedEvents });
-            setNewEvent({ day: '', time: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '' });
+            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '' });
           };
 
           const removeEvent = (index) => {
@@ -270,7 +271,6 @@
             setEditingEventIndex(originalIndex);
             setEditEventForm({
                 day: event.day || '',
-                time: event.time || '',
                 text: event.text || '',
                 color: event.color || '',
                 notes: event.notes || ''
@@ -287,7 +287,6 @@
             updatedEvents[editingEventIndex] = {
                 ...updatedEvents[editingEventIndex],
                 day: dayNum,
-                time: editEventForm.time,
                 text: editEventForm.text,
                 color: editEventForm.color,
                 notes: editEventForm.notes
@@ -331,30 +330,39 @@
             if (confirm('⚠️ Apagar TODOS os eventos desta empresa?')) saveToCloud({ events: [], categories: [], statuses: {} });
           };
 
+          // Exportar evento como "O DIA TODO" no Google Agenda
           const exportSingleToGoogleCalendar = (event) => {
               const companyName = companies.find(c => c.id === selectedCompany)?.name || 'UPLI';
-              const dateStr = `${year}${String(month + 1).padStart(2, '0')}${String(event.day).padStart(2, '0')}`;
-              let timeStrStart = '090000'; let timeStrEnd = '100000';
-              if (event.time) {
-                  const [hr, min] = event.time.split(':');
-                  timeStrStart = `${hr}${min}00`;
-                  const endHr = String((parseInt(hr) + 1) % 24).padStart(2, '0'); 
-                  timeStrEnd = `${endHr}${min}00`;
-              }
-              const dates = `${dateStr}T${timeStrStart}/${dateStr}T${timeStrEnd}`;
+              
+              // Cria a data do evento
+              const startDate = new Date(year, month, event.day);
+              // Para evento de dia inteiro, o Google exige que a data final seja o DIA SEGUINTE
+              const endDate = new Date(year, month, event.day + 1);
+
+              const startStr = `${startDate.getFullYear()}${String(startDate.getMonth() + 1).padStart(2, '0')}${String(startDate.getDate()).padStart(2, '0')}`;
+              const endStr = `${endDate.getFullYear()}${String(endDate.getMonth() + 1).padStart(2, '0')}${String(endDate.getDate()).padStart(2, '0')}`;
+              
+              const dates = `${startStr}/${endStr}`;
               const title = encodeURIComponent(`[${companyName}] ${event.text}`);
               const details = encodeURIComponent(event.notes || 'Sem anotações.');
+              
               window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`, '_blank');
           };
 
           const handleFileUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
+
             const reader = new FileReader();
             reader.onload = (event) => {
               const content = event.target.result;
               const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-              if (lines.length < 2) return alert('O arquivo deve ter pelo menos 2 linhas.');
+              
+              if (lines.length < 2) {
+                  alert('O arquivo deve ter pelo menos 2 linhas.');
+                  e.target.value = '';
+                  return;
+              }
 
               const compName = lines[0];
               let comp = companies.find(c => c.name.toLowerCase() === compName.toLowerCase());
@@ -367,19 +375,17 @@
 
                 let catName = parts[0].trim();
                 let catColor = null;
-                let dayNumStr, timeStr, desc;
+                let dayNumStr, desc;
 
                 if (parts[1].trim().startsWith('#')) {
-                    catColor = parts[1].trim(); dayNumStr = parts[2] ? parts[2].trim() : '';
-                    if (parts.length === 4) { timeStr = ''; desc = parts[3].trim(); }
-                    else if (parts.length > 4) { timeStr = parts[3].trim(); desc = parts.slice(4).join(';').trim(); }
-                    else return;
+                    catColor = parts[1].trim();
+                    dayNumStr = parts[2] ? parts[2].trim() : '';
+                    desc = parts.slice(3).join(';').trim();
                 } else {
                     dayNumStr = parts[1].trim();
-                    if (parts.length === 3) { timeStr = ''; desc = parts[2].trim(); }
-                    else if (parts.length > 3) { timeStr = parts[2].trim(); desc = parts.slice(3).join(';').trim(); }
-                    else return;
+                    desc = parts.slice(2).join(';').trim();
                 }
+
                 const dayNum = parseInt(dayNumStr);
                 if (!catName || isNaN(dayNum) || !desc) return;
 
@@ -389,12 +395,20 @@
                   category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: finalColor };
                   compData.categories.push(category);
                 }
-                compData.events.push({ day: dayNum, time: timeStr, text: desc, color: category.id, month: month, year: year });
+
+                compData.events.push({ day: dayNum, text: desc, color: category.id, month: month, year: year });
               });
 
               db.collection('companies').doc(compId).set({
-                  name: compName, events: compData.events, categories: compData.categories, statuses: compData.statuses || {}
-              }, { merge: true }).then(() => { setSelectedCompany(compId); alert(`Eventos importados com sucesso!`); });
+                  name: compName,
+                  events: compData.events,
+                  categories: compData.categories,
+                  statuses: compData.statuses || {}
+              }, { merge: true }).then(() => {
+                  setSelectedCompany(compId);
+                  alert(`Eventos importados com sucesso!`);
+              });
+
               e.target.value = ''; 
             };
             reader.readAsText(file);
@@ -420,13 +434,19 @@
           };
 
           const getWeeks = () => {
-            const weeks = []; let currentWeek = new Array(7).fill(null);
+            const weeks = [];
+            let currentWeek = new Array(7).fill(null);
             const daysInMonth = getDaysInMonth(year, month);
             let currentDayOfWeek = getFirstDayOfMonth(year, month);
 
             for (let day = 1; day <= daysInMonth; day++) {
-              currentWeek[currentDayOfWeek] = day; currentDayOfWeek++;
-              if (currentDayOfWeek === 7) { weeks.push(currentWeek); currentWeek = new Array(7).fill(null); currentDayOfWeek = 0; }
+              currentWeek[currentDayOfWeek] = day;
+              currentDayOfWeek++;
+              if (currentDayOfWeek === 7) {
+                weeks.push(currentWeek);
+                currentWeek = new Array(7).fill(null);
+                currentDayOfWeek = 0;
+              }
             }
             if (currentDayOfWeek > 0) weeks.push(currentWeek);
             return weeks;
@@ -434,19 +454,24 @@
 
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
-            const words = text.split(' '); const lines = []; let currentLine = words[0];
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+
             for (let i = 1; i < words.length; i++) {
                 const word = words[i];
-                if (ctx.measureText(currentLine + " " + word).width < maxWidth) currentLine += " " + word;
-                else { lines.push(currentLine); currentLine = word; }
+                const width = ctx.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) {
+                    currentLine += " " + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
             }
             lines.push(currentLine);
             return lines;
           };
 
-          // =========================================================================
-          // NOVO SISTEMA DE DESENHO DO CANVAS (QUALIDADE 4K)
-          // =========================================================================
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -458,8 +483,8 @@
             const colWidth = contentWidth / 7;
             const eventSpacing = 8;
             
-            // Calculando a altura física necessária
             ctx.font = 'bold 14px Arial';
+            
             let totalHeight = padding; 
             totalHeight += 100; 
             totalHeight += 80; 
@@ -473,7 +498,6 @@
                   let colHeight = 0;
                   dayEvents.forEach(event => {
                     let displayText = event.text || '';
-                    if (event.time) displayText = `⏰ ${event.time} ` + displayText;
                     const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
                     const status = getEventStatus(originalIndex);
                     if (status === 'done') displayText += ' ✓';
@@ -499,16 +523,13 @@
             
             const finalHeight = Math.max(1080, totalHeight);
 
-            // ---> A MÁGICA DO 4K ACONTECE AQUI <---
-            const scale = 3; // Multiplica os pixels reais por 3 (Maior Qualidade)
+            const scale = 3; 
             canvas.width = canvasWidth * scale;
             canvas.height = finalHeight * scale;
             
-            // Suaviza as fontes para evitar serrilhados
             ctx.scale(scale, scale);
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            // ----------------------------------------
             
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
@@ -578,7 +599,6 @@
                   
                   ctx.font = 'bold 14px Arial';
                   let displayText = event.text || '';
-                  if (event.time) displayText = `⏰ ${event.time} ` + displayText;
                   if (status === 'done') displayText += ' ✓';
                   if (status === 'late') displayText += ' ⚠';
                   
@@ -649,7 +669,6 @@
             return { canvas, finalHeight };
           };
 
-          // Exportar Imagem em Alta Resolução (PNG)
           const exportAsImage = async () => {
             try {
               const { canvas } = drawCalendarToCanvas();
@@ -665,7 +684,6 @@
             } catch (error) { alert('Erro ao exportar imagem.'); }
           };
 
-          // Exportar PDF em Alta Resolução
           const exportAsPDF = async () => {
             try {
               if (!window.jspdf) {
@@ -675,17 +693,15 @@
                 await new Promise((resolve) => scriptPDF.onload = resolve);
               }
               const { canvas, finalHeight } = drawCalendarToCanvas();
-              // Pega a imagem na resolução 4K
               const imgData = canvas.toDataURL('image/png', 1.0);
               
               const pdf = new window.jspdf.jsPDF({
                 orientation: finalHeight > 1920 ? 'portrait' : 'landscape',
                 unit: 'px',
-                format: [1920, finalHeight], // Mantém o tamanho do papel normal, para não ficar uma folha gigante
+                format: [1920, finalHeight],
                 compress: true
               });
               
-              // Insere a imagem 4K comprimida dentro do espaço da folha
               pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight, '', 'FAST');
               const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
               pdf.save(`calendario-${companyName}-${months[month]}-${year}-HQ.pdf`);
@@ -759,7 +775,6 @@
                                       onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
                                     >
                                       <span>
-                                          {event.time && <span className="opacity-90 font-black mr-1"><Clock /> {event.time}</span>}
                                           {event.text}
                                           {event.notes && <span className="ml-1 text-yellow-300 drop-shadow-md"><MessageSquare /></span>}
                                           {status === 'done' && <span className="ml-1">✓</span>}
@@ -782,6 +797,65 @@
                       ))}
                     </div>
                   </div>
+                </div>
+
+                {/* --- MODO CELULAR (AGENDA VERTICAL) --- */}
+                <div className="block md:hidden space-y-4 mt-2">
+                  {daysArray.map(day => {
+                    const dayEvents = getEventsForDay(day);
+                    const date = new Date(year, month, day);
+                    const dayOfWeek = fullWeekDays[date.getDay()];
+                    
+                    if(activeFilter !== 'ALL' && dayEvents.length === 0) return null; // Esconde dias vazios se tiver filtro
+
+                    return (
+                      <div key={day} className={`border-2 rounded-2xl p-4 shadow-sm transition ${dayEvents.length > 0 ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className="flex items-center gap-3 mb-3 border-b pb-2">
+                          <span className={`w-10 h-10 flex items-center justify-center rounded-full font-black text-lg ${dayEvents.length > 0 ? 'bg-black text-white shadow-md' : 'bg-gray-200 text-gray-500'}`}>
+                            {day}
+                          </span>
+                          <span className={`font-black text-sm uppercase tracking-wide ${dayEvents.length > 0 ? 'text-gray-800' : 'text-gray-400'}`}>
+                            {dayOfWeek}
+                          </span>
+                        </div>
+                        
+                        {dayEvents.length > 0 ? (
+                          <div className="flex flex-col gap-3 pl-2">
+                            {dayEvents.map((event, eIdx) => {
+                              const color = safeColorOptions.find(c => c.id === event.color);
+                              if (!color) return null;
+                              
+                              const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                              const status = getEventStatus(originalIndex);
+                              const finalColor = getStatusColor(color.color, status);
+                              const textColor = getTextColor(finalColor);
+                              
+                              return (
+                                <div
+                                  key={eIdx}
+                                  style={{ backgroundColor: finalColor, color: textColor }}
+                                  className="rounded-xl px-4 py-3 text-sm font-bold shadow-md flex flex-col break-words whitespace-normal leading-tight"
+                                >
+                                  <span>
+                                      {event.text}
+                                      {status === 'done' && <span className="ml-2">✓</span>}
+                                      {status === 'late' && <span className="ml-2">⚠</span>}
+                                  </span>
+                                  {event.notes && (
+                                    <div style={{ backgroundColor: 'rgba(255,255,255,0.2)'}} className="mt-2 p-2 rounded-lg text-xs font-normal border border-white border-opacity-30">
+                                        <p className="whitespace-pre-wrap">{event.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs font-bold text-gray-400 italic pl-2">Nenhum post agendado para hoje.</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -865,18 +939,17 @@
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-                      <div className="flex items-center gap-3 mr-2 bg-blue-50 border border-blue-200 px-4 py-2 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-3 mr-2 bg-blue-50 border border-blue-200 px-4 py-2 rounded-xl shadow-sm w-full md:w-auto">
                           <div className="bg-blue-200 text-blue-700 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
-                          <div className="flex flex-col leading-tight">
+                          <div className="flex flex-col leading-tight flex-1">
                               <span className="text-sm font-black text-gray-800">{currentUserName}</span>
                               <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'admin' ? 'text-blue-600' : 'text-green-600'}`}>{userRole === 'admin' ? 'Administrador' : 'Modo Cliente'}</span>
                           </div>
                           <button onClick={() => { setNewDisplayName(user.displayName || ''); setShowProfileModal(true); }} className="text-blue-400 hover:text-blue-700 transition p-1 ml-1"><Edit2/></button>
                       </div>
 
-                      {/* BOTÕES DE EXPORTAÇÃO EM ALTA QUALIDADE */}
-                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm" title="Baixar Imagem 4K"><ImageIcon /> Baixar PNG</button>
-                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm" title="Baixar PDF em Alta Definição"><PDFIcon /> Baixar PDF</button>
+                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm"><ImageIcon /> Baixar PNG</button>
+                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm"><PDFIcon /> Baixar PDF</button>
 
                       <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 text-red-700 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
                     </div>
@@ -887,9 +960,9 @@
                     <div className="space-y-6">
                       <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200">
                         <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                        <div className="flex gap-2 mb-4">
+                        <div className="flex flex-col sm:flex-row gap-2 mb-4">
                           <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 outline-none w-full" />
-                          <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 font-bold hover:bg-black transition">Add</button>
+                          <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 py-2 font-bold hover:bg-black transition w-full sm:w-auto">Adicionar</button>
                         </div>
                         {companies.map(company => (
                               <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
@@ -899,7 +972,7 @@
                         ))}
                       </div>
 
-                      <div className="flex gap-4">
+                      <div className="flex flex-col sm:flex-row gap-4">
                         <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold bg-white outline-none flex-1">
                           {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                         </select>
@@ -910,15 +983,19 @@
                     <div className="space-y-6">
                       <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                         <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
-                        <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none" />
-                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded" />
-                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold">Add</button>
+                        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                          <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none w-full" />
+                          
+                          {/* CORRIGIDO O SELETOR DE COR COM BORDA E CLICK NO CELULAR */}
+                          <div className="flex gap-2">
+                              <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
+                              <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto">Add</button>
+                          </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {safeColorOptions.map(color => (
                               <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold">
-                                {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900">×</button>
+                                {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm">×</button>
                               </div>
                           ))}
                         </div>
@@ -927,19 +1004,21 @@
                       <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                         <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
                         <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
-                              <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-16 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
-                              <input type="time" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} className="w-28 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
-                              <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none" />
+                          
+                          {/* CORRIGIDO: QUEBRA DE LINHA NO CELULAR PARA O TEXTO E DIA NÃO ESPREMEREM */}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                              <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 rounded-lg px-3 py-2 text-center font-bold outline-none" />
+                              <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none w-full" />
                           </div>
+
                           <textarea placeholder="Anotações / Roteiro / Link do Drive..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 rounded-lg px-3 py-2 outline-none text-sm h-16 resize-none"></textarea>
                           
-                          <div className="flex gap-2 mt-1">
-                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 font-bold bg-white">
+                          <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 font-bold bg-white w-full">
                                 <option value="">Escolher cor...</option>
                                 {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                               </select>
-                              <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold">Postar</button>
+                              <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold w-full sm:w-auto">Postar</button>
                           </div>
                         </div>
                       </div>
@@ -958,19 +1037,20 @@
                           
                           if (editingEventIndex === originalIndex) {
                             return (
-                              <div key={originalIndex} className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 flex flex-col gap-2">
-                                <div className="flex gap-2">
-                                  <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-16 border p-1 rounded outline-none font-bold" />
-                                  <input type="time" value={editEventForm.time} onChange={e => setEditEventForm({...editEventForm, time: e.target.value})} className="border p-1 rounded outline-none" />
-                                  <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border p-1 rounded outline-none" />
+                              <div key={originalIndex} className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 flex flex-col gap-2 shadow-md">
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-full sm:w-20 border-2 p-2 rounded-lg outline-none font-bold text-center" />
+                                  <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border-2 p-2 rounded-lg outline-none w-full" />
                                 </div>
-                                <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border p-1 rounded outline-none text-sm h-16" placeholder="Anotações..."></textarea>
-                                <div className="flex gap-2">
-                                    <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border p-1 rounded bg-white">
+                                <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border-2 p-2 rounded-lg outline-none text-sm h-16" placeholder="Anotações..."></textarea>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border-2 p-2 rounded-lg bg-white w-full font-bold">
                                       {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                                     </select>
-                                    <button onClick={saveEditEvent} className="bg-green-500 text-white px-4 rounded font-bold">Salvar</button>
-                                    <button onClick={cancelEditEvent} className="bg-gray-400 text-white px-4 rounded font-bold">Cancelar</button>
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                        <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg font-bold">Salvar</button>
+                                        <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-4 py-2 rounded-lg font-bold">Cancelar</button>
+                                    </div>
                                 </div>
                               </div>
                             );
@@ -979,7 +1059,7 @@
                           return (
                             <div key={originalIndex} className="bg-gray-50 border rounded-lg p-3 flex flex-col gap-2 transition hover:bg-white hover:shadow-md">
                               <div className="flex items-start gap-2">
-                                <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded">D{event.day} {event.time && `(${event.time})`}</span>
+                                <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded mt-0.5">D{event.day}</span>
                                 <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md">{event.text}</span>
                               </div>
                               
@@ -990,18 +1070,17 @@
                               )}
 
                               {userRole === 'admin' && (
-                                  <div className="flex justify-between items-center mt-1">
-                                    <div className="flex gap-1">
-                                      <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-xs font-bold ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700'}`}>✓ Feito</button>
-                                      <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-xs font-bold ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'}`}>⚠ Atraso</button>
+                                  <div className="flex flex-col sm:flex-row justify-between sm:items-center mt-2 gap-3 sm:gap-0">
+                                    <div className="flex gap-1 w-full sm:w-auto">
+                                      <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`flex-1 sm:flex-none px-3 py-1 rounded text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
+                                      <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`flex-1 sm:flex-none px-3 py-1 rounded text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
                                     </div>
-                                    <div className="flex gap-2">
-                                      <button onClick={() => exportSingleToGoogleCalendar(event)} className="bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1" title="Adicionar à minha Agenda do Google">
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                      <button onClick={() => exportSingleToGoogleCalendar(event)} className="flex-1 sm:flex-none bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1 rounded text-xs font-bold transition flex items-center justify-center gap-1">
                                           + Agenda
                                       </button>
-                                      <span className="text-gray-300 mx-1">|</span>
-                                      <button onClick={() => startEditEvent(event, originalIndex)} className="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 rounded transition"><Edit2 /></button>
-                                      <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 rounded transition"><Trash2 /></button>
+                                      <button onClick={() => startEditEvent(event, originalIndex)} className="flex-1 sm:flex-none text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded transition font-bold"><Edit2 /></button>
+                                      <button onClick={() => removeEvent(originalIndex)} className="flex-1 sm:flex-none text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1 rounded transition font-bold"><Trash2 /></button>
                                     </div>
                                   </div>
                               )}
