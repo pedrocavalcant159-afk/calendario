@@ -72,6 +72,7 @@
           const [email, setEmail] = useState('');
           const [password, setPassword] = useState('');
           const [loadingAuth, setLoadingAuth] = useState(true);
+          const [isResetMode, setIsResetMode] = useState(false); // Controla se a tela é de Login ou Recuperação
           
           const [currentUserName, setCurrentUserName] = useState('');
           const [showProfileModal, setShowProfileModal] = useState(false);
@@ -110,13 +111,33 @@
               });
           };
 
-          const handleResetPassword = () => {
+          // Função para recuperar senha de quem JÁ ESTÁ LOGADO (pelo modal de perfil)
+          const handleResetPasswordLogged = () => {
               if (!user || !user.email) return;
               auth.sendPasswordResetEmail(user.email).then(() => {
                   alert(`Um e-mail de redefinição de senha foi enviado para: ${user.email}. Verifique sua caixa de entrada (e o Spam)!`);
                   setShowProfileModal(false);
               }).catch(error => {
                   alert("Erro ao enviar e-mail: " + error.message);
+              });
+          };
+
+          // Função para recuperar senha NA TELA DE LOGIN (quando não está logado)
+          const handleForgotPasswordSubmit = (e) => {
+              e.preventDefault();
+              if (!email) {
+                  alert("Por favor, digite o seu e-mail.");
+                  return;
+              }
+              auth.sendPasswordResetEmail(email).then(() => {
+                  alert(`O link de recuperação foi enviado para: ${email}\n\nVerifique sua caixa de entrada e a pasta de Spam!`);
+                  setIsResetMode(false); // Volta pra tela normal de login automaticamente
+              }).catch(error => {
+                  if (error.code === 'auth/user-not-found') {
+                      alert("Erro: Este e-mail não está cadastrado no sistema.");
+                  } else {
+                      alert("Erro ao tentar recuperar a senha: " + error.message);
+                  }
               });
           };
 
@@ -850,21 +871,76 @@
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 font-bold text-gray-500">Carregando Nuvem...</div>;
 
-          // --- TELA DE LOGIN ---
+          // --- TELA DE LOGIN DINÂMICA (Login x Recuperar Senha) ---
           if (!user) {
               return (
                   <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
-                      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full">
+                      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full relative overflow-hidden">
+                          
+                          {/* Cabeçalho que muda dependendo da tela */}
                           <div className="text-center mb-8">
-                              <span className="text-5xl">📅</span>
-                              <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">Calendário UPLI</h2>
-                              <p className="text-gray-500 text-sm mt-1">Faça login para acessar a nuvem</p>
+                              <span className="text-5xl">{isResetMode ? '🔐' : '📅'}</span>
+                              <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">
+                                  {isResetMode ? 'Recuperar Senha' : 'Calendário UPLI'}
+                              </h2>
+                              <p className="text-gray-500 text-sm mt-1">
+                                  {isResetMode ? 'Digite seu e-mail para receber o link' : 'Faça login para acessar a nuvem'}
+                              </p>
                           </div>
-                          <form onSubmit={handleLogin} className="space-y-4">
-                              <input type="email" placeholder="E-mail de acesso" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
-                              <input type="password" placeholder="Senha" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={password} onChange={e=>setPassword(e.target.value)} required />
-                              <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENTRAR</button>
-                          </form>
+                          
+                          {isResetMode ? (
+                              /* TELA DE ESQUECI A SENHA */
+                              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
+                                  <input 
+                                      type="email" 
+                                      placeholder="Seu e-mail cadastrado" 
+                                      className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" 
+                                      value={email} 
+                                      onChange={e=>setEmail(e.target.value)} 
+                                      required 
+                                  />
+                                  
+                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">
+                                      ENVIAR LINK
+                                  </button>
+                                  
+                                  <div className="text-center mt-4 pt-2 border-t">
+                                      <button type="button" onClick={() => setIsResetMode(false)} className="text-sm text-gray-500 hover:text-gray-800 font-bold transition">
+                                          ← Voltar para o login
+                                      </button>
+                                  </div>
+                              </form>
+                          ) : (
+                              /* TELA DE LOGIN NORMAL */
+                              <form onSubmit={handleLogin} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
+                                  <input 
+                                      type="email" 
+                                      placeholder="E-mail de acesso" 
+                                      className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" 
+                                      value={email} 
+                                      onChange={e=>setEmail(e.target.value)} 
+                                      required 
+                                  />
+                                  <input 
+                                      type="password" 
+                                      placeholder="Senha" 
+                                      className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" 
+                                      value={password} 
+                                      onChange={e=>setPassword(e.target.value)} 
+                                      required 
+                                  />
+                                  
+                                  <div className="flex justify-end">
+                                      <button type="button" onClick={() => setIsResetMode(true)} className="text-sm text-blue-600 hover:text-blue-800 font-bold transition mt-1">
+                                          Esqueceu a senha?
+                                      </button>
+                                  </div>
+
+                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">
+                                      ENTRAR
+                                  </button>
+                              </form>
+                          )}
                       </div>
                   </div>
               );
@@ -897,7 +973,7 @@
                               <button onClick={handleUpdateProfile} className="w-full bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition shadow-sm">
                                   Salvar Nome
                               </button>
-                              <button onClick={handleResetPassword} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">
+                              <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">
                                   Redefinir Senha (E-mail)
                               </button>
                               <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">
