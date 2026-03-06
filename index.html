@@ -3,43 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Calendário de Conteúdo</title>
+    <title>Criador de Calendário de Conteúdo - UPLI</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 </head>
 <body className="bg-gray-100">
     <div id="root"></div>
     
     <script type="text/babel">
-        const { useState, useRef, useEffect } = React;
+        // --- SUAS CHAVES DO FIREBASE (JÁ CONFIGURADAS) ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
+          authDomain: "calendario-upli.firebaseapp.com",
+          projectId: "calendario-upli",
+          storageBucket: "calendario-upli.firebasestorage.app",
+          messagingSenderId: "849051732172",
+          appId: "1:849051732172:web:14735da6c16d19bcf71a69",
+          measurementId: "G-6YXY6KY98T"
+        };
+
+        // Inicializando o Banco de Dados (com proteção)
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const { useState, useEffect } = React;
         
         // Ícones
         const Download = () => <span>⬇️</span>;
         const Upload = () => <span>📤</span>;
-        const Plus = () => <span>➕</span>;
         const Trash2 = () => <span>🗑️</span>;
         const CalendarDays = () => <span>📅</span>;
         const Edit2 = () => <span>✏️</span>;
-        const Save = () => <span>💾</span>;
-        const Database = () => <span>💾</span>;
+        const LogOut = () => <span>🚪</span>;
         const Clock = () => <span className="mr-1 opacity-80">⏰</span>;
         
         const CalendarCreator = () => {
+          // --- SISTEMA DE LOGIN ---
+          const [user, setUser] = useState(null);
+          const [email, setEmail] = useState('');
+          const [password, setPassword] = useState('');
+          const [loadingAuth, setLoadingAuth] = useState(true);
+
+          useEffect(() => {
+             const unsubscribe = auth.onAuthStateChanged(u => {
+                 setUser(u);
+                 setLoadingAuth(false);
+             });
+             return () => unsubscribe();
+          }, []);
+
+          const handleLogin = (e) => {
+             e.preventDefault();
+             auth.signInWithEmailAndPassword(email, password).catch(err => {
+                 alert("Erro ao entrar: Verifique o e-mail e a senha cadastrados no Firebase.");
+             });
+          };
+
+          const handleLogout = () => auth.signOut();
+
+          // --- ESTADOS DO CALENDÁRIO ---
           const [year, setYear] = useState(2026);
-          const [month, setMonth] = useState(2); // Começando em Março
+          const [month, setMonth] = useState(2); 
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
           const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           
-          // Estados para edição de Categoria
           const [editingColor, setEditingColor] = useState(null);
           const [editLabel, setEditLabel] = useState('');
           const [editColorValue, setEditColorValue] = useState('');
+
+          const [editingEventIndex, setEditingEventIndex] = useState(null);
+          const [editEventForm, setEditEventForm] = useState({ day: '', time: '', text: '', color: '' });
           
-          const [lastSaved, setLastSaved] = useState(null);
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
           const [selectedCompany, setSelectedCompany] = useState(null);
@@ -47,52 +92,65 @@
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
 
+          // --- PUXAR DADOS DO BANCO DE DADOS EM TEMPO REAL (COM PROTEÇÃO ANTI-TELA BRANCA) ---
           useEffect(() => {
-            try {
-              const savedCompanies = JSON.parse(localStorage.getItem('calendar_companies') || '[]');
-              if (savedCompanies.length > 0) {
-                setCompanies(savedCompanies);
-                setSelectedCompany(savedCompanies[0].id);
+            if (!user) return;
+            const unsubscribe = db.collection('companies').onSnapshot(snapshot => {
+                try {
+                    const fetchedCompanies = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        // Força a existência das variáveis mesmo que o banco venha vazio
+                        fetchedCompanies.push({ 
+                            id: doc.id, 
+                            name: data.name || 'Nova Empresa', 
+                            events: data.events || [],
+                            categories: data.categories || [],
+                            statuses: data.statuses || {}
+                        });
+                    });
+                    
+                    // Ordenar por nome de forma segura
+                    fetchedCompanies.sort((a,b) => String(a.name).localeCompare(String(b.name)));
+                    setCompanies(fetchedCompanies);
+
+                    if (!selectedCompany && fetchedCompanies.length > 0) {
+                        setSelectedCompany(fetchedCompanies[0].id);
+                    }
+                } catch (error) {
+                    console.error("Erro ao ler banco de dados:", error);
+                }
+            }, error => {
+                console.error("Erro de permissão no banco:", error);
+                alert("Falta de permissão no banco de dados. Confira se as regras estão em Modo de Teste.");
+            });
+            return () => unsubscribe();
+          }, [user, selectedCompany]);
+
+          // --- ATUALIZAR A TELA QUANDO SELECIONA A EMPRESA OU ALGUÉM EDITA ---
+          useEffect(() => {
+              if (selectedCompany) {
+                  const comp = companies.find(c => c.id === selectedCompany);
+                  if (comp) {
+                      setEvents(comp.events || []);
+                      setColorOptions(comp.categories || []);
+                      setEventStatuses(comp.statuses || {});
+                  }
+              } else {
+                  setEvents([]); setColorOptions([]); setEventStatuses({});
               }
-            } catch (error) {
-              console.error('Erro ao carregar empresas:', error);
-            }
-          }, []);
+          }, [selectedCompany, companies]);
 
-          useEffect(() => {
-            if (!selectedCompany) return;
-            try {
-              const companyData = JSON.parse(localStorage.getItem(`company_${selectedCompany}`) || '{}');
-              setEvents(companyData.events || []);
-              setColorOptions(companyData.categories || []);
-              setEventStatuses(companyData.statuses || {});
-              if (companyData.lastSaved) setLastSaved(new Date(companyData.lastSaved));
-            } catch (error) {
-              console.error('Erro ao carregar dados da empresa:', error);
-            }
-          }, [selectedCompany]);
-
-          useEffect(() => {
-            if (!selectedCompany || (events.length === 0 && colorOptions.length === 0 && Object.keys(eventStatuses).length === 0)) return;
-            try {
-              const companyData = {
-                events: events,
-                categories: colorOptions,
-                statuses: eventStatuses,
-                lastSaved: new Date().toISOString()
-              };
-              localStorage.setItem(`company_${selectedCompany}`, JSON.stringify(companyData));
-              setLastSaved(new Date());
-            } catch (error) {
-              console.error('Erro ao salvar:', error);
-            }
-          }, [events, colorOptions, eventStatuses, selectedCompany]);
+          // --- FUNÇÃO CENTRAL PARA SALVAR NA NUVEM ---
+          const saveToCloud = (updates) => {
+              if (!selectedCompany) return;
+              db.collection('companies').doc(selectedCompany).set(updates, { merge: true }).catch(err => alert("Erro ao salvar na nuvem!"));
+          };
 
           const months = [
             'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
             'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
           ];
-
           const fullWeekDays = ['DOMINGO', 'SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO'];
 
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -100,64 +158,46 @@
 
           const toggleEventStatus = (eventIndex, status) => {
             const eventKey = `event_${eventIndex}`;
-            setEventStatuses(prev => {
-              const current = prev[eventKey];
-              if (current === status) {
-                const newStatuses = {...prev};
-                delete newStatuses[eventKey];
-                return newStatuses;
-              } else {
-                return {...prev, [eventKey]: status};
-              }
-            });
+            const current = eventStatuses[eventKey];
+            const newStatuses = {...eventStatuses};
+            if (current === status) delete newStatuses[eventKey];
+            else newStatuses[eventKey] = status;
+            
+            saveToCloud({ statuses: newStatuses });
           };
 
           const getEventStatus = (eventIndex) => eventStatuses[`event_${eventIndex}`] || null;
 
           const getStatusColor = (originalColor, status) => {
-            if (status === 'done') return '#22c55e'; // Verde
-            if (status === 'late') return '#ef4444'; // Vermelho
+            if (status === 'done') return '#22c55e'; 
+            if (status === 'late') return '#ef4444'; 
             return originalColor;
           };
 
           const addCompany = () => {
             if (newCompanyName.trim()) {
               const id = Date.now().toString();
-              const newCompany = { id, name: newCompanyName.trim() };
-              const updatedCompanies = [...companies, newCompany];
-              setCompanies(updatedCompanies);
-              localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+              db.collection('companies').doc(id).set({
+                  name: newCompanyName.trim(),
+                  events: [],
+                  categories: [],
+                  statuses: {}
+              });
               setSelectedCompany(id);
               setNewCompanyName('');
-              localStorage.setItem(`company_${id}`, JSON.stringify({ events: [], categories: [], statuses: {}, lastSaved: new Date().toISOString() }));
             }
           };
 
           const removeCompany = (companyId) => {
-            if (confirm('⚠️ ATENÇÃO: Isso apagará a empresa e TODOS os eventos e categorias dela. Deseja realmente excluir esta empresa?')) {
-              const updatedCompanies = companies.filter(c => c.id !== companyId);
-              setCompanies(updatedCompanies);
-              localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
-              localStorage.removeItem(`company_${companyId}`);
-              
-              if (selectedCompany === companyId) {
-                if (updatedCompanies.length > 0) {
-                  setSelectedCompany(updatedCompanies[0].id);
-                } else {
-                  setSelectedCompany(null);
-                  setEvents([]); 
-                  setColorOptions([]); 
-                  setEventStatuses({});
-                }
-              }
+            if (confirm('⚠️ ATENÇÃO: Isso apagará a empresa e TODOS os eventos para sempre. Tem certeza?')) {
+              db.collection('companies').doc(companyId).delete();
+              if (selectedCompany === companyId) setSelectedCompany(null);
             }
           };
 
           const startEditCompany = (company) => { setEditingCompany(company.id); setEditCompanyName(company.name); };
           const saveEditCompany = () => {
-            const updatedCompanies = companies.map(c => c.id === editingCompany ? { ...c, name: editCompanyName.trim() } : c );
-            setCompanies(updatedCompanies);
-            localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+            db.collection('companies').doc(editingCompany).update({ name: editCompanyName.trim() });
             setEditingCompany(null); setEditCompanyName('');
           };
           const cancelEditCompany = () => { setEditingCompany(null); setEditCompanyName(''); };
@@ -174,25 +214,61 @@
           const addEvent = () => {
             const dayNum = parseInt(newEvent.day);
             const daysInCurrentMonth = getDaysInMonth(year, month);
-            if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha todos os campos obrigatórios (Dia, Descrição e Categoria)!');
+            if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido para ${months[month]}`);
             
-            setEvents([...events, { ...newEvent, day: dayNum, month: month, year: year }]);
+            const updatedEvents = [...events, { ...newEvent, day: dayNum, month: month, year: year }];
+            saveToCloud({ events: updatedEvents });
             setNewEvent({ day: '', time: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '' });
           };
 
-          const removeEvent = (index) => setEvents(events.filter((_, i) => i !== index));
+          const removeEvent = (index) => {
+              const updatedEvents = events.filter((_, i) => i !== index);
+              saveToCloud({ events: updatedEvents });
+          };
+
+          const startEditEvent = (event, originalIndex) => {
+            setEditingEventIndex(originalIndex);
+            setEditEventForm({
+                day: event.day,
+                time: event.time || '',
+                text: event.text,
+                color: event.color
+            });
+          };
+
+          const saveEditEvent = () => {
+            const dayNum = parseInt(editEventForm.day);
+            const daysInCurrentMonth = getDaysInMonth(year, month);
+            if (!editEventForm.day || !editEventForm.text || !editEventForm.color) return alert('Preencha os campos obrigatórios!');
+            if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
+
+            const updatedEvents = [...events];
+            updatedEvents[editingEventIndex] = {
+                ...updatedEvents[editingEventIndex],
+                day: dayNum,
+                time: editEventForm.time,
+                text: editEventForm.text,
+                color: editEventForm.color
+            };
+            saveToCloud({ events: updatedEvents });
+            setEditingEventIndex(null);
+          };
+
+          const cancelEditEvent = () => setEditingEventIndex(null);
 
           const addCategory = () => {
             if (newCategory.label.trim()) {
-              setColorOptions([...colorOptions, { id: Date.now().toString(), label: newCategory.label, color: newCategory.color }]);
+              const updatedCats = [...colorOptions, { id: Date.now().toString(), label: newCategory.label, color: newCategory.color }];
+              saveToCloud({ categories: updatedCats });
               setNewCategory({ label: '', color: '#3b82f6' });
             }
           };
 
           const removeCategory = (id) => {
-            setColorOptions(prev => prev.filter(c => c.id !== id));
-            setEvents(prev => prev.filter(e => e.color !== id));
+            const updatedCats = colorOptions.filter(c => c.id !== id);
+            const updatedEvts = events.filter(e => e.color !== id);
+            saveToCloud({ categories: updatedCats, events: updatedEvts });
             if (editingColor === id) cancelEditCategory();
           };
 
@@ -203,31 +279,19 @@
           };
 
           const saveEditCategory = () => {
-            setColorOptions(colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c));
+            const updatedCats = colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c);
+            saveToCloud({ categories: updatedCats });
             setEditingColor(null);
           };
 
-          const cancelEditCategory = () => {
-            setEditingColor(null);
-            setEditLabel('');
-            setEditColorValue('');
-          };
+          const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
           const clearAllData = () => {
-            if (confirm('⚠️ Apagar TODOS os eventos e categorias desta empresa atual? (A empresa não será excluída, apenas os dados)')) {
-              setEvents([]); setColorOptions([]); setEventStatuses({});
-              
-              const companyData = {
-                events: [],
-                categories: [],
-                statuses: {},
-                lastSaved: new Date().toISOString()
-              };
-              localStorage.setItem(`company_${selectedCompany}`, JSON.stringify(companyData));
+            if (confirm('⚠️ Apagar TODOS os eventos e categorias desta empresa?')) {
+                saveToCloud({ events: [], categories: [], statuses: {} });
             }
           };
 
-          // --- LÓGICA DE IMPORTAÇÃO APENAS COM LEITURA DO HEX ---
           const handleFileUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -238,27 +302,15 @@
               const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
               
               if (lines.length < 2) {
-                  alert('O arquivo deve ter pelo menos 2 linhas: a primeira com o nome da empresa e a segunda com um evento.');
+                  alert('O arquivo deve ter pelo menos 2 linhas.');
                   e.target.value = '';
                   return;
               }
 
               const compName = lines[0];
-              
-              let updatedCompanies = [...companies];
-              let company = updatedCompanies.find(c => c.name.toLowerCase() === compName.toLowerCase());
-              let compId;
-              
-              if (!company) {
-                compId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-                company = { id: compId, name: compName };
-                updatedCompanies.push(company);
-              } else {
-                compId = company.id;
-              }
-
-              const rawData = localStorage.getItem(`company_${compId}`);
-              let compData = rawData ? JSON.parse(rawData) : { events: [], categories: [], statuses: {} };
+              let comp = companies.find(c => c.name.toLowerCase() === compName.toLowerCase());
+              let compId = comp ? comp.id : Date.now().toString() + Math.random().toString(36).substr(2, 5);
+              let compData = comp ? { ...comp } : { events: [], categories: [], statuses: {} };
 
               lines.slice(1).forEach(line => {
                 const parts = line.split(';');
@@ -268,32 +320,17 @@
                 let catColor = null;
                 let dayNumStr, timeStr, desc;
 
-                // Verifica se a segunda coluna é uma cor (começa com #)
                 if (parts[1].trim().startsWith('#')) {
                     catColor = parts[1].trim();
                     dayNumStr = parts[2] ? parts[2].trim() : '';
-                    
-                    if (parts.length === 4) {
-                        timeStr = '';
-                        desc = parts[3].trim();
-                    } else if (parts.length > 4) {
-                        timeStr = parts[3].trim();
-                        desc = parts.slice(4).join(';').trim();
-                    } else {
-                        return;
-                    }
+                    if (parts.length === 4) { timeStr = ''; desc = parts[3].trim(); }
+                    else if (parts.length > 4) { timeStr = parts[3].trim(); desc = parts.slice(4).join(';').trim(); }
+                    else return;
                 } else {
-                    // Se não tiver cor no TXT
                     dayNumStr = parts[1].trim();
-                    if (parts.length === 3) {
-                        timeStr = '';
-                        desc = parts[2].trim();
-                    } else if (parts.length > 3) {
-                        timeStr = parts[2].trim();
-                        desc = parts.slice(3).join(';').trim();
-                    } else {
-                        return;
-                    }
+                    if (parts.length === 3) { timeStr = ''; desc = parts[2].trim(); }
+                    else if (parts.length > 3) { timeStr = parts[2].trim(); desc = parts.slice(3).join(';').trim(); }
+                    else return;
                 }
 
                 const dayNum = parseInt(dayNumStr);
@@ -301,49 +338,27 @@
 
                 let category = compData.categories.find(c => c.label.toLowerCase() === catName.toLowerCase());
                 if (!category) {
-                  // Usa o hex do arquivo ou gera um aleatório se não existir
                   let finalColor = catColor || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-                  
                   category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: finalColor };
                   compData.categories.push(category);
                 }
 
-                compData.events.push({
-                  day: dayNum,
-                  time: timeStr,
-                  text: desc,
-                  color: category.id,
-                  month: month,
-                  year: year
-                });
+                compData.events.push({ day: dayNum, time: timeStr, text: desc, color: category.id, month: month, year: year });
               });
 
-              compData.lastSaved = new Date().toISOString();
-              localStorage.setItem(`company_${compId}`, JSON.stringify(compData));
-              localStorage.setItem('calendar_companies', JSON.stringify(updatedCompanies));
+              db.collection('companies').doc(compId).set({
+                  name: compName,
+                  events: compData.events,
+                  categories: compData.categories,
+                  statuses: compData.statuses || {}
+              }, { merge: true }).then(() => {
+                  setSelectedCompany(compId);
+                  alert(`Eventos importados com sucesso!`);
+              });
 
-              setCompanies(updatedCompanies);
-              
-              if (selectedCompany === compId) {
-                setEvents(compData.events);
-                setColorOptions(compData.categories);
-                setEventStatuses(compData.statuses || {});
-              } else {
-                setSelectedCompany(compId);
-              }
-
-              alert(`Eventos importados com sucesso para a empresa: ${compName}!`);
               e.target.value = ''; 
             };
             reader.readAsText(file);
-          };
-
-          const exportData = () => {
-            const dataStr = JSON.stringify({ events, categories: colorOptions, exportDate: new Date().toISOString() }, null, 2);
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(new Blob([dataStr], { type: 'application/json' }));
-            link.download = `backup-dados-${new Date().toISOString().split('T')[0]}.json`;
-            link.click();
           };
 
           const getEventsForDay = (day) => events.filter(e => e.day === day && e.month === month && e.year === year);
@@ -434,25 +449,24 @@
                   maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
                 }
               });
-              totalHeight += maxWeekHeightCalc + 30; // Margem inferior da semana
+              totalHeight += maxWeekHeightCalc + 30; 
             });
             
             const legendItems = getLegendItems();
             if (legendItems.length > 0) {
-              totalHeight += 40; // Margem antes da legenda
+              totalHeight += 40; 
               const itemsPerRow = 5;
               const legendRows = Math.ceil(legendItems.length / itemsPerRow);
-              totalHeight += legendRows * 45; // Altura total de todas as linhas de legenda
-              totalHeight += padding; // Margem final de respiro
+              totalHeight += legendRows * 45; 
+              totalHeight += padding; 
             } else {
-              totalHeight += padding; // Margem final caso não tenha legenda
+              totalHeight += padding; 
             }
             
             const finalHeight = Math.max(1080, totalHeight);
             canvas.width = canvasWidth;
             canvas.height = finalHeight;
             
-            // RENDERIZAÇÃO
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
             
@@ -780,31 +794,57 @@
             );
           };
 
+          // TELA DE LOGIN 
+          if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 font-bold text-gray-500">Carregando Nuvem...</div>;
+
+          if (!user) {
+              return (
+                  <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
+                      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full">
+                          <div className="text-center mb-8">
+                              <span className="text-5xl">📅</span>
+                              <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">Calendário UPLI</h2>
+                              <p className="text-gray-500 text-sm mt-1">Faça login para acessar a nuvem</p>
+                          </div>
+                          <form onSubmit={handleLogin} className="space-y-4">
+                              <input type="email" placeholder="E-mail de acesso" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
+                              <input type="password" placeholder="Senha" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={password} onChange={e=>setPassword(e.target.value)} required />
+                              <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENTRAR</button>
+                          </form>
+                      </div>
+                  </div>
+              );
+          }
+
+          // Preparando os eventos do mês agrupados por categoria
+          const eventsWithOriginalIndex = (events || []).map((ev, index) => ({ ...ev, originalIndex: index }));
+          const currentMonthEventsList = eventsWithOriginalIndex.filter(e => e.month === month && e.year === year);
+
           return (
             <div className="min-h-screen bg-gray-100 p-2 md:p-8">
               <div className="max-w-7xl mx-auto space-y-6">
                 
                 <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-200">
-                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 border-b pb-4">
                     <div>
                       <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800">
-                        <CalendarDays /> Criador de Calendário Upli
+                        <CalendarDays /> Criador de Calendário UPLI
                       </h1>
-                      {lastSaved && <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Database /> Auto-salvo: {lastSaved.toLocaleString('pt-BR')}</p>}
+                      <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><Database /> Sincronizado na Nuvem ao vivo</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 w-full xl:w-auto">
-                      <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="L1: Empresa | L2+: Categoria; #cor; Dia; Horário; Descrição">
+                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                      <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="Importar TXT com cores">
                         <Upload /> Importar TXT
                         <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
                       </label>
 
                       <button onClick={exportData} className="flex-1 md:flex-none bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 shadow-sm"><Download /> Backup JSON</button>
-                      <button onClick={clearAllData} className="flex-1 md:flex-none bg-yellow-500 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-yellow-600 transition flex items-center justify-center gap-2 shadow-sm" disabled={!selectedCompany} title="Limpar eventos da tela (Mantém a empresa)"><Trash2 /> Limpar Eventos</button>
+                      <button onClick={clearAllData} className="flex-1 md:flex-none bg-yellow-500 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-yellow-600 transition flex items-center justify-center gap-2 shadow-sm" disabled={!selectedCompany} title="Limpar eventos da tela">Limpar Tela</button>
+                      <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 text-red-700 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* COLUNA ESQUERDA: Empresas e Data */}
                     <div className="space-y-6">
                       <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200">
                         <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
@@ -816,7 +856,7 @@
                         
                         {companies.length > 0 && (
                           <div className="flex flex-col gap-2 mt-4 max-h-48 overflow-y-auto pr-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Empresas Cadastradas:</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Empresas na Nuvem:</label>
                             {companies.map(company => (
                               <div key={company.id} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between border-2 rounded-lg p-2 transition gap-2 sm:gap-0 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
                                 
@@ -839,7 +879,7 @@
                                       <button 
                                         onClick={() => removeCompany(company.id)} 
                                         className="text-white bg-red-500 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1 transition shadow-sm"
-                                        title="Excluir esta empresa e tudo dentro dela"
+                                        title="Excluir esta empresa da nuvem"
                                       >
                                         <Trash2 /> Excluir
                                       </button>
@@ -866,7 +906,6 @@
                       </div>
                     </div>
 
-                    {/* COLUNA DIREITA: Categorias e Eventos */}
                     <div className="space-y-6">
                       <div className="bg-blue-50 p-4 md:p-5 rounded-xl border border-blue-100">
                         <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
@@ -876,7 +915,6 @@
                           <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold hover:bg-blue-700 transition">Add</button>
                         </div>
                         
-                        {/* LISTA DE CATEGORIAS COM BOTÃO EDITAR */}
                         <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
                           {colorOptions.map(color => {
                             if (editingColor === color.id) {
@@ -919,47 +957,74 @@
                     </div>
                   </div>
 
-                  {/* LISTA DE EVENTOS RÁPIDA */}
+                  {/* LISTA DE EVENTOS RÁPIDA - AGRUPADA POR CATEGORIA */}
                   <div className="mt-8 border-t pt-6">
-                    <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts Cadastrados ({events.filter(e => e.month === month && e.year === year).length})</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-48 overflow-y-auto pr-2">
-                      {events.filter(e => e.month === month && e.year === year).sort((a,b) => a.day - b.day).map((event, idx) => {
-                        const color = colorOptions.find(c => c.id === event.color);
-                        if (!color) return null;
-                        const originalIndex = events.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                        const status = getEventStatus(originalIndex);
+                    <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts Cadastrados ({currentMonthEventsList.length})</h3>
+                    
+                    <div className="space-y-6 max-h-96 overflow-y-auto pr-2">
+                      {colorOptions.map(category => {
+                        const catEvents = currentMonthEventsList.filter(e => e.color === category.id).sort((a,b) => a.day - b.day);
                         
+                        if (catEvents.length === 0) return null;
+
                         return (
-                          <div key={idx} className="bg-white border rounded-lg p-3 shadow-sm flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded flex-shrink-0">
-                                D{event.day} {event.time && <span className="ml-1 text-[10px] opacity-70">({event.time})</span>}
-                              </span>
-                              <span style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="text-xs font-bold px-2 py-1 rounded-full flex-1 break-words whitespace-normal leading-tight">{event.text}</span>
-                            </div>
-                            <div className="flex justify-between items-center mt-1">
-                              <div className="flex gap-1">
-                                <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
-                                <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
-                              </div>
-                              <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 transition"><Trash2 /></button>
+                          <div key={category.id} className="bg-white border rounded-xl p-4 shadow-sm">
+                            <h4 className="font-black text-lg mb-3 border-b pb-2" style={{ color: category.color }}>{category.label}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {catEvents.map((event) => {
+                                const originalIndex = event.originalIndex;
+                                const status = getEventStatus(originalIndex);
+                                
+                                // MODO DE EDIÇÃO
+                                if (editingEventIndex === originalIndex) {
+                                  return (
+                                    <div key={originalIndex} className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 shadow-md flex flex-col gap-2">
+                                      <div className="flex gap-2">
+                                        <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-16 border p-1 text-sm rounded font-bold outline-none" />
+                                        <input type="time" value={editEventForm.time} onChange={e => setEditEventForm({...editEventForm, time: e.target.value})} className="flex-1 border p-1 text-sm rounded outline-none" />
+                                      </div>
+                                      <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="w-full border p-1 text-sm rounded outline-none" />
+                                      <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="w-full border p-1 text-sm rounded outline-none bg-white">
+                                        {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                      </select>
+                                      <div className="flex gap-2 mt-1">
+                                        <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-2 py-1 rounded text-xs font-bold hover:bg-green-600 transition">Salvar</button>
+                                        <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold hover:bg-gray-500 transition">Cancelar</button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                // MODO DE VISUALIZAÇÃO
+                                return (
+                                  <div key={originalIndex} className="bg-gray-50 border rounded-lg p-3 flex flex-col gap-2 transition hover:bg-white hover:shadow-md">
+                                    <div className="flex items-start gap-2">
+                                      <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded flex-shrink-0 mt-0.5">
+                                        D{event.day} {event.time && <span className="ml-1 text-[10px] opacity-70">({event.time})</span>}
+                                      </span>
+                                      <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md flex-1 break-words whitespace-normal leading-tight">
+                                        {event.text}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-1">
+                                      <div className="flex gap-1">
+                                        <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
+                                        <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button onClick={() => startEditEvent(event, originalIndex)} className="text-blue-500 hover:text-blue-700 transition" title="Editar Evento"><Edit2 /></button>
+                                        <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 transition" title="Excluir Evento"><Trash2 /></button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-
-                  {selectedCompany && (
-                    <div className="flex flex-col md:flex-row gap-4 mt-8 pt-6 border-t border-gray-200">
-                      <button onClick={exportAsImage} className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-center gap-2 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-sm md:text-lg">
-                        <Download /> Imagem (Calendário)
-                      </button>
-                      <button onClick={exportAsPDF} className="flex-1 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-center gap-2 hover:shadow-lg transition-transform transform hover:-translate-y-1 font-black text-sm md:text-lg">
-                        <Download /> PDF (Alta Qualidade)
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 {selectedCompany && renderCalendarUI()}
