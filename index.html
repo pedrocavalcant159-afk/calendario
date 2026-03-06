@@ -17,7 +17,6 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        // --- RADAR DE ERROS ---
         class ErrorBoundary extends React.Component {
             constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
             static getDerivedStateFromError(error) { return { hasError: true, errorMsg: error.toString() }; }
@@ -38,7 +37,6 @@
             }
         }
 
-        // --- SUAS CHAVES DO FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
           authDomain: "calendario-upli.firebaseapp.com",
@@ -65,24 +63,30 @@
         const LogOut = () => <span>🚪</span>;
         const Clock = () => <span className="mr-1 opacity-80">⏰</span>;
         const DatabaseIcon = () => <span>☁️</span>;
+        const MessageSquare = () => <span className="text-[10px]">💬</span>;
+        const FilterIcon = () => <span>🔍</span>;
+        const ImageIcon = () => <span>🖼️</span>;
+        const PDFIcon = () => <span>📄</span>;
         
         const CalendarCreator = () => {
-          // --- SISTEMA DE LOGIN E PERFIL ---
           const [user, setUser] = useState(null);
           const [email, setEmail] = useState('');
           const [password, setPassword] = useState('');
           const [loadingAuth, setLoadingAuth] = useState(true);
-          const [isResetMode, setIsResetMode] = useState(false); // Controla se a tela é de Login ou Recuperação
+          const [isResetMode, setIsResetMode] = useState(false); 
           
           const [currentUserName, setCurrentUserName] = useState('');
           const [showProfileModal, setShowProfileModal] = useState(false);
           const [newDisplayName, setNewDisplayName] = useState('');
+          const [userRole, setUserRole] = useState('admin'); 
 
           useEffect(() => {
              const unsubscribe = auth.onAuthStateChanged(u => {
                  setUser(u);
                  if (u) {
                      setCurrentUserName(u.displayName || u.email);
+                     const savedRole = localStorage.getItem(`role_${u.uid}`);
+                     if(savedRole) setUserRole(savedRole);
                  }
                  setLoadingAuth(false);
              });
@@ -91,62 +95,42 @@
 
           const handleLogin = (e) => {
              e.preventDefault();
-             auth.signInWithEmailAndPassword(email, password).catch(err => {
-                 alert("Erro ao entrar: Verifique o e-mail e a senha.");
-             });
+             auth.signInWithEmailAndPassword(email, password).catch(err => alert("Erro ao entrar: Verifique o e-mail e a senha."));
           };
 
           const handleLogout = () => auth.signOut();
 
           const handleUpdateProfile = () => {
               if (!user) return;
-              user.updateProfile({
-                  displayName: newDisplayName
-              }).then(() => {
+              user.updateProfile({ displayName: newDisplayName }).then(() => {
                   setCurrentUserName(newDisplayName);
+                  localStorage.setItem(`role_${user.uid}`, userRole);
                   setShowProfileModal(false);
-                  alert("Nome de usuário atualizado com sucesso!");
-              }).catch(error => {
-                  alert("Erro ao atualizar nome: " + error.message);
-              });
+              }).catch(error => alert("Erro ao atualizar nome: " + error.message));
           };
 
-          // Função para recuperar senha de quem JÁ ESTÁ LOGADO (pelo modal de perfil)
           const handleResetPasswordLogged = () => {
               if (!user || !user.email) return;
               auth.sendPasswordResetEmail(user.email).then(() => {
-                  alert(`Um e-mail de redefinição de senha foi enviado para: ${user.email}. Verifique sua caixa de entrada (e o Spam)!`);
+                  alert(`E-mail de redefinição enviado para: ${user.email}.`);
                   setShowProfileModal(false);
-              }).catch(error => {
-                  alert("Erro ao enviar e-mail: " + error.message);
-              });
+              }).catch(error => alert("Erro ao enviar: " + error.message));
           };
 
-          // Função para recuperar senha NA TELA DE LOGIN (quando não está logado)
           const handleForgotPasswordSubmit = (e) => {
               e.preventDefault();
-              if (!email) {
-                  alert("Por favor, digite o seu e-mail.");
-                  return;
-              }
+              if (!email) return alert("Digite seu e-mail.");
               auth.sendPasswordResetEmail(email).then(() => {
-                  alert(`O link de recuperação foi enviado para: ${email}\n\nVerifique sua caixa de entrada e a pasta de Spam!`);
-                  setIsResetMode(false); // Volta pra tela normal de login automaticamente
-              }).catch(error => {
-                  if (error.code === 'auth/user-not-found') {
-                      alert("Erro: Este e-mail não está cadastrado no sistema.");
-                  } else {
-                      alert("Erro ao tentar recuperar a senha: " + error.message);
-                  }
-              });
+                  alert(`Link enviado para: ${email}`);
+                  setIsResetMode(false);
+              }).catch(error => alert("Erro: E-mail não encontrado."));
           };
 
-          // --- ESTADOS DO CALENDÁRIO ---
           const [year, setYear] = useState(2026);
           const [month, setMonth] = useState(2); 
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
-          const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '' });
+          const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '', notes: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           
           const [editingColor, setEditingColor] = useState(null);
@@ -154,7 +138,8 @@
           const [editColorValue, setEditColorValue] = useState('');
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', time: '', text: '', color: '' });
+          const [editEventForm, setEditEventForm] = useState({ day: '', time: '', text: '', color: '', notes: '' });
+          const [expandedNoteIndex, setExpandedNoteIndex] = useState(null); 
           
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
@@ -162,6 +147,8 @@
           const [newCompanyName, setNewCompanyName] = useState('');
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
+          
+          const [activeFilter, setActiveFilter] = useState('ALL'); 
 
           useEffect(() => {
             if (!user) return;
@@ -178,18 +165,11 @@
                             statuses: data.statuses || {}
                         });
                     });
-                    
                     fetchedCompanies.sort((a,b) => String(a.name).localeCompare(String(b.name)));
                     setCompanies(fetchedCompanies);
 
-                    if (!selectedCompany && fetchedCompanies.length > 0) {
-                        setSelectedCompany(fetchedCompanies[0].id);
-                    }
-                } catch (err) {
-                    console.error("Erro ao processar dados:", err);
-                }
-            }, error => {
-                console.error("Erro de permissão no Firestore:", error);
+                    if (!selectedCompany && fetchedCompanies.length > 0) setSelectedCompany(fetchedCompanies[0].id);
+                } catch (err) { console.error("Erro:", err); }
             });
             return () => unsubscribe();
           }, [user, selectedCompany]);
@@ -201,6 +181,7 @@
                       setEvents(Array.isArray(comp.events) ? comp.events : []);
                       setColorOptions(Array.isArray(comp.categories) ? comp.categories : []);
                       setEventStatuses(comp.statuses || {});
+                      setActiveFilter('ALL'); 
                   }
               } else {
                   setEvents([]); setColorOptions([]); setEventStatuses({});
@@ -212,22 +193,19 @@
               db.collection('companies').doc(selectedCompany).set(updates, { merge: true }).catch(err => alert("Erro ao salvar na nuvem!"));
           };
 
-          const months = [
-            'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
-            'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
-          ];
+          const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
           const fullWeekDays = ['DOMINGO', 'SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO'];
 
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
           const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
           const toggleEventStatus = (eventIndex, status) => {
+            if (userRole === 'cliente') return; 
             const eventKey = `event_${eventIndex}`;
             const current = eventStatuses[eventKey];
             const newStatuses = {...eventStatuses};
             if (current === status) delete newStatuses[eventKey];
             else newStatuses[eventKey] = status;
-            
             saveToCloud({ statuses: newStatuses });
           };
 
@@ -242,19 +220,13 @@
           const addCompany = () => {
             if (newCompanyName.trim()) {
               const id = Date.now().toString();
-              db.collection('companies').doc(id).set({
-                  name: newCompanyName.trim(),
-                  events: [],
-                  categories: [],
-                  statuses: {}
-              });
-              setSelectedCompany(id);
-              setNewCompanyName('');
+              db.collection('companies').doc(id).set({ name: newCompanyName.trim(), events: [], categories: [], statuses: {} });
+              setSelectedCompany(id); setNewCompanyName('');
             }
           };
 
           const removeCompany = (companyId) => {
-            if (confirm('⚠️ ATENÇÃO: Isso apagará a empresa e TODOS os eventos para sempre. Tem certeza?')) {
+            if (confirm('ATENÇÃO: Apagar a empresa e TODOS os eventos?')) {
               db.collection('companies').doc(companyId).delete();
               if (selectedCompany === companyId) setSelectedCompany(null);
             }
@@ -286,7 +258,7 @@
             
             const updatedEvents = [...events, { ...newEvent, day: dayNum, month: month, year: year }];
             saveToCloud({ events: updatedEvents });
-            setNewEvent({ day: '', time: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '' });
+            setNewEvent({ day: '', time: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '' });
           };
 
           const removeEvent = (index) => {
@@ -300,7 +272,8 @@
                 day: event.day || '',
                 time: event.time || '',
                 text: event.text || '',
-                color: event.color || ''
+                color: event.color || '',
+                notes: event.notes || ''
             });
           };
 
@@ -316,7 +289,8 @@
                 day: dayNum,
                 time: editEventForm.time,
                 text: editEventForm.text,
-                color: editEventForm.color
+                color: editEventForm.color,
+                notes: editEventForm.notes
             };
             saveToCloud({ events: updatedEvents });
             setEditingEventIndex(null);
@@ -354,34 +328,33 @@
           const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
           const clearAllData = () => {
-            if (confirm('⚠️ Apagar TODOS os eventos e categorias desta empresa?')) {
-                saveToCloud({ events: [], categories: [], statuses: {} });
-            }
+            if (confirm('⚠️ Apagar TODOS os eventos desta empresa?')) saveToCloud({ events: [], categories: [], statuses: {} });
           };
 
-          const exportData = () => {
-            const dataStr = JSON.stringify({ events, categories: colorOptions, exportDate: new Date().toISOString() }, null, 2);
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(new Blob([dataStr], { type: 'application/json' }));
-            const compName = companies.find(c => c.id === selectedCompany)?.name || 'backup';
-            link.download = `backup-${compName}-${new Date().toISOString().split('T')[0]}.json`;
-            link.click();
+          const exportSingleToGoogleCalendar = (event) => {
+              const companyName = companies.find(c => c.id === selectedCompany)?.name || 'UPLI';
+              const dateStr = `${year}${String(month + 1).padStart(2, '0')}${String(event.day).padStart(2, '0')}`;
+              let timeStrStart = '090000'; let timeStrEnd = '100000';
+              if (event.time) {
+                  const [hr, min] = event.time.split(':');
+                  timeStrStart = `${hr}${min}00`;
+                  const endHr = String((parseInt(hr) + 1) % 24).padStart(2, '0'); 
+                  timeStrEnd = `${endHr}${min}00`;
+              }
+              const dates = `${dateStr}T${timeStrStart}/${dateStr}T${timeStrEnd}`;
+              const title = encodeURIComponent(`[${companyName}] ${event.text}`);
+              const details = encodeURIComponent(event.notes || 'Sem anotações.');
+              window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`, '_blank');
           };
 
           const handleFileUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = (event) => {
               const content = event.target.result;
               const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-              
-              if (lines.length < 2) {
-                  alert('O arquivo deve ter pelo menos 2 linhas.');
-                  e.target.value = '';
-                  return;
-              }
+              if (lines.length < 2) return alert('O arquivo deve ter pelo menos 2 linhas.');
 
               const compName = lines[0];
               let comp = companies.find(c => c.name.toLowerCase() === compName.toLowerCase());
@@ -397,8 +370,7 @@
                 let dayNumStr, timeStr, desc;
 
                 if (parts[1].trim().startsWith('#')) {
-                    catColor = parts[1].trim();
-                    dayNumStr = parts[2] ? parts[2].trim() : '';
+                    catColor = parts[1].trim(); dayNumStr = parts[2] ? parts[2].trim() : '';
                     if (parts.length === 4) { timeStr = ''; desc = parts[3].trim(); }
                     else if (parts.length > 4) { timeStr = parts[3].trim(); desc = parts.slice(4).join(';').trim(); }
                     else return;
@@ -408,7 +380,6 @@
                     else if (parts.length > 3) { timeStr = parts[2].trim(); desc = parts.slice(3).join(';').trim(); }
                     else return;
                 }
-
                 const dayNum = parseInt(dayNumStr);
                 if (!catName || isNaN(dayNum) || !desc) return;
 
@@ -418,20 +389,12 @@
                   category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: finalColor };
                   compData.categories.push(category);
                 }
-
                 compData.events.push({ day: dayNum, time: timeStr, text: desc, color: category.id, month: month, year: year });
               });
 
               db.collection('companies').doc(compId).set({
-                  name: compName,
-                  events: compData.events,
-                  categories: compData.categories,
-                  statuses: compData.statuses || {}
-              }, { merge: true }).then(() => {
-                  setSelectedCompany(compId);
-                  alert(`Eventos importados com sucesso!`);
-              });
-
+                  name: compName, events: compData.events, categories: compData.categories, statuses: compData.statuses || {}
+              }, { merge: true }).then(() => { setSelectedCompany(compId); alert(`Eventos importados com sucesso!`); });
               e.target.value = ''; 
             };
             reader.readAsText(file);
@@ -440,7 +403,16 @@
           const safeEvents = Array.isArray(events) ? events : [];
           const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
 
-          const getEventsForDay = (day) => safeEvents.filter(e => e.day === day && e.month === month && e.year === year);
+          const getFilteredEvents = () => {
+              let monthEvents = safeEvents.filter(e => e.month === month && e.year === year);
+              if (activeFilter === 'ALL') return monthEvents;
+              if (activeFilter === 'DONE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'done');
+              if (activeFilter === 'LATE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'late');
+              return monthEvents.filter(e => e.color === activeFilter);
+          };
+
+          const getEventsForDay = (day) => getFilteredEvents().filter(e => e.day === day);
+          
           const getLegendItems = () => {
             const currentEvents = safeEvents.filter(e => e.month === month && e.year === year);
             const uniqueColors = [...new Set(currentEvents.map(e => e.color))];
@@ -448,19 +420,13 @@
           };
 
           const getWeeks = () => {
-            const weeks = [];
-            let currentWeek = new Array(7).fill(null);
+            const weeks = []; let currentWeek = new Array(7).fill(null);
             const daysInMonth = getDaysInMonth(year, month);
             let currentDayOfWeek = getFirstDayOfMonth(year, month);
 
             for (let day = 1; day <= daysInMonth; day++) {
-              currentWeek[currentDayOfWeek] = day;
-              currentDayOfWeek++;
-              if (currentDayOfWeek === 7) {
-                weeks.push(currentWeek);
-                currentWeek = new Array(7).fill(null);
-                currentDayOfWeek = 0;
-              }
+              currentWeek[currentDayOfWeek] = day; currentDayOfWeek++;
+              if (currentDayOfWeek === 7) { weeks.push(currentWeek); currentWeek = new Array(7).fill(null); currentDayOfWeek = 0; }
             }
             if (currentDayOfWeek > 0) weeks.push(currentWeek);
             return weeks;
@@ -468,24 +434,19 @@
 
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
-            const words = text.split(' ');
-            const lines = [];
-            let currentLine = words[0];
-
+            const words = text.split(' '); const lines = []; let currentLine = words[0];
             for (let i = 1; i < words.length; i++) {
                 const word = words[i];
-                const width = ctx.measureText(currentLine + " " + word).width;
-                if (width < maxWidth) {
-                    currentLine += " " + word;
-                } else {
-                    lines.push(currentLine);
-                    currentLine = word;
-                }
+                if (ctx.measureText(currentLine + " " + word).width < maxWidth) currentLine += " " + word;
+                else { lines.push(currentLine); currentLine = word; }
             }
             lines.push(currentLine);
             return lines;
           };
 
+          // =========================================================================
+          // NOVO SISTEMA DE DESENHO DO CANVAS (QUALIDADE 4K)
+          // =========================================================================
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -497,8 +458,8 @@
             const colWidth = contentWidth / 7;
             const eventSpacing = 8;
             
+            // Calculando a altura física necessária
             ctx.font = 'bold 14px Arial';
-            
             let totalHeight = padding; 
             totalHeight += 100; 
             totalHeight += 80; 
@@ -506,25 +467,19 @@
             weeks.forEach(week => {
               totalHeight += 50; 
               let maxWeekHeightCalc = 0;
-              
               week.forEach(day => {
                 if (day) {
                   const dayEvents = getEventsForDay(day);
                   let colHeight = 0;
-                  
                   dayEvents.forEach(event => {
                     let displayText = event.text || '';
                     if (event.time) displayText = `⏰ ${event.time} ` + displayText;
-                    
                     const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
                     const status = getEventStatus(originalIndex);
                     if (status === 'done') displayText += ' ✓';
                     if (status === 'late') displayText += ' ⚠';
-                    
                     const lines = getLines(ctx, displayText, (colWidth) - 40); 
-                    
-                    const dynamicHeight = (lines.length * 18) + 24; 
-                    colHeight += dynamicHeight + eventSpacing;
+                    colHeight += (lines.length * 18) + 24 + eventSpacing;
                   });
                   maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
                 }
@@ -537,15 +492,23 @@
               totalHeight += 40; 
               const itemsPerRow = 5;
               const legendRows = Math.ceil(legendItems.length / itemsPerRow);
-              totalHeight += legendRows * 45; 
-              totalHeight += padding; 
+              totalHeight += legendRows * 45 + padding; 
             } else {
               totalHeight += padding; 
             }
             
             const finalHeight = Math.max(1080, totalHeight);
-            canvas.width = canvasWidth;
-            canvas.height = finalHeight;
+
+            // ---> A MÁGICA DO 4K ACONTECE AQUI <---
+            const scale = 3; // Multiplica os pixels reais por 3 (Maior Qualidade)
+            canvas.width = canvasWidth * scale;
+            canvas.height = finalHeight * scale;
+            
+            // Suaviza as fontes para evitar serrilhados
+            ctx.scale(scale, scale);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            // ----------------------------------------
             
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
@@ -564,12 +527,10 @@
             fullWeekDays.forEach((day, i) => {
               const x = padding + (i * colWidth);
               const pillMargin = 10;
-              
               ctx.fillStyle = '#000000';
               ctx.beginPath();
               ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25);
               ctx.fill();
-              
               ctx.fillStyle = '#ffffff';
               ctx.font = 'bold 20px Arial';
               ctx.fillText(day, x + (colWidth / 2), currentY + 33);
@@ -681,7 +642,6 @@
                 
                 let label = item.label || '';
                 while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
-                
                 ctx.fillText(label, itemX + (itemWidth / 2), itemY + 24);
               });
             }
@@ -689,6 +649,7 @@
             return { canvas, finalHeight };
           };
 
+          // Exportar Imagem em Alta Resolução (PNG)
           const exportAsImage = async () => {
             try {
               const { canvas } = drawCalendarToCanvas();
@@ -697,15 +658,14 @@
                 const link = document.createElement('a');
                 link.href = url;
                 const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
-                link.download = `calendario-${companyName}-${months[month]}-${year}.png`;
+                link.download = `calendario-${companyName}-${months[month]}-${year}-HQ.png`;
                 link.click();
                 URL.revokeObjectURL(url);
               }, 'image/png', 1.0);
-            } catch (error) {
-              alert('Erro ao exportar imagem.');
-            }
+            } catch (error) { alert('Erro ao exportar imagem.'); }
           };
 
+          // Exportar PDF em Alta Resolução
           const exportAsPDF = async () => {
             try {
               if (!window.jspdf) {
@@ -715,21 +675,21 @@
                 await new Promise((resolve) => scriptPDF.onload = resolve);
               }
               const { canvas, finalHeight } = drawCalendarToCanvas();
+              // Pega a imagem na resolução 4K
               const imgData = canvas.toDataURL('image/png', 1.0);
               
               const pdf = new window.jspdf.jsPDF({
                 orientation: finalHeight > 1920 ? 'portrait' : 'landscape',
                 unit: 'px',
-                format: [1920, finalHeight],
+                format: [1920, finalHeight], // Mantém o tamanho do papel normal, para não ficar uma folha gigante
                 compress: true
               });
               
+              // Insere a imagem 4K comprimida dentro do espaço da folha
               pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight, '', 'FAST');
               const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
-              pdf.save(`calendario-${companyName}-${months[month]}-${year}.pdf`);
-            } catch (error) {
-              alert('Erro ao exportar PDF.');
-            }
+              pdf.save(`calendario-${companyName}-${months[month]}-${year}-HQ.pdf`);
+            } catch (error) { alert('Erro ao exportar PDF.'); }
           };
 
           const renderCalendarUI = () => {
@@ -739,10 +699,23 @@
 
             return (
               <div className="bg-white rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200">
-                <div className="mb-6 md:mb-8 border-b pb-4">
+                <div className="mb-6 border-b pb-4">
                   <h2 className="text-2xl md:text-4xl font-black text-gray-900 uppercase tracking-tight">
                     {months[month]} {year} <span className="text-gray-400 font-medium">|</span> {companies.find(c => c.id === selectedCompany)?.name}
                   </h2>
+                </div>
+
+                <div className="mb-6 bg-gray-50 p-3 rounded-lg border flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-gray-500 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
+                    <button onClick={() => setActiveFilter('ALL')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter === 'ALL' ? 'bg-black text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>Tudo</button>
+                    <button onClick={() => setActiveFilter('DONE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>Concluídos ✓</button>
+                    <button onClick={() => setActiveFilter('LATE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>Atrasados ⚠</button>
+                    <span className="text-gray-300 mx-1">|</span>
+                    {getLegendItems().map(cat => (
+                        <button key={cat.id} onClick={() => setActiveFilter(cat.id)} style={activeFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter !== cat.id && 'bg-gray-100 border border-gray-300 text-gray-600 opacity-70 hover:opacity-100'}`}>
+                            {cat.label}
+                        </button>
+                    ))}
                 </div>
 
                 <div className="hidden md:block overflow-x-auto pb-4">
@@ -782,15 +755,23 @@
                                     <div
                                       key={eIdx}
                                       style={{ backgroundColor: finalColor, color: textColor }}
-                                      className="rounded-xl px-2 py-2 text-[10px] md:text-[11px] font-bold text-center shadow-sm transition-transform hover:scale-105 cursor-default flex flex-col items-center justify-center break-words whitespace-normal leading-tight"
-                                      title={event.text}
+                                      className="rounded-xl px-2 py-2 text-[10px] md:text-[11px] font-bold text-center shadow-sm cursor-pointer hover:opacity-90 flex flex-col items-center justify-center break-words whitespace-normal leading-tight relative group"
+                                      onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
                                     >
                                       <span>
                                           {event.time && <span className="opacity-90 font-black mr-1"><Clock /> {event.time}</span>}
                                           {event.text}
+                                          {event.notes && <span className="ml-1 text-yellow-300 drop-shadow-md"><MessageSquare /></span>}
                                           {status === 'done' && <span className="ml-1">✓</span>}
                                           {status === 'late' && <span className="ml-1">⚠</span>}
                                       </span>
+                                      
+                                      {expandedNoteIndex === originalIndex && event.notes && (
+                                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-yellow-100 border-2 border-yellow-300 text-yellow-900 p-2 rounded-lg shadow-xl z-10 text-left text-xs cursor-text">
+                                              <p className="font-bold border-b border-yellow-200 mb-1">Anotações:</p>
+                                              <p className="whitespace-pre-wrap">{event.notes}</p>
+                                          </div>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -802,143 +783,34 @@
                     </div>
                   </div>
                 </div>
-
-                <div className="block md:hidden space-y-3 mt-2">
-                  {daysArray.map(day => {
-                    const dayEvents = getEventsForDay(day);
-                    const date = new Date(year, month, day);
-                    const dayOfWeek = fullWeekDays[date.getDay()];
-                    
-                    return (
-                      <div key={day} className={`border rounded-xl p-3 shadow-sm transition ${dayEvents.length > 0 ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-100'}`}>
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className={`w-8 h-8 flex items-center justify-center rounded-full font-black text-sm ${dayEvents.length > 0 ? 'bg-black text-white' : 'bg-gray-200 text-gray-500'}`}>
-                            {day}
-                          </span>
-                          <span className={`font-bold text-sm uppercase ${dayEvents.length > 0 ? 'text-gray-800' : 'text-gray-400'}`}>
-                            {dayOfWeek}
-                          </span>
-                        </div>
-                        
-                        {dayEvents.length > 0 && (
-                          <div className="flex flex-col gap-2 pl-11">
-                            {dayEvents.map((event, eIdx) => {
-                              const color = safeColorOptions.find(c => c.id === event.color);
-                              if (!color) return null;
-                              
-                              const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                              const status = getEventStatus(originalIndex);
-                              const finalColor = getStatusColor(color.color, status);
-                              const textColor = getTextColor(finalColor);
-                              
-                              return (
-                                <div
-                                  key={eIdx}
-                                  style={{ backgroundColor: finalColor, color: textColor }}
-                                  className="rounded-xl px-3 py-2 text-xs font-bold shadow-sm flex flex-col break-words whitespace-normal leading-tight"
-                                >
-                                  <span>
-                                      {event.time && <span className="opacity-90 font-black mr-1"><Clock /> {event.time}</span>}
-                                      {event.text}
-                                      {status === 'done' && <span className="ml-1">✓</span>}
-                                      {status === 'late' && <span className="ml-1">⚠</span>}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {getLegendItems().length > 0 && (
-                  <div className="mt-8 md:mt-12 pt-6 border-t">
-                    <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800">LEGENDA</h3>
-                    <div className="flex flex-wrap gap-2 md:gap-3">
-                      {getLegendItems().map(item => (
-                        <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-1 md:py-2 text-xs md:text-sm font-bold shadow-sm">
-                          {item.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           };
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 font-bold text-gray-500">Carregando Nuvem...</div>;
 
-          // --- TELA DE LOGIN DINÂMICA (Login x Recuperar Senha) ---
           if (!user) {
               return (
                   <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
                       <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full relative overflow-hidden">
-                          
-                          {/* Cabeçalho que muda dependendo da tela */}
                           <div className="text-center mb-8">
                               <span className="text-5xl">{isResetMode ? '🔐' : '📅'}</span>
-                              <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">
-                                  {isResetMode ? 'Recuperar Senha' : 'Calendário UPLI'}
-                              </h2>
-                              <p className="text-gray-500 text-sm mt-1">
-                                  {isResetMode ? 'Digite seu e-mail para receber o link' : 'Faça login para acessar a nuvem'}
-                              </p>
+                              <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">{isResetMode ? 'Recuperar Senha' : 'Calendário UPLI'}</h2>
+                              <p className="text-gray-500 text-sm mt-1">{isResetMode ? 'Digite seu e-mail para receber o link' : 'Faça login para acessar a nuvem'}</p>
                           </div>
                           
                           {isResetMode ? (
-                              /* TELA DE ESQUECI A SENHA */
-                              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
-                                  <input 
-                                      type="email" 
-                                      placeholder="Seu e-mail cadastrado" 
-                                      className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" 
-                                      value={email} 
-                                      onChange={e=>setEmail(e.target.value)} 
-                                      required 
-                                  />
-                                  
-                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">
-                                      ENVIAR LINK
-                                  </button>
-                                  
-                                  <div className="text-center mt-4 pt-2 border-t">
-                                      <button type="button" onClick={() => setIsResetMode(false)} className="text-sm text-gray-500 hover:text-gray-800 font-bold transition">
-                                          ← Voltar para o login
-                                      </button>
-                                  </div>
+                              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                                  <input type="email" placeholder="Seu e-mail cadastrado" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
+                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENVIAR LINK</button>
+                                  <div className="text-center mt-4 pt-2 border-t"><button type="button" onClick={() => setIsResetMode(false)} className="text-sm text-gray-500 hover:text-gray-800 font-bold transition">← Voltar</button></div>
                               </form>
                           ) : (
-                              /* TELA DE LOGIN NORMAL */
-                              <form onSubmit={handleLogin} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
-                                  <input 
-                                      type="email" 
-                                      placeholder="E-mail de acesso" 
-                                      className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" 
-                                      value={email} 
-                                      onChange={e=>setEmail(e.target.value)} 
-                                      required 
-                                  />
-                                  <input 
-                                      type="password" 
-                                      placeholder="Senha" 
-                                      className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" 
-                                      value={password} 
-                                      onChange={e=>setPassword(e.target.value)} 
-                                      required 
-                                  />
-                                  
-                                  <div className="flex justify-end">
-                                      <button type="button" onClick={() => setIsResetMode(true)} className="text-sm text-blue-600 hover:text-blue-800 font-bold transition mt-1">
-                                          Esqueceu a senha?
-                                      </button>
-                                  </div>
-
-                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">
-                                      ENTRAR
-                                  </button>
+                              <form onSubmit={handleLogin} className="space-y-4">
+                                  <input type="email" placeholder="E-mail de acesso" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
+                                  <input type="password" placeholder="Senha" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={password} onChange={e=>setPassword(e.target.value)} required />
+                                  <div className="flex justify-end"><button type="button" onClick={() => setIsResetMode(true)} className="text-sm text-blue-600 hover:text-blue-800 font-bold transition mt-1">Esqueceu a senha?</button></div>
+                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENTRAR</button>
                               </form>
                           )}
                       </div>
@@ -947,260 +819,194 @@
           }
 
           const eventsWithOriginalIndex = safeEvents.map((ev, index) => ({ ...ev, originalIndex: index }));
-          const currentMonthEventsList = eventsWithOriginalIndex.filter(e => e.month === month && e.year === year);
+          const filteredMonthEventsList = getFilteredEvents().map(e => {
+              const oIdx = safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month);
+              return {...e, originalIndex: oIdx};
+          });
 
           return (
             <div className="min-h-screen bg-gray-100 p-2 md:p-8">
               
-              {/* MODAL DE PERFIL */}
               {showProfileModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
                       <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
                           <h3 className="text-xl font-black text-gray-800 border-b pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
-                          
                           <div>
                               <label className="block text-sm font-bold text-gray-700 mb-1">Nome de Exibição</label>
-                              <input 
-                                  type="text" 
-                                  value={newDisplayName} 
-                                  onChange={e => setNewDisplayName(e.target.value)} 
-                                  className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-                                  placeholder="Ex: Stefany..."
-                              />
+                              <input type="text" value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Ex: Stefany..." />
+                          </div>
+                          
+                          <div className="pt-2">
+                              <label className="block text-sm font-bold text-gray-700 mb-1">Modo de Visão</label>
+                              <div className="flex bg-gray-100 p-1 rounded-lg">
+                                  <button onClick={() => setUserRole('admin')} className={`flex-1 py-1 text-sm font-bold rounded-md transition ${userRole === 'admin' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Administrador</button>
+                                  <button onClick={() => setUserRole('cliente')} className={`flex-1 py-1 text-sm font-bold rounded-md transition ${userRole === 'cliente' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Cliente (Só Ver)</button>
+                              </div>
+                              <p className="text-[10px] text-gray-500 mt-1 leading-tight">Cliente não vê botões de apagar e editar para não bagunçar o calendário.</p>
                           </div>
 
                           <div className="pt-4 flex flex-col gap-2">
-                              <button onClick={handleUpdateProfile} className="w-full bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition shadow-sm">
-                                  Salvar Nome
-                              </button>
-                              <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">
-                                  Redefinir Senha (E-mail)
-                              </button>
-                              <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">
-                                  Fechar
-                              </button>
+                              <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Perfil</button>
+                              <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">Redefinir Senha</button>
+                              <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">Fechar</button>
                           </div>
                       </div>
                   </div>
               )}
 
               <div className="max-w-7xl mx-auto space-y-6">
-                
                 <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-200">
                   <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 border-b pb-4">
                     <div>
                       <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800">
-                        <CalendarDays /> Criador de Calendário UPLI
+                        <CalendarDays /> Calendário UPLI
                       </h1>
                       <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Conectado à Nuvem Firebase</p>
                     </div>
                     
-                    {/* BARRA DE USUÁRIO E BOTÕES */}
                     <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-                      
-                      {/* CRACHÁ DO USUÁRIO */}
                       <div className="flex items-center gap-3 mr-2 bg-blue-50 border border-blue-200 px-4 py-2 rounded-xl shadow-sm">
-                          <div className="bg-blue-200 text-blue-700 w-8 h-8 flex items-center justify-center rounded-full text-lg">
-                              👤
-                          </div>
+                          <div className="bg-blue-200 text-blue-700 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
                           <div className="flex flex-col leading-tight">
                               <span className="text-sm font-black text-gray-800">{currentUserName}</span>
-                              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Administrador(a)</span>
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'admin' ? 'text-blue-600' : 'text-green-600'}`}>{userRole === 'admin' ? 'Administrador' : 'Modo Cliente'}</span>
                           </div>
-                          <button onClick={() => { setNewDisplayName(user.displayName || ''); setShowProfileModal(true); }} className="text-blue-400 hover:text-blue-700 transition p-1 ml-1" title="Editar Perfil">
-                              <Edit2/>
-                          </button>
+                          <button onClick={() => { setNewDisplayName(user.displayName || ''); setShowProfileModal(true); }} className="text-blue-400 hover:text-blue-700 transition p-1 ml-1"><Edit2/></button>
                       </div>
 
-                      <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="Importar TXT com cores">
-                        <Upload /> Importar TXT
-                        <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-                      </label>
+                      {/* BOTÕES DE EXPORTAÇÃO EM ALTA QUALIDADE */}
+                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm" title="Baixar Imagem 4K"><ImageIcon /> Baixar PNG</button>
+                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm" title="Baixar PDF em Alta Definição"><PDFIcon /> Baixar PDF</button>
 
-                      <button onClick={exportData} className="flex-1 md:flex-none bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 shadow-sm"><Download /> Backup JSON</button>
-                      <button onClick={clearAllData} className="flex-1 md:flex-none bg-yellow-500 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-yellow-600 transition flex items-center justify-center gap-2 shadow-sm" disabled={!selectedCompany} title="Limpar eventos da tela">Limpar Tela</button>
                       <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 text-red-700 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
                     </div>
                   </div>
 
+                  {userRole === 'admin' && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div className="space-y-6">
                       <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200">
                         <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                        
                         <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addCompany()} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none w-full" />
+                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 outline-none w-full" />
                           <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 font-bold hover:bg-black transition">Add</button>
                         </div>
-                        
-                        {companies.length > 0 && (
-                          <div className="flex flex-col gap-2 mt-4 max-h-48 overflow-y-auto pr-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Empresas na Nuvem:</label>
-                            {companies.map(company => (
-                              <div key={company.id} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between border-2 rounded-lg p-2 transition gap-2 sm:gap-0 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
-                                
-                                {editingCompany === company.id ? (
-                                  <div className="flex items-center gap-2 w-full">
-                                    <input type="text" value={editCompanyName} onChange={e => setEditCompanyName(e.target.value)} className="flex-1 border-2 rounded px-2 py-1 text-sm outline-none" onKeyPress={e => e.key === 'Enter' && saveEditCompany()} />
-                                    <button onClick={saveEditCompany} className="bg-green-600 text-white px-3 py-1 rounded text-sm font-bold">Salvar</button>
-                                    <button onClick={cancelEditCompany} className="bg-gray-400 text-white px-3 py-1 rounded text-sm font-bold">Cancelar</button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div 
-                                      className="flex-1 font-bold cursor-pointer truncate w-full sm:w-auto" 
-                                      onClick={() => setSelectedCompany(company.id)}
-                                    >
-                                      {company.name} {selectedCompany === company.id && <span className="text-blue-500 text-xs sm:ml-2 block sm:inline">(Selecionada)</span>}
-                                    </div>
-                                    <div className="flex items-center gap-1 w-full sm:w-auto justify-end">
-                                      <button onClick={() => startEditCompany(company)} className="text-blue-500 hover:text-blue-700 p-2 rounded hover:bg-blue-100 transition" title="Editar nome"><Edit2 /></button>
-                                      <button 
-                                        onClick={() => removeCompany(company.id)} 
-                                        className="text-white bg-red-500 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1 transition shadow-sm"
-                                        title="Excluir esta empresa da nuvem"
-                                      >
-                                        <Trash2 /> Excluir
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
+                        {companies.map(company => (
+                              <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                                    <div className="flex-1 font-bold cursor-pointer" onClick={() => setSelectedCompany(company.id)}>{company.name}</div>
+                                    <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 px-2"><Trash2 /></button>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                        ))}
                       </div>
 
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">Mês</label>
-                          <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold bg-white outline-none cursor-pointer">
-                            {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                          </select>
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">Ano</label>
-                          <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value) || 2026)} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold outline-none" />
-                        </div>
+                      <div className="flex gap-4">
+                        <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold bg-white outline-none flex-1">
+                          {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                        </select>
+                        <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value) || 2026)} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold outline-none flex-1" />
                       </div>
                     </div>
 
                     <div className="space-y-6">
-                      <div className="bg-blue-50 p-4 md:p-5 rounded-xl border border-blue-100">
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                         <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
                         <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Ex: REELS..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none focus:border-blue-500 w-full" />
-                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
-                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold hover:bg-blue-700 transition">Add</button>
+                          <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none" />
+                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded" />
+                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold">Add</button>
                         </div>
-                        
-                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
-                          {safeColorOptions.map(color => {
-                            if (editingColor === color.id) {
-                              return (
-                                <div key={color.id} className="flex items-center gap-1 bg-white border-2 border-blue-400 p-1 rounded-full shadow-sm">
-                                  <input type="color" value={editColorValue} onChange={e => setEditColorValue(e.target.value)} className="w-6 h-6 p-0 border-0 rounded-full cursor-pointer ml-1"/>
-                                  <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-24 text-xs font-bold border rounded px-2 py-1 outline-none"/>
-                                  <button onClick={saveEditCategory} className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-xs hover:bg-green-600">✓</button>
-                                  <button onClick={cancelEditCategory} className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-xs hover:bg-red-600 mr-1">×</button>
-                                </div>
-                              );
-                            }
-                            
-                            return (
-                              <div key={color.id} style={{backgroundColor: color.color || '#000000', color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group">
-                                {color.label}
-                                <button onClick={() => startEditCategory(color)} className="ml-1 opacity-70 hover:opacity-100 transition-opacity" title="Editar Cor/Nome"><Edit2 /></button>
-                                <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm" title="Remover Categoria">×</button>
+                        <div className="flex flex-wrap gap-2">
+                          {safeColorOptions.map(color => (
+                              <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold">
+                                {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900">×</button>
                               </div>
-                            );
-                          })}
+                          ))}
                         </div>
                       </div>
 
-                      <div className="bg-green-50 p-4 md:p-5 rounded-xl border border-green-100">
-                        <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Evento Manual</h3>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-16 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
-                          <input type="time" placeholder="Horário" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} className="w-full sm:w-28 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
-                          <input type="text" placeholder="O que vai rolar?" value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none focus:border-green-500" />
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-2 mt-2">
-                          <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none font-bold bg-white w-full">
-                            <option value="">Escolha a categoria...</option>
-                            {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                          </select>
-                          <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold hover:bg-green-700 transition shadow-sm w-full sm:w-auto">Postar</button>
+                      <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                        <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                              <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-16 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
+                              <input type="time" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} className="w-28 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
+                              <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none" />
+                          </div>
+                          <textarea placeholder="Anotações / Roteiro / Link do Drive..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 rounded-lg px-3 py-2 outline-none text-sm h-16 resize-none"></textarea>
+                          
+                          <div className="flex gap-2 mt-1">
+                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 font-bold bg-white">
+                                <option value="">Escolher cor...</option>
+                                {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                              </select>
+                              <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold">Postar</button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                  )}
 
-                  {/* LISTA DE EVENTOS RÁPIDA - AGRUPADA POR CATEGORIA */}
                   <div className="mt-8 border-t pt-6">
-                    <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts Cadastrados ({currentMonthEventsList.length})</h3>
-                    
-                    <div className="space-y-6 max-h-96 overflow-y-auto pr-2">
-                      {safeColorOptions.map(category => {
-                        const catEvents = currentMonthEventsList.filter(e => e.color === category.id).sort((a,b) => a.day - b.day);
-                        
-                        if (catEvents.length === 0) return null;
+                    <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts (Mostrando {filteredMonthEventsList.length})</h3>
+                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                      {filteredMonthEventsList.map((event) => {
+                          const originalIndex = event.originalIndex;
+                          const category = safeColorOptions.find(c => c.id === event.color);
+                          if(!category) return null;
+                          const status = getEventStatus(originalIndex);
+                          
+                          if (editingEventIndex === originalIndex) {
+                            return (
+                              <div key={originalIndex} className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                  <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-16 border p-1 rounded outline-none font-bold" />
+                                  <input type="time" value={editEventForm.time} onChange={e => setEditEventForm({...editEventForm, time: e.target.value})} className="border p-1 rounded outline-none" />
+                                  <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border p-1 rounded outline-none" />
+                                </div>
+                                <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border p-1 rounded outline-none text-sm h-16" placeholder="Anotações..."></textarea>
+                                <div className="flex gap-2">
+                                    <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border p-1 rounded bg-white">
+                                      {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                    </select>
+                                    <button onClick={saveEditEvent} className="bg-green-500 text-white px-4 rounded font-bold">Salvar</button>
+                                    <button onClick={cancelEditEvent} className="bg-gray-400 text-white px-4 rounded font-bold">Cancelar</button>
+                                </div>
+                              </div>
+                            );
+                          }
 
-                        return (
-                          <div key={category.id} className="bg-white border rounded-xl p-4 shadow-sm">
-                            <h4 className="font-black text-lg mb-3 border-b pb-2" style={{ color: category.color || '#000000' }}>{category.label}</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {catEvents.map((event) => {
-                                const originalIndex = event.originalIndex;
-                                const status = getEventStatus(originalIndex);
-                                
-                                // MODO DE EDIÇÃO
-                                if (editingEventIndex === originalIndex) {
-                                  return (
-                                    <div key={originalIndex} className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 shadow-md flex flex-col gap-2">
-                                      <div className="flex gap-2">
-                                        <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-16 border p-1 text-sm rounded font-bold outline-none" />
-                                        <input type="time" value={editEventForm.time} onChange={e => setEditEventForm({...editEventForm, time: e.target.value})} className="flex-1 border p-1 text-sm rounded outline-none" />
-                                      </div>
-                                      <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="w-full border p-1 text-sm rounded outline-none" />
-                                      <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="w-full border p-1 text-sm rounded outline-none bg-white">
-                                        {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                      </select>
-                                      <div className="flex gap-2 mt-1">
-                                        <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-2 py-1 rounded text-xs font-bold hover:bg-green-600 transition">Salvar</button>
-                                        <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold hover:bg-gray-500 transition">Cancelar</button>
-                                      </div>
-                                    </div>
-                                  );
-                                }
+                          return (
+                            <div key={originalIndex} className="bg-gray-50 border rounded-lg p-3 flex flex-col gap-2 transition hover:bg-white hover:shadow-md">
+                              <div className="flex items-start gap-2">
+                                <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded">D{event.day} {event.time && `(${event.time})`}</span>
+                                <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md">{event.text}</span>
+                              </div>
+                              
+                              {event.notes && (
+                                  <div className="bg-yellow-50 text-yellow-800 text-xs p-2 rounded border border-yellow-200 flex gap-2 items-start mt-1">
+                                      <MessageSquare /> <p className="whitespace-pre-wrap">{event.notes}</p>
+                                  </div>
+                              )}
 
-                                // MODO DE VISUALIZAÇÃO
-                                return (
-                                  <div key={originalIndex} className="bg-gray-50 border rounded-lg p-3 flex flex-col gap-2 transition hover:bg-white hover:shadow-md">
-                                    <div className="flex items-start gap-2">
-                                      <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded flex-shrink-0 mt-0.5">
-                                        D{event.day} {event.time && <span className="ml-1 text-[10px] opacity-70">({event.time})</span>}
-                                      </span>
-                                      <span style={{backgroundColor: category.color || '#000000', color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md flex-1 break-words whitespace-normal leading-tight">
-                                        {event.text}
-                                      </span>
+                              {userRole === 'admin' && (
+                                  <div className="flex justify-between items-center mt-1">
+                                    <div className="flex gap-1">
+                                      <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-xs font-bold ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700'}`}>✓ Feito</button>
+                                      <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-xs font-bold ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'}`}>⚠ Atraso</button>
                                     </div>
-                                    <div className="flex justify-between items-center mt-1">
-                                      <div className="flex gap-1">
-                                        <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>✓ Feito</button>
-                                        <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-[10px] md:text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>⚠ Atraso</button>
-                                      </div>
-                                      <div className="flex gap-2">
-                                        <button onClick={() => startEditEvent(event, originalIndex)} className="text-blue-500 hover:text-blue-700 transition" title="Editar Evento"><Edit2 /></button>
-                                        <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 transition" title="Excluir Evento"><Trash2 /></button>
-                                      </div>
+                                    <div className="flex gap-2">
+                                      <button onClick={() => exportSingleToGoogleCalendar(event)} className="bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1" title="Adicionar à minha Agenda do Google">
+                                          + Agenda
+                                      </button>
+                                      <span className="text-gray-300 mx-1">|</span>
+                                      <button onClick={() => startEditEvent(event, originalIndex)} className="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 rounded transition"><Edit2 /></button>
+                                      <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 rounded transition"><Trash2 /></button>
                                     </div>
                                   </div>
-                                );
-                              })}
+                              )}
                             </div>
-                          </div>
-                        );
+                          );
                       })}
                     </div>
                   </div>
