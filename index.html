@@ -4,16 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criador de Calendário de Conteúdo - UPLI</title>
+    
+    <script>
+        window.addEventListener('error', function(event) {
+            document.body.innerHTML = '<div style="background:#ffebee; padding:30px; margin:20px; border:3px solid #f44336; border-radius:12px; font-family:sans-serif; color:#b71c1c; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">' +
+                '<h2 style="margin-top:0; font-size: 28px;">🚨 O Código Quebrou (Erro Crítico)!</h2>' +
+                '<p style="font-size: 16px;"><strong>O que deu errado:</strong> ' + event.message + '</p>' +
+                '<p style="font-size: 16px;"><strong>Linha:</strong> ' + event.lineno + ' | <strong>Coluna:</strong> ' + event.colno + '</p>' +
+                '<p style="margin-top: 10px; font-weight: bold;">Detalhes Técnicos (Envie para o chat):</p>' +
+                '<pre style="background:#fff; padding:15px; border:1px solid #ffcdd2; overflow:auto; border-radius: 8px; font-size: 14px;">' + (event.error && event.error.stack ? event.error.stack : 'Sem detalhes extras.') + '</pre>' +
+                '</div>';
+        });
+    </script>
+
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/index.min.js"></script>
+    <script>
+        window.onload = function() {
+            if (typeof MobileDragDrop !== 'undefined') {
+                MobileDragDrop.polyfill({ holdToDrag: 300 });
+            }
+        }
+    </script>
+    <style>
+        [draggable="true"] { touch-action: none; }
+    </style>
     
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 </head>
-<body className="bg-gray-100">
+<body class="bg-gray-100 transition-colors duration-300">
     <div id="root"></div>
     
     <script type="text/babel">
@@ -25,7 +54,7 @@
                     return (
                         <div className="min-h-screen flex items-center justify-center bg-red-50 p-8">
                             <div className="bg-white p-8 rounded-xl shadow-xl border-2 border-red-500 max-w-2xl w-full">
-                                <h2 className="text-2xl font-black text-red-600 mb-4">Oops! Algo bloqueou a tela.</h2>
+                                <h2 className="text-2xl font-black text-red-600 mb-4">Oops! Erro na Interface.</h2>
                                 <p className="text-gray-700 mb-4">Copie o texto abaixo e mande para o desenvolvedor:</p>
                                 <pre className="bg-gray-100 p-4 rounded text-sm text-red-800 overflow-auto">{this.state.errorMsg}</pre>
                                 <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-2 rounded font-bold hover:bg-red-700">Recarregar Página</button>
@@ -37,11 +66,11 @@
             }
         }
 
+        // --- SUAS CHAVES DO FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
           authDomain: "calendario-upli.firebaseapp.com",
           projectId: "calendario-upli",
-          storageBucket: "calendario-upli.firebasestorage.app",
           messagingSenderId: "849051732172",
           appId: "1:849051732172:web:14735da6c16d19bcf71a69",
           measurementId: "G-6YXY6KY98T"
@@ -61,13 +90,19 @@
         const CalendarDays = () => <span>📅</span>;
         const Edit2 = () => <span>✏️</span>;
         const LogOut = () => <span>🚪</span>;
-        const Clock = () => <span className="mr-1 opacity-80">⏰</span>;
         const DatabaseIcon = () => <span>☁️</span>;
         const MessageSquare = () => <span className="text-[10px]">💬</span>;
         const FilterIcon = () => <span>🔍</span>;
         const ImageIcon = () => <span>🖼️</span>;
         const PDFIcon = () => <span>📄</span>;
+        const KeyIcon = () => <span>🔑</span>;
         
+        // =====================================================================
+        // SEU E-MAIL JÁ PREENCHIDO AQUI (NÃO MEXER)
+        // =====================================================================
+        const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
+        // =====================================================================
+
         const CalendarCreator = () => {
           const [user, setUser] = useState(null);
           const [email, setEmail] = useState('');
@@ -78,20 +113,96 @@
           const [currentUserName, setCurrentUserName] = useState('');
           const [showProfileModal, setShowProfileModal] = useState(false);
           const [newDisplayName, setNewDisplayName] = useState('');
-          const [userRole, setUserRole] = useState('admin'); 
+          
+          const [userRole, setUserRole] = useState('cliente'); 
+          const [globalRoles, setGlobalRoles] = useState({});
+          const [showRolesModal, setShowRolesModal] = useState(false);
+          const [roleEmailInput, setRoleEmailInput] = useState('');
+          const [roleSelectInput, setRoleSelectInput] = useState('admin');
+
+          const [darkMode, setDarkMode] = useState(false);
 
           useEffect(() => {
-             const unsubscribe = auth.onAuthStateChanged(u => {
-                 setUser(u);
-                 if (u) {
-                     setCurrentUserName(u.displayName || u.email);
-                     const savedRole = localStorage.getItem(`role_${u.uid}`);
-                     if(savedRole) setUserRole(savedRole);
+             try {
+                 const savedTheme = localStorage.getItem('theme');
+                 if (savedTheme === 'dark') {
+                     setDarkMode(true);
+                     document.documentElement.classList.add('dark');
                  }
-                 setLoadingAuth(false);
+             } catch(e) {}
+
+             const unsubscribe = auth.onAuthStateChanged(u => {
+                 if (u) {
+                     setUser(u);
+                     setCurrentUserName(u.displayName || u.email);
+
+                     db.collection('system').doc('roles').onSnapshot(doc => {
+                         if (doc.exists) {
+                             const rolesData = doc.data().userRoles || {};
+                             setGlobalRoles(rolesData);
+                             
+                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
+                                 setUserRole('master'); 
+                             } else if (rolesData[u.email.toLowerCase()] === 'admin') {
+                                 setUserRole('admin'); 
+                             } else {
+                                 setUserRole('cliente'); 
+                             }
+                         } else {
+                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
+                                 db.collection('system').doc('roles').set({ userRoles: {} });
+                                 setUserRole('master');
+                             } else {
+                                 setUserRole('cliente');
+                             }
+                         }
+                         setLoadingAuth(false);
+                     });
+
+                 } else {
+                     setUser(null);
+                     setLoadingAuth(false);
+                 }
              });
              return () => unsubscribe();
           }, []);
+
+          const isAdmin = userRole === 'master' || userRole === 'admin';
+
+          const handleSaveRole = () => {
+              if(!roleEmailInput) return;
+              const emailToSave = roleEmailInput.toLowerCase().trim();
+              const updatedRoles = { ...globalRoles, [emailToSave]: roleSelectInput };
+              
+              db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true })
+                .then(() => { 
+                    setRoleEmailInput(''); 
+                    alert(`Permissão de ${roleSelectInput.toUpperCase()} concedida para ${emailToSave}!`); 
+                })
+                .catch(err => alert("Erro ao salvar permissão: " + err.message));
+          };
+
+          const handleRemoveRole = (emailToRemove) => {
+              if(confirm(`Tem certeza que deseja rebaixar ${emailToRemove} para CLIENTE?`)) {
+                  const updatedRoles = { ...globalRoles };
+                  delete updatedRoles[emailToRemove];
+                  db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true });
+              }
+          };
+
+          const toggleDarkMode = () => {
+              const newMode = !darkMode;
+              setDarkMode(newMode);
+              try {
+                  if (newMode) {
+                      document.documentElement.classList.add('dark');
+                      localStorage.setItem('theme', 'dark');
+                  } else {
+                      document.documentElement.classList.remove('dark');
+                      localStorage.setItem('theme', 'light');
+                  }
+              } catch(e) {}
+          };
 
           const handleLogin = (e) => {
              e.preventDefault();
@@ -104,7 +215,6 @@
               if (!user) return;
               user.updateProfile({ displayName: newDisplayName }).then(() => {
                   setCurrentUserName(newDisplayName);
-                  localStorage.setItem(`role_${user.uid}`, userRole);
                   setShowProfileModal(false);
               }).catch(error => alert("Erro ao atualizar nome: " + error.message));
           };
@@ -126,11 +236,12 @@
               }).catch(error => alert("Erro: E-mail não encontrado."));
           };
 
-          const [year, setYear] = useState(2026);
-          const [month, setMonth] = useState(2); 
+          const [year, setYear] = useState(new Date().getFullYear());
+          const [month, setMonth] = useState(new Date().getMonth()); 
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
-          const [newEvent, setNewEvent] = useState({ day: '', time: '', text: '', color: '', notes: '' });
+          
+          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           
           const [editingColor, setEditingColor] = useState(null);
@@ -138,7 +249,7 @@
           const [editColorValue, setEditColorValue] = useState('');
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', time: '', text: '', color: '', notes: '' });
+          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
           const [expandedNoteIndex, setExpandedNoteIndex] = useState(null); 
           
           const [eventStatuses, setEventStatuses] = useState({});
@@ -148,7 +259,8 @@
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
           
-          const [activeFilter, setActiveFilter] = useState('ALL'); 
+          const [calendarFilter, setCalendarFilter] = useState('ALL'); 
+          const [listFilter, setListFilter] = useState('ALL');         
 
           useEffect(() => {
             if (!user) return;
@@ -181,7 +293,8 @@
                       setEvents(Array.isArray(comp.events) ? comp.events : []);
                       setColorOptions(Array.isArray(comp.categories) ? comp.categories : []);
                       setEventStatuses(comp.statuses || {});
-                      setActiveFilter('ALL'); 
+                      setCalendarFilter('ALL'); 
+                      setListFilter('ALL');
                   }
               } else {
                   setEvents([]); setColorOptions([]); setEventStatuses({});
@@ -199,13 +312,34 @@
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
           const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
+          const handlePrevMonth = () => {
+              if (month === 0) { setMonth(11); setYear(year - 1); } 
+              else { setMonth(month - 1); }
+          };
+          const handleNextMonth = () => {
+              if (month === 11) { setMonth(0); setYear(year + 1); } 
+              else { setMonth(month + 1); }
+          };
+
+          const formatDateStr = (isoString) => {
+              if(!isoString) return '';
+              const date = new Date(isoString);
+              return date.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'});
+          };
+
           const toggleEventStatus = (eventIndex, status) => {
-            if (userRole === 'cliente') return; 
+            if (!isAdmin) return; 
             const eventKey = `event_${eventIndex}`;
             const current = eventStatuses[eventKey];
             const newStatuses = {...eventStatuses};
-            if (current === status) delete newStatuses[eventKey];
-            else newStatuses[eventKey] = status;
+            
+            // CORREÇÃO: Se clicar de novo no mesmo, ele desmarca (envia null)
+            if (current === status) {
+                newStatuses[eventKey] = null; 
+            } else {
+                newStatuses[eventKey] = status;
+            }
+            
             saveToCloud({ statuses: newStatuses });
           };
 
@@ -256,9 +390,16 @@
             if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
             
-            const updatedEvents = [...events, { ...newEvent, day: dayNum, month: month, year: year }];
+            const eventToAdd = { 
+                ...newEvent, 
+                day: dayNum, month: month, year: year,
+                createdBy: currentUserName,
+                createdAt: new Date().toISOString()
+            };
+
+            const updatedEvents = [...events, eventToAdd];
             saveToCloud({ events: updatedEvents });
-            setNewEvent({ day: '', time: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '' });
+            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '', imageUrl: '' });
           };
 
           const removeEvent = (index) => {
@@ -270,10 +411,10 @@
             setEditingEventIndex(originalIndex);
             setEditEventForm({
                 day: event.day || '',
-                time: event.time || '',
                 text: event.text || '',
                 color: event.color || '',
-                notes: event.notes || ''
+                notes: event.notes || '',
+                imageUrl: event.imageUrl || ''
             });
           };
 
@@ -284,19 +425,43 @@
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
 
             const updatedEvents = [...events];
+            
             updatedEvents[editingEventIndex] = {
                 ...updatedEvents[editingEventIndex],
                 day: dayNum,
-                time: editEventForm.time,
                 text: editEventForm.text,
                 color: editEventForm.color,
-                notes: editEventForm.notes
+                notes: editEventForm.notes,
+                imageUrl: editEventForm.imageUrl,
+                updatedBy: currentUserName,
+                updatedAt: new Date().toISOString()
             };
             saveToCloud({ events: updatedEvents });
             setEditingEventIndex(null);
           };
 
           const cancelEditEvent = () => setEditingEventIndex(null);
+
+          const onDragStart = (e, originalIndex) => {
+              e.dataTransfer.setData("eventIndex", originalIndex);
+          };
+
+          const onDrop = (e, targetDay) => {
+              e.preventDefault();
+              if(!isAdmin) return; 
+              
+              const originalIndex = e.dataTransfer.getData("eventIndex");
+              if(originalIndex === null || originalIndex === '') return;
+              
+              const updatedEvents = [...events];
+              updatedEvents[originalIndex].day = targetDay;
+              updatedEvents[originalIndex].updatedBy = currentUserName;
+              updatedEvents[originalIndex].updatedAt = new Date().toISOString();
+              
+              saveToCloud({ events: updatedEvents });
+          };
+
+          const onDragOver = (e) => e.preventDefault();
 
           const addCategory = () => {
             if (newCategory.label.trim()) {
@@ -327,91 +492,30 @@
 
           const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
-          const clearAllData = () => {
-            if (confirm('⚠️ Apagar TODOS os eventos desta empresa?')) saveToCloud({ events: [], categories: [], statuses: {} });
-          };
-
           const exportSingleToGoogleCalendar = (event) => {
               const companyName = companies.find(c => c.id === selectedCompany)?.name || 'UPLI';
-              const dateStr = `${year}${String(month + 1).padStart(2, '0')}${String(event.day).padStart(2, '0')}`;
-              let timeStrStart = '090000'; let timeStrEnd = '100000';
-              if (event.time) {
-                  const [hr, min] = event.time.split(':');
-                  timeStrStart = `${hr}${min}00`;
-                  const endHr = String((parseInt(hr) + 1) % 24).padStart(2, '0'); 
-                  timeStrEnd = `${endHr}${min}00`;
-              }
-              const dates = `${dateStr}T${timeStrStart}/${dateStr}T${timeStrEnd}`;
+              const startDate = new Date(year, month, event.day);
+              const endDate = new Date(year, month, event.day + 1);
+              const startStr = `${startDate.getFullYear()}${String(startDate.getMonth() + 1).padStart(2, '0')}${String(startDate.getDate()).padStart(2, '0')}`;
+              const endStr = `${endDate.getFullYear()}${String(endDate.getMonth() + 1).padStart(2, '0')}${String(endDate.getDate()).padStart(2, '0')}`;
+              const dates = `${startStr}/${endStr}`;
               const title = encodeURIComponent(`[${companyName}] ${event.text}`);
               const details = encodeURIComponent(event.notes || 'Sem anotações.');
               window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`, '_blank');
           };
 
-          const handleFileUpload = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              const content = event.target.result;
-              const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-              if (lines.length < 2) return alert('O arquivo deve ter pelo menos 2 linhas.');
-
-              const compName = lines[0];
-              let comp = companies.find(c => c.name.toLowerCase() === compName.toLowerCase());
-              let compId = comp ? comp.id : Date.now().toString() + Math.random().toString(36).substr(2, 5);
-              let compData = comp ? { ...comp } : { events: [], categories: [], statuses: {} };
-
-              lines.slice(1).forEach(line => {
-                const parts = line.split(';');
-                if (parts.length < 3) return;
-
-                let catName = parts[0].trim();
-                let catColor = null;
-                let dayNumStr, timeStr, desc;
-
-                if (parts[1].trim().startsWith('#')) {
-                    catColor = parts[1].trim(); dayNumStr = parts[2] ? parts[2].trim() : '';
-                    if (parts.length === 4) { timeStr = ''; desc = parts[3].trim(); }
-                    else if (parts.length > 4) { timeStr = parts[3].trim(); desc = parts.slice(4).join(';').trim(); }
-                    else return;
-                } else {
-                    dayNumStr = parts[1].trim();
-                    if (parts.length === 3) { timeStr = ''; desc = parts[2].trim(); }
-                    else if (parts.length > 3) { timeStr = parts[2].trim(); desc = parts.slice(3).join(';').trim(); }
-                    else return;
-                }
-                const dayNum = parseInt(dayNumStr);
-                if (!catName || isNaN(dayNum) || !desc) return;
-
-                let category = compData.categories.find(c => c.label.toLowerCase() === catName.toLowerCase());
-                if (!category) {
-                  let finalColor = catColor || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-                  category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: finalColor };
-                  compData.categories.push(category);
-                }
-                compData.events.push({ day: dayNum, time: timeStr, text: desc, color: category.id, month: month, year: year });
-              });
-
-              db.collection('companies').doc(compId).set({
-                  name: compName, events: compData.events, categories: compData.categories, statuses: compData.statuses || {}
-              }, { merge: true }).then(() => { setSelectedCompany(compId); alert(`Eventos importados com sucesso!`); });
-              e.target.value = ''; 
-            };
-            reader.readAsText(file);
-          };
-
           const safeEvents = Array.isArray(events) ? events : [];
           const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
 
-          const getFilteredEvents = () => {
+          const getEventsByFilterType = (filterType) => {
               let monthEvents = safeEvents.filter(e => e.month === month && e.year === year);
-              if (activeFilter === 'ALL') return monthEvents;
-              if (activeFilter === 'DONE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'done');
-              if (activeFilter === 'LATE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'late');
-              return monthEvents.filter(e => e.color === activeFilter);
+              if (filterType === 'ALL') return monthEvents;
+              if (filterType === 'DONE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'done');
+              if (filterType === 'LATE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'late');
+              return monthEvents.filter(e => e.color === filterType);
           };
 
-          const getEventsForDay = (day) => getFilteredEvents().filter(e => e.day === day);
+          const getCalendarEventsForDay = (day) => getEventsByFilterType(calendarFilter).filter(e => e.day === day);
           
           const getLegendItems = () => {
             const currentEvents = safeEvents.filter(e => e.month === month && e.year === year);
@@ -420,13 +524,19 @@
           };
 
           const getWeeks = () => {
-            const weeks = []; let currentWeek = new Array(7).fill(null);
+            const weeks = [];
+            let currentWeek = new Array(7).fill(null);
             const daysInMonth = getDaysInMonth(year, month);
             let currentDayOfWeek = getFirstDayOfMonth(year, month);
 
             for (let day = 1; day <= daysInMonth; day++) {
-              currentWeek[currentDayOfWeek] = day; currentDayOfWeek++;
-              if (currentDayOfWeek === 7) { weeks.push(currentWeek); currentWeek = new Array(7).fill(null); currentDayOfWeek = 0; }
+              currentWeek[currentDayOfWeek] = day;
+              currentDayOfWeek++;
+              if (currentDayOfWeek === 7) {
+                weeks.push(currentWeek);
+                currentWeek = new Array(7).fill(null);
+                currentDayOfWeek = 0;
+              }
             }
             if (currentDayOfWeek > 0) weeks.push(currentWeek);
             return weeks;
@@ -434,19 +544,19 @@
 
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
-            const words = text.split(' '); const lines = []; let currentLine = words[0];
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+
             for (let i = 1; i < words.length; i++) {
                 const word = words[i];
-                if (ctx.measureText(currentLine + " " + word).width < maxWidth) currentLine += " " + word;
-                else { lines.push(currentLine); currentLine = word; }
+                const width = ctx.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
             }
             lines.push(currentLine);
             return lines;
           };
 
-          // =========================================================================
-          // NOVO SISTEMA DE DESENHO DO CANVAS (QUALIDADE 4K)
-          // =========================================================================
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -458,22 +568,18 @@
             const colWidth = contentWidth / 7;
             const eventSpacing = 8;
             
-            // Calculando a altura física necessária
             ctx.font = 'bold 14px Arial';
-            let totalHeight = padding; 
-            totalHeight += 100; 
-            totalHeight += 80; 
+            let totalHeight = padding + 100 + 80; 
             
             weeks.forEach(week => {
               totalHeight += 50; 
               let maxWeekHeightCalc = 0;
               week.forEach(day => {
                 if (day) {
-                  const dayEvents = getEventsForDay(day);
+                  const dayEvents = getCalendarEventsForDay(day);
                   let colHeight = 0;
                   dayEvents.forEach(event => {
                     let displayText = event.text || '';
-                    if (event.time) displayText = `⏰ ${event.time} ` + displayText;
                     const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
                     const status = getEventStatus(originalIndex);
                     if (status === 'done') displayText += ' ✓';
@@ -499,16 +605,13 @@
             
             const finalHeight = Math.max(1080, totalHeight);
 
-            // ---> A MÁGICA DO 4K ACONTECE AQUI <---
-            const scale = 3; // Multiplica os pixels reais por 3 (Maior Qualidade)
+            const scale = 3; 
             canvas.width = canvasWidth * scale;
             canvas.height = finalHeight * scale;
             
-            // Suaviza as fontes para evitar serrilhados
             ctx.scale(scale, scale);
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            // ----------------------------------------
             
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
@@ -561,7 +664,7 @@
               week.forEach((day, i) => {
                 if (!day) return;
                 
-                const dayEvents = getEventsForDay(day);
+                const dayEvents = getCalendarEventsForDay(day);
                 let eventY = currentY;
                 const x = padding + (i * colWidth);
                 const eventMargin = 10;
@@ -578,7 +681,6 @@
                   
                   ctx.font = 'bold 14px Arial';
                   let displayText = event.text || '';
-                  if (event.time) displayText = `⏰ ${event.time} ` + displayText;
                   if (status === 'done') displayText += ' ✓';
                   if (status === 'late') displayText += ' ⚠';
                   
@@ -649,7 +751,6 @@
             return { canvas, finalHeight };
           };
 
-          // Exportar Imagem em Alta Resolução (PNG)
           const exportAsImage = async () => {
             try {
               const { canvas } = drawCalendarToCanvas();
@@ -665,7 +766,6 @@
             } catch (error) { alert('Erro ao exportar imagem.'); }
           };
 
-          // Exportar PDF em Alta Resolução
           const exportAsPDF = async () => {
             try {
               if (!window.jspdf) {
@@ -675,119 +775,22 @@
                 await new Promise((resolve) => scriptPDF.onload = resolve);
               }
               const { canvas, finalHeight } = drawCalendarToCanvas();
-              // Pega a imagem na resolução 4K
               const imgData = canvas.toDataURL('image/png', 1.0);
               
               const pdf = new window.jspdf.jsPDF({
                 orientation: finalHeight > 1920 ? 'portrait' : 'landscape',
                 unit: 'px',
-                format: [1920, finalHeight], // Mantém o tamanho do papel normal, para não ficar uma folha gigante
+                format: [1920, finalHeight],
                 compress: true
               });
               
-              // Insere a imagem 4K comprimida dentro do espaço da folha
               pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight, '', 'FAST');
               const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
               pdf.save(`calendario-${companyName}-${months[month]}-${year}-HQ.pdf`);
             } catch (error) { alert('Erro ao exportar PDF.'); }
           };
 
-          const renderCalendarUI = () => {
-            const weeks = getWeeks();
-            const daysInMonth = getDaysInMonth(year, month);
-            const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
-
-            return (
-              <div className="bg-white rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200">
-                <div className="mb-6 border-b pb-4">
-                  <h2 className="text-2xl md:text-4xl font-black text-gray-900 uppercase tracking-tight">
-                    {months[month]} {year} <span className="text-gray-400 font-medium">|</span> {companies.find(c => c.id === selectedCompany)?.name}
-                  </h2>
-                </div>
-
-                <div className="mb-6 bg-gray-50 p-3 rounded-lg border flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold text-gray-500 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
-                    <button onClick={() => setActiveFilter('ALL')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter === 'ALL' ? 'bg-black text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>Tudo</button>
-                    <button onClick={() => setActiveFilter('DONE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>Concluídos ✓</button>
-                    <button onClick={() => setActiveFilter('LATE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>Atrasados ⚠</button>
-                    <span className="text-gray-300 mx-1">|</span>
-                    {getLegendItems().map(cat => (
-                        <button key={cat.id} onClick={() => setActiveFilter(cat.id)} style={activeFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-xs font-bold rounded-full transition ${activeFilter !== cat.id && 'bg-gray-100 border border-gray-300 text-gray-600 opacity-70 hover:opacity-100'}`}>
-                            {cat.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="hidden md:block overflow-x-auto pb-4">
-                  <div className="min-w-[800px]">
-                    <div className="grid grid-cols-7 gap-4 mb-6">
-                      {fullWeekDays.map(day => (
-                        <div key={day} className="bg-black text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
-                          {day}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-8">
-                      {weeks.map((week, wIdx) => (
-                        <div key={wIdx} className="flex flex-col">
-                          <div className="bg-black rounded-full h-10 flex items-center px-4 mb-4 shadow-md">
-                            {week.map((day, dIdx) => (
-                              <div key={dIdx} className="flex-1 text-white font-bold text-lg px-2">
-                                {day || ''}
-                              </div>
-                            ))}
-                          </div>
-                          
-                          <div className="grid grid-cols-7 gap-4">
-                            {week.map((day, dIdx) => (
-                              <div key={dIdx} className="flex flex-col gap-2 min-h-[60px]">
-                                {day && getEventsForDay(day).map((event, eIdx) => {
-                                  const color = safeColorOptions.find(c => c.id === event.color);
-                                  if (!color) return null;
-                                  
-                                  const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                                  const status = getEventStatus(originalIndex);
-                                  const finalColor = getStatusColor(color.color, status);
-                                  const textColor = getTextColor(finalColor);
-                                  
-                                  return (
-                                    <div
-                                      key={eIdx}
-                                      style={{ backgroundColor: finalColor, color: textColor }}
-                                      className="rounded-xl px-2 py-2 text-[10px] md:text-[11px] font-bold text-center shadow-sm cursor-pointer hover:opacity-90 flex flex-col items-center justify-center break-words whitespace-normal leading-tight relative group"
-                                      onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
-                                    >
-                                      <span>
-                                          {event.time && <span className="opacity-90 font-black mr-1"><Clock /> {event.time}</span>}
-                                          {event.text}
-                                          {event.notes && <span className="ml-1 text-yellow-300 drop-shadow-md"><MessageSquare /></span>}
-                                          {status === 'done' && <span className="ml-1">✓</span>}
-                                          {status === 'late' && <span className="ml-1">⚠</span>}
-                                      </span>
-                                      
-                                      {expandedNoteIndex === originalIndex && event.notes && (
-                                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-yellow-100 border-2 border-yellow-300 text-yellow-900 p-2 rounded-lg shadow-xl z-10 text-left text-xs cursor-text">
-                                              <p className="font-bold border-b border-yellow-200 mb-1">Anotações:</p>
-                                              <p className="whitespace-pre-wrap">{event.notes}</p>
-                                          </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          };
-
-          if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 font-bold text-gray-500">Carregando Nuvem...</div>;
+          if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 font-bold text-gray-500">Carregando Nuvem...</div>;
 
           if (!user) {
               return (
@@ -818,202 +821,498 @@
               );
           }
 
-          const eventsWithOriginalIndex = safeEvents.map((ev, index) => ({ ...ev, originalIndex: index }));
-          const filteredMonthEventsList = getFilteredEvents().map(e => {
+          const daysInMonth = getDaysInMonth(year, month);
+          const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
+          const weeks = getWeeks();
+          
+          const filteredListEvents = getEventsByFilterType(listFilter).map(e => {
               const oIdx = safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month);
               return {...e, originalIndex: oIdx};
           });
 
           return (
-            <div className="min-h-screen bg-gray-100 p-2 md:p-8">
+            <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
               
+              {/* MODAL DE PERFIL RESTRITO */}
               {showProfileModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
-                          <h3 className="text-xl font-black text-gray-800 border-b pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
-                          <div>
-                              <label className="block text-sm font-bold text-gray-700 mb-1">Nome de Exibição</label>
-                              <input type="text" value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Ex: Stefany..." />
-                          </div>
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
+                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
                           
-                          <div className="pt-2">
-                              <label className="block text-sm font-bold text-gray-700 mb-1">Modo de Visão</label>
-                              <div className="flex bg-gray-100 p-1 rounded-lg">
-                                  <button onClick={() => setUserRole('admin')} className={`flex-1 py-1 text-sm font-bold rounded-md transition ${userRole === 'admin' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Administrador</button>
-                                  <button onClick={() => setUserRole('cliente')} className={`flex-1 py-1 text-sm font-bold rounded-md transition ${userRole === 'cliente' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Cliente (Só Ver)</button>
-                              </div>
-                              <p className="text-[10px] text-gray-500 mt-1 leading-tight">Cliente não vê botões de apagar e editar para não bagunçar o calendário.</p>
+                          <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
+                              <p className="text-lg font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
+                                  {userRole === 'master' ? '👑 Master' : userRole === 'admin' ? '🛡️ Administrador' : '🔒 Cliente'}
+                              </p>
+                              <p className="text-[10px] text-gray-500 mt-1">Seu cargo só pode ser alterado pela diretoria.</p>
+                          </div>
+
+                          <div>
+                              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Nome de Exibição</label>
+                              <input type="text" value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Ex: Stefany..." />
                           </div>
 
                           <div className="pt-4 flex flex-col gap-2">
-                              <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Perfil</button>
+                              <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Nome</button>
                               <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">Redefinir Senha</button>
-                              <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">Fechar</button>
+                              <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">Fechar</button>
                           </div>
                       </div>
                   </div>
               )}
 
+              {/* PAINEL SECRETO DO MASTER */}
+              {showRolesModal && userRole === 'master' && (
+                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Gerenciar Acessos</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Qualquer pessoa não listada aqui entra automaticamente como "Cliente" (sem poder editar).</p>
+                          
+                          <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600">
+                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">E-mail do Usuário</label>
+                              <input type="email" value={roleEmailInput} onChange={e => setRoleEmailInput(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none mb-3" placeholder="exemplo@gmail.com" />
+                              
+                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Permissão</label>
+                              <select value={roleSelectInput} onChange={e => setRoleSelectInput(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3">
+                                  <option value="admin">Administrador (Pode editar tudo)</option>
+                                  <option value="cliente">Cliente (Somente visualização)</option>
+                              </select>
+                              
+                              <button onClick={handleSaveRole} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Permissão</button>
+                          </div>
+
+                          <div className="mt-4">
+                              <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos Concedidos:</h4>
+                              <div className="space-y-2">
+                                  {Object.keys(globalRoles).map(email => (
+                                      <div key={email} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded border dark:border-gray-700">
+                                          <div className="flex flex-col">
+                                              <span className="font-bold text-sm">{email}</span>
+                                              <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>{globalRoles[email]}</span>
+                                          </div>
+                                          <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 dark:bg-red-900 px-2 py-1 rounded">Rebaixar</button>
+                                      </div>
+                                  ))}
+                                  {Object.keys(globalRoles).length === 0 && <p className="text-xs text-gray-400">Nenhum acesso cadastrado.</p>}
+                              </div>
+                          </div>
+
+                          <button onClick={() => setShowRolesModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-4">Fechar Painel</button>
+                      </div>
+                  </div>
+              )}
+
               <div className="max-w-7xl mx-auto space-y-6">
-                <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-200">
-                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 border-b pb-4">
+                
+                {/* CABEÇALHO SUPERIOR */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div>
-                      <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800">
+                      <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800 dark:text-white">
                         <CalendarDays /> Calendário UPLI
                       </h1>
                       <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Conectado à Nuvem Firebase</p>
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-                      <div className="flex items-center gap-3 mr-2 bg-blue-50 border border-blue-200 px-4 py-2 rounded-xl shadow-sm">
-                          <div className="bg-blue-200 text-blue-700 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
-                          <div className="flex flex-col leading-tight">
-                              <span className="text-sm font-black text-gray-800">{currentUserName}</span>
-                              <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'admin' ? 'text-blue-600' : 'text-green-600'}`}>{userRole === 'admin' ? 'Administrador' : 'Modo Cliente'}</span>
+                      <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition hover:scale-110 shadow-sm" title="Alternar Tema">
+                          {darkMode ? '☀️' : '🌙'}
+                      </button>
+
+                      {userRole === 'master' && (
+                          <button onClick={() => setShowRolesModal(true)} className="bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-yellow-500 transition flex items-center gap-2">
+                              <KeyIcon /> Acessos
+                          </button>
+                      )}
+
+                      <div className="flex items-center gap-3 mr-2 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 px-4 py-2 rounded-xl shadow-sm w-full md:w-auto">
+                          <div className="bg-blue-200 dark:bg-gray-600 text-blue-700 dark:text-blue-300 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
+                          <div className="flex flex-col leading-tight flex-1">
+                              <span className="text-sm font-black text-gray-800 dark:text-white">{currentUserName}</span>
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'master' ? 'text-yellow-600 dark:text-yellow-400' : userRole === 'admin' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Administrador' : 'Cliente'}
+                              </span>
                           </div>
-                          <button onClick={() => { setNewDisplayName(user.displayName || ''); setShowProfileModal(true); }} className="text-blue-400 hover:text-blue-700 transition p-1 ml-1"><Edit2/></button>
+                          <button onClick={() => setShowProfileModal(true)} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition p-1 ml-1"><Edit2/></button>
                       </div>
 
-                      {/* BOTÕES DE EXPORTAÇÃO EM ALTA QUALIDADE */}
-                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm" title="Baixar Imagem 4K"><ImageIcon /> Baixar PNG</button>
-                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm" title="Baixar PDF em Alta Definição"><PDFIcon /> Baixar PDF</button>
+                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm"><ImageIcon /> Baixar PNG</button>
+                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm"><PDFIcon /> Baixar PDF</button>
 
-                      <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 text-red-700 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
-                    </div>
-                  </div>
-
-                  {userRole === 'admin' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200">
-                        <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                        <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 outline-none w-full" />
-                          <button onClick={addCompany} className="bg-gray-800 text-white rounded-lg px-4 font-bold hover:bg-black transition">Add</button>
-                        </div>
-                        {companies.map(company => (
-                              <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex-1 font-bold cursor-pointer" onClick={() => setSelectedCompany(company.id)}>{company.name}</div>
-                                    <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 px-2"><Trash2 /></button>
-                              </div>
-                        ))}
-                      </div>
-
-                      <div className="flex gap-4">
-                        <select value={month} onChange={e => setMonth(parseInt(e.target.value))} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold bg-white outline-none flex-1">
-                          {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                        </select>
-                        <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value) || 2026)} className="w-full border-2 border-gray-300 rounded-lg px-3 py-3 font-bold outline-none flex-1" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                        <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">🎨 Categorias</h3>
-                        <div className="flex gap-2 mb-4">
-                          <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 rounded-lg px-3 py-2 outline-none" />
-                          <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded" />
-                          <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 font-bold">Add</button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {safeColorOptions.map(color => (
-                              <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold">
-                                {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900">×</button>
-                              </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                        <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
-                        <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
-                              <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-16 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
-                              <input type="time" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} className="w-28 border-2 border-green-200 rounded-lg px-2 py-2 text-center font-bold outline-none" />
-                              <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 outline-none" />
-                          </div>
-                          <textarea placeholder="Anotações / Roteiro / Link do Drive..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 rounded-lg px-3 py-2 outline-none text-sm h-16 resize-none"></textarea>
-                          
-                          <div className="flex gap-2 mt-1">
-                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 rounded-lg px-3 py-2 font-bold bg-white">
-                                <option value="">Escolher cor...</option>
-                                {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                              </select>
-                              <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold">Postar</button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  )}
-
-                  <div className="mt-8 border-t pt-6">
-                    <h3 className="font-bold text-gray-800 mb-4">Gerenciar Posts (Mostrando {filteredMonthEventsList.length})</h3>
-                    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                      {filteredMonthEventsList.map((event) => {
-                          const originalIndex = event.originalIndex;
-                          const category = safeColorOptions.find(c => c.id === event.color);
-                          if(!category) return null;
-                          const status = getEventStatus(originalIndex);
-                          
-                          if (editingEventIndex === originalIndex) {
-                            return (
-                              <div key={originalIndex} className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 flex flex-col gap-2">
-                                <div className="flex gap-2">
-                                  <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-16 border p-1 rounded outline-none font-bold" />
-                                  <input type="time" value={editEventForm.time} onChange={e => setEditEventForm({...editEventForm, time: e.target.value})} className="border p-1 rounded outline-none" />
-                                  <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border p-1 rounded outline-none" />
-                                </div>
-                                <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border p-1 rounded outline-none text-sm h-16" placeholder="Anotações..."></textarea>
-                                <div className="flex gap-2">
-                                    <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border p-1 rounded bg-white">
-                                      {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                    </select>
-                                    <button onClick={saveEditEvent} className="bg-green-500 text-white px-4 rounded font-bold">Salvar</button>
-                                    <button onClick={cancelEditEvent} className="bg-gray-400 text-white px-4 rounded font-bold">Cancelar</button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div key={originalIndex} className="bg-gray-50 border rounded-lg p-3 flex flex-col gap-2 transition hover:bg-white hover:shadow-md">
-                              <div className="flex items-start gap-2">
-                                <span className="bg-gray-200 text-gray-800 font-black text-xs px-2 py-1 rounded">D{event.day} {event.time && `(${event.time})`}</span>
-                                <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md">{event.text}</span>
-                              </div>
-                              
-                              {event.notes && (
-                                  <div className="bg-yellow-50 text-yellow-800 text-xs p-2 rounded border border-yellow-200 flex gap-2 items-start mt-1">
-                                      <MessageSquare /> <p className="whitespace-pre-wrap">{event.notes}</p>
-                                  </div>
-                              )}
-
-                              {userRole === 'admin' && (
-                                  <div className="flex justify-between items-center mt-1">
-                                    <div className="flex gap-1">
-                                      <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`px-2 py-1 rounded text-xs font-bold ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700'}`}>✓ Feito</button>
-                                      <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`px-2 py-1 rounded text-xs font-bold ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'}`}>⚠ Atraso</button>
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <button onClick={() => exportSingleToGoogleCalendar(event)} className="bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1" title="Adicionar à minha Agenda do Google">
-                                          + Agenda
-                                      </button>
-                                      <span className="text-gray-300 mx-1">|</span>
-                                      <button onClick={() => startEditEvent(event, originalIndex)} className="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 rounded transition"><Edit2 /></button>
-                                      <button onClick={() => removeEvent(originalIndex)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 rounded transition"><Trash2 /></button>
-                                    </div>
-                                  </div>
-                              )}
-                            </div>
-                          );
-                      })}
+                      <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
                     </div>
                   </div>
                 </div>
 
-                {selectedCompany && renderCalendarUI()}
+                {/* PAINEL DE ADMINISTRAÇÃO (SÓ APARECE SE FOR ADMIN OU MASTER) */}
+                {isAdmin && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
+                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                        <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
+                      </div>
+                      {companies.map(company => (
+                            <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
+                                  <div className="flex-1 font-bold cursor-pointer dark:text-white" onClick={() => setSelectedCompany(company.id)}>{company.name}</div>
+                                  <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 px-2"><Trash2 /></button>
+                            </div>
+                      ))}
+                    </div>
+                  </div>
 
+                  <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
+                      <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias</h3>
+                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                        <div className="flex gap-2">
+                            <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
+                            <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto">Add</button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {safeColorOptions.map(color => (
+                            <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                              {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm">×</button>
+                            </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
+                      <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
+                            <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                        </div>
+                        
+                        <textarea placeholder="Anotações / Roteiro..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none text-sm h-12 resize-none"></textarea>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border-2 border-green-200 dark:border-gray-600 flex items-center gap-2">
+                            <span className="text-xl">🔗</span>
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400">Link da Imagem / Arte (Opcional)</label>
+                                <input type="url" placeholder="Cole o link do Drive, Site..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none bg-transparent dark:border-gray-600" />
+                            </div>
+                            {newEvent.imageUrl && <img src={newEvent.imageUrl} className="h-8 w-8 object-cover rounded border shadow-sm" alt="" onError={(e) => e.target.style.display='none'} />}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                            <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full">
+                              <option value="">Escolher cor...</option>
+                              {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold w-full sm:w-auto shadow-sm">Postar</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {/* TELA DE GERENCIAR POSTS (LISTA) */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                      <h3 className="font-bold text-xl text-gray-800 dark:text-white">Gerenciar Posts (Mostrando {filteredListEvents.length})</h3>
+                      
+                      <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700 flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold text-gray-500 dark:text-gray-400"><FilterIcon/> Filtros da Lista:</span>
+                          <button onClick={() => setListFilter('ALL')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
+                          <button onClick={() => setListFilter('DONE')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>Feitos ✓</button>
+                          <button onClick={() => setListFilter('LATE')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>Atrasados ⚠</button>
+                          <span className="text-gray-300 dark:text-gray-600 mx-1 hidden sm:inline">|</span>
+                          {getLegendItems().map(cat => (
+                              <button key={cat.id} onClick={() => setListFilter(cat.id)} style={listFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter !== cat.id && 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:opacity-80'}`}>
+                                  {cat.label}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                    {filteredListEvents.map((event) => {
+                        const originalIndex = event.originalIndex;
+                        const category = safeColorOptions.find(c => c.id === event.color);
+                        if(!category) return null;
+                        const status = getEventStatus(originalIndex);
+                        
+                        if (editingEventIndex === originalIndex) {
+                          return (
+                            <div key={originalIndex} className="bg-blue-50 dark:bg-gray-700 border-2 border-blue-400 dark:border-blue-600 rounded-xl p-4 flex flex-col gap-3 shadow-md">
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-full sm:w-20 border p-2 rounded-lg outline-none font-bold text-center dark:bg-gray-800 dark:text-white dark:border-gray-600" />
+                                <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border p-2 rounded-lg outline-none w-full dark:bg-gray-800 dark:text-white dark:border-gray-600" />
+                              </div>
+                              <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border p-2 rounded-lg outline-none text-sm h-16 dark:bg-gray-800 dark:text-white dark:border-gray-600" placeholder="Anotações..."></textarea>
+                              
+                              <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-300">🔗 Link da Imagem / Arte</label>
+                                  <input type="url" value={editEventForm.imageUrl} onChange={e => setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border p-2 rounded-lg outline-none text-sm dark:bg-gray-800 dark:text-white dark:border-gray-600" placeholder="Cole o link aqui..."/>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                                  <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border p-2 rounded-lg font-bold bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600">
+                                    {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                  </select>
+                                  <div className="flex gap-2 w-full sm:w-auto">
+                                      <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-green-600 transition">Salvar</button>
+                                      <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-gray-500 transition">Cancelar</button>
+                                  </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={originalIndex} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex flex-col gap-2 transition hover:bg-white dark:hover:bg-gray-800 hover:shadow-lg">
+                            <div className="flex items-start gap-3">
+                              <span className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-black text-sm px-3 py-1 rounded-lg mt-0.5 shadow-sm">D{event.day}</span>
+                              <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-sm font-bold px-3 py-1 rounded-lg shadow-sm">{event.text}</span>
+                            </div>
+                            
+                            {event.imageUrl && (
+                                <div className="mt-1 flex flex-col items-start gap-1">
+                                    <a href={event.imageUrl} target="_blank" className="text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm font-bold">
+                                        🔗 Acessar Link da Arte
+                                    </a>
+                                    <img src={event.imageUrl} alt="" className="h-16 w-auto object-cover rounded border border-gray-300 dark:border-gray-600" onError={(e) => e.target.style.display='none'} />
+                                </div>
+                            )}
+
+                            {event.notes && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900 dark:text-yellow-200 text-yellow-800 text-xs p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 flex gap-2 items-start mt-2 shadow-sm">
+                                    <MessageSquare /> <p className="whitespace-pre-wrap font-medium">{event.notes}</p>
+                                </div>
+                            )}
+                            
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg px-3 py-2 flex flex-col mt-2 border border-gray-200 dark:border-gray-700 shadow-sm font-medium">
+                                <span>👤 Criado por: {event.createdBy || 'Desconhecido'} em {formatDateStr(event.createdAt) || '-'}</span>
+                                {event.updatedBy && <span>✏️ Editado por: {event.updatedBy} em {formatDateStr(event.updatedAt)}</span>}
+                            </div>
+
+                            {isAdmin && (
+                                <div className="flex flex-col sm:flex-row justify-between sm:items-center mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
+                                  <div className="flex gap-2 w-full sm:w-auto">
+                                    <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>✓ Feito</button>
+                                    <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>⚠ Atraso</button>
+                                  </div>
+                                  <div className="flex gap-2 w-full sm:w-auto">
+                                    <button onClick={() => exportSingleToGoogleCalendar(event)} className="flex-1 sm:flex-none bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm">
+                                        + Agenda
+                                    </button>
+                                    <span className="text-gray-300 dark:text-gray-600 mx-1 hidden sm:inline">|</span>
+                                    <button onClick={() => startEditEvent(event, originalIndex)} className="flex-1 sm:flex-none text-blue-600 dark:text-blue-400 hover:text-blue-800 bg-blue-50 dark:bg-gray-700 hover:bg-blue-100 px-4 py-2 rounded-lg transition font-bold shadow-sm flex justify-center items-center"><Edit2 /></button>
+                                    <button onClick={() => removeEvent(originalIndex)} className="flex-1 sm:flex-none text-red-600 dark:text-red-400 hover:text-red-800 bg-red-50 dark:bg-gray-700 hover:bg-red-100 px-4 py-2 rounded-lg transition font-bold shadow-sm flex justify-center items-center"><Trash2 /></button>
+                                  </div>
+                                </div>
+                            )}
+                          </div>
+                        );
+                    })}
+                  </div>
+                </div>
+
+                {/* TELA DO CALENDÁRIO VISUAL */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
+                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">⬅️</button>
+                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[200px]">
+                          {months[month]} {year}
+                        </h2>
+                        <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">➡️</button>
+                    </div>
+                    <h3 className="text-xl md:text-2xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm">{companies.find(c => c.id === selectedCompany)?.name}</h3>
+                  </div>
+
+                  {/* FILTRO DO CALENDÁRIO */}
+                  <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
+                      <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros do Calendário:</span>
+                      <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
+                      <button onClick={() => setCalendarFilter('DONE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'DONE' ? 'bg-green-600 text-white shadow-md' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>Concluídos ✓</button>
+                      <button onClick={() => setCalendarFilter('LATE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'LATE' ? 'bg-red-600 text-white shadow-md' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>Atrasados ⚠</button>
+                      <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                      {getLegendItems().map(cat => (
+                          <button key={cat.id} onClick={() => setCalendarFilter(cat.id)} style={calendarFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter !== cat.id && 'bg-gray-200 border border-gray-300 text-gray-600 opacity-70 hover:opacity-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                              {cat.label}
+                          </button>
+                      ))}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto pb-4">
+                    <div className="min-w-[800px]">
+                      <div className="grid grid-cols-7 gap-4 mb-4">
+                        {fullWeekDays.map(day => (
+                          <div key={day} className="bg-black dark:bg-gray-700 text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
+                            {day}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-4">
+                        {weeks.map((week, wIdx) => (
+                          <div key={wIdx} className="flex flex-col">
+                            <div className="bg-gray-200 dark:bg-gray-700 rounded-t-xl h-10 flex items-center px-4 shadow-sm">
+                              {week.map((day, dIdx) => (
+                                <div key={dIdx} className="flex-1 text-gray-800 dark:text-gray-200 font-black text-sm px-2 text-center border-r border-gray-300 dark:border-gray-600 last:border-0">
+                                  {day || ''}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <div className="grid grid-cols-7 gap-2 bg-gray-50 dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-xl p-2 min-h-[120px] shadow-sm">
+                              {week.map((day, dIdx) => (
+                                <div 
+                                  key={dIdx} 
+                                  className="flex flex-col gap-2 p-1 min-h-[100px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                                  onDragOver={onDragOver}
+                                  onDrop={(e) => day ? onDrop(e, day) : null}
+                                >
+                                  {day && getCalendarEventsForDay(day).map((event, eIdx) => {
+                                    const color = safeColorOptions.find(c => c.id === event.color);
+                                    if (!color) return null;
+                                    
+                                    const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                    const status = getEventStatus(originalIndex);
+                                    const finalColor = getStatusColor(color.color, status);
+                                    const textColor = getTextColor(finalColor);
+                                    
+                                    return (
+                                      <div
+                                        key={eIdx}
+                                        draggable={isAdmin}
+                                        onDragStart={(e) => onDragStart(e, originalIndex)}
+                                        style={{ backgroundColor: finalColor, color: textColor }}
+                                        className={`rounded-xl p-2 text-[11px] font-bold text-center shadow-md relative group break-words whitespace-normal leading-tight ${isAdmin ? 'cursor-grab active:cursor-grabbing hover:scale-105 transition-transform' : 'cursor-pointer'}`}
+                                        onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
+                                      >
+                                        {event.imageUrl && (
+                                            <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
+                                        )}
+                                        
+                                        <span>
+                                            {event.text}
+                                            {event.notes && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
+                                            {status === 'done' && <span className="ml-1">✓</span>}
+                                            {status === 'late' && <span className="ml-1">⚠</span>}
+                                        </span>
+                                        
+                                        {expandedNoteIndex === originalIndex && (
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-white p-4 rounded-xl shadow-2xl z-50 text-left text-xs cursor-text">
+                                                {event.notes && (
+                                                    <div className="mb-3">
+                                                        <p className="font-black text-sm border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">Anotações:</p>
+                                                        <p className="whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700">{event.notes}</p>
+                                                    </div>
+                                                )}
+                                                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
+                                                    <p>👤 Criado por <span className="font-bold">{event.createdBy}</span></p>
+                                                    {event.updatedBy && <p>✏️ Editado por <span className="font-bold">{event.updatedBy}</span></p>}
+                                                </div>
+                                            </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="block md:hidden space-y-4 mt-2">
+                    {daysArray.map(day => {
+                      const dayEvents = getCalendarEventsForDay(day);
+                      const date = new Date(year, month, day);
+                      const dayOfWeek = fullWeekDays[date.getDay()];
+                      
+                      if(calendarFilter !== 'ALL' && dayEvents.length === 0) return null; 
+
+                      return (
+                        <div key={day} 
+                             className={`border-2 rounded-2xl p-4 shadow-sm transition dark:border-gray-700 ${dayEvents.length > 0 ? 'bg-white dark:bg-gray-800 border-gray-300' : 'bg-gray-50 dark:bg-gray-900 border-gray-100'}`}
+                             onDragOver={onDragOver}
+                             onDrop={(e) => day ? onDrop(e, day) : null}
+                        >
+                          <div className="flex items-center gap-3 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
+                            <span className={`w-10 h-10 flex items-center justify-center rounded-full font-black text-lg ${dayEvents.length > 0 ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                              {day}
+                            </span>
+                            <span className={`font-black text-sm uppercase tracking-wide ${dayEvents.length > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                              {dayOfWeek}
+                            </span>
+                          </div>
+                          
+                          {dayEvents.length > 0 ? (
+                            <div className="flex flex-col gap-3 pl-2">
+                              {dayEvents.map((event, eIdx) => {
+                                const color = safeColorOptions.find(c => c.id === event.color);
+                                if (!color) return null;
+                                
+                                const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                const status = getEventStatus(originalIndex);
+                                const finalColor = getStatusColor(color.color, status);
+                                const textColor = getTextColor(finalColor);
+                                
+                                return (
+                                  <div
+                                    key={eIdx}
+                                    draggable={isAdmin}
+                                    onDragStart={(e) => onDragStart(e, originalIndex)}
+                                    style={{ backgroundColor: finalColor, color: textColor }}
+                                    className={`rounded-xl px-4 py-3 text-sm font-bold shadow-md flex flex-col break-words whitespace-normal leading-tight ${isAdmin ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                                  >
+                                    {event.imageUrl && (
+                                      <div className="mb-2 flex flex-col gap-1">
+                                          <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm">🔗 Ver Arte</a>
+                                          <img src={event.imageUrl} className="w-full h-32 object-cover rounded border border-black border-opacity-20" alt="Arte" onError={(e) => e.target.style.display='none'} />
+                                      </div>
+                                    )}
+                                    <span className="text-base">
+                                        {event.text}
+                                        {status === 'done' && <span className="ml-2">✓</span>}
+                                        {status === 'late' && <span className="ml-2">⚠</span>}
+                                    </span>
+                                    {event.notes && (
+                                      <div style={{ backgroundColor: 'rgba(255,255,255,0.2)'}} className="mt-2 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner">
+                                          <p className="whitespace-pre-wrap">{event.notes}</p>
+                                      </div>
+                                    )}
+                                    <div className="mt-2 text-[10px] opacity-80 bg-black bg-opacity-10 p-2 rounded-lg font-medium">
+                                       👤 Criado: {event.createdBy} {event.updatedBy ? `| ✏️ Editado: ${event.updatedBy}` : ''}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 italic pl-2">Nenhum post agendado ou solte aqui...</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {getLegendItems().length > 0 && (
+                    <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA</h3>
+                      <div className="flex flex-wrap gap-2 md:gap-3">
+                        {getLegendItems().map(item => (
+                          <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-2 text-xs md:text-sm font-bold shadow-md border border-black border-opacity-10">
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );
