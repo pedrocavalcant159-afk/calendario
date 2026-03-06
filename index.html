@@ -17,13 +17,10 @@
     <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/index.min.js"></script>
     <script>
         window.onload = function() {
-            MobileDragDrop.polyfill({
-                holdToDrag: 300 // Pressione por 0.3 segundos no celular para começar a arrastar
-            });
+            MobileDragDrop.polyfill({ holdToDrag: 300 });
         }
     </script>
     <style>
-        /* Previne a tela de rolar enquanto você estiver arrastando um post no celular */
         [draggable="true"] { touch-action: none; }
     </style>
     
@@ -84,7 +81,14 @@
         const FilterIcon = () => <span>🔍</span>;
         const ImageIcon = () => <span>🖼️</span>;
         const PDFIcon = () => <span>📄</span>;
+        const KeyIcon = () => <span>🔑</span>;
         
+        // =====================================================================
+        // ATENÇÃO: COLOQUE O SEU E-MAIL DE LOGIN EXATAMENTE AQUI ABAIXO (EM MINÚSCULO)
+        // =====================================================================
+        const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
+        // =====================================================================
+
         const CalendarCreator = () => {
           const [user, setUser] = useState(null);
           const [email, setEmail] = useState('');
@@ -95,29 +99,84 @@
           const [currentUserName, setCurrentUserName] = useState('');
           const [showProfileModal, setShowProfileModal] = useState(false);
           const [newDisplayName, setNewDisplayName] = useState('');
-          const [userRole, setUserRole] = useState('admin'); 
+          
+          // ESTADOS DO NOVO SISTEMA DE SEGURANÇA
+          const [userRole, setUserRole] = useState('cliente'); 
+          const [globalRoles, setGlobalRoles] = useState({});
+          const [showRolesModal, setShowRolesModal] = useState(false);
+          const [roleEmailInput, setRoleEmailInput] = useState('');
+          const [roleSelectInput, setRoleSelectInput] = useState('admin');
 
-          // MODO ESCURO
           const [darkMode, setDarkMode] = useState(false);
 
+          // EFEITO DE AUTENTICAÇÃO E HIERARQUIA
           useEffect(() => {
              const unsubscribe = auth.onAuthStateChanged(u => {
-                 setUser(u);
                  if (u) {
+                     setUser(u);
                      setCurrentUserName(u.displayName || u.email);
-                     const savedRole = localStorage.getItem(`role_${u.uid}`);
-                     if(savedRole) setUserRole(savedRole);
                      
+                     // Carrega o Modo Escuro
                      const savedTheme = localStorage.getItem('theme');
                      if (savedTheme === 'dark') {
                          setDarkMode(true);
                          document.documentElement.classList.add('dark');
                      }
+
+                     // Puxa as regras de quem é quem no Banco de Dados
+                     db.collection('system').doc('roles').onSnapshot(doc => {
+                         if (doc.exists) {
+                             const rolesData = doc.data().userRoles || {};
+                             setGlobalRoles(rolesData);
+                             
+                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
+                                 setUserRole('master'); 
+                             } else if (rolesData[u.email.toLowerCase()] === 'admin') {
+                                 setUserRole('admin'); 
+                             } else {
+                                 setUserRole('cliente'); 
+                             }
+                         } else {
+                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
+                                 db.collection('system').doc('roles').set({ userRoles: {} });
+                                 setUserRole('master');
+                             } else {
+                                 setUserRole('cliente');
+                             }
+                         }
+                         setLoadingAuth(false);
+                     });
+
+                 } else {
+                     setUser(null);
+                     setLoadingAuth(false);
                  }
-                 setLoadingAuth(false);
              });
              return () => unsubscribe();
           }, []);
+
+          const isAdmin = userRole === 'master' || userRole === 'admin';
+
+          const handleSaveRole = () => {
+              if(!roleEmailInput) return;
+              const emailToSave = roleEmailInput.toLowerCase().trim();
+              const updatedRoles = { ...globalRoles, [emailToSave]: roleSelectInput };
+              
+              db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true })
+                .then(() => { 
+                    setRoleEmailInput(''); 
+                    alert(`Permissão de ${roleSelectInput.toUpperCase()} concedida para ${emailToSave}!`); 
+                })
+                .catch(err => alert("Erro ao salvar permissão: " + err.message));
+          };
+
+          const handleRemoveRole = (emailToRemove) => {
+              if(confirm(`Tem certeza que deseja rebaixar ${emailToRemove} para CLIENTE?`)) {
+                  const updatedRoles = { ...globalRoles };
+                  delete updatedRoles[emailToRemove];
+                  db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true });
+              }
+          };
 
           const toggleDarkMode = () => {
               const newMode = !darkMode;
@@ -142,7 +201,6 @@
               if (!user) return;
               user.updateProfile({ displayName: newDisplayName }).then(() => {
                   setCurrentUserName(newDisplayName);
-                  localStorage.setItem(`role_${user.uid}`, userRole);
                   setShowProfileModal(false);
               }).catch(error => alert("Erro ao atualizar nome: " + error.message));
           };
@@ -187,9 +245,8 @@
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
           
-          // ESTADOS PARA OS DOIS FILTROS SEPARADOS
-          const [calendarFilter, setCalendarFilter] = useState('ALL'); // Filtro do Calendário de cima
-          const [listFilter, setListFilter] = useState('ALL');         // Filtro da Lista de Gerenciamento de baixo
+          const [calendarFilter, setCalendarFilter] = useState('ALL'); 
+          const [listFilter, setListFilter] = useState('ALL');         
 
           useEffect(() => {
             if (!user) return;
@@ -257,7 +314,7 @@
           };
 
           const toggleEventStatus = (eventIndex, status) => {
-            if (userRole === 'cliente') return; 
+            if (!isAdmin) return; 
             const eventKey = `event_${eventIndex}`;
             const current = eventStatuses[eventKey];
             const newStatuses = {...eventStatuses};
@@ -365,14 +422,13 @@
 
           const cancelEditEvent = () => setEditingEventIndex(null);
 
-          // ARRASTAR E SOLTAR (DRAG & DROP)
           const onDragStart = (e, originalIndex) => {
               e.dataTransfer.setData("eventIndex", originalIndex);
           };
 
           const onDrop = (e, targetDay) => {
               e.preventDefault();
-              if(userRole === 'cliente') return; 
+              if(!isAdmin) return; 
               
               const originalIndex = e.dataTransfer.getData("eventIndex");
               if(originalIndex === null || originalIndex === '') return;
@@ -416,10 +472,6 @@
 
           const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
-          const clearAllData = () => {
-            if (confirm('⚠️ Apagar TODOS os eventos desta empresa?')) saveToCloud({ events: [], categories: [], statuses: {} });
-          };
-
           const exportSingleToGoogleCalendar = (event) => {
               const companyName = companies.find(c => c.id === selectedCompany)?.name || 'UPLI';
               const startDate = new Date(year, month, event.day);
@@ -432,68 +484,9 @@
               window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`, '_blank');
           };
 
-          const handleFileUpload = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              const content = event.target.result;
-              const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-              
-              if (lines.length < 2) return alert('O arquivo deve ter pelo menos 2 linhas.');
-
-              const compName = lines[0];
-              let comp = companies.find(c => c.name.toLowerCase() === compName.toLowerCase());
-              let compId = comp ? comp.id : Date.now().toString() + Math.random().toString(36).substr(2, 5);
-              let compData = comp ? { ...comp } : { events: [], categories: [], statuses: {} };
-
-              lines.slice(1).forEach(line => {
-                const parts = line.split(';');
-                if (parts.length < 3) return;
-
-                let catName = parts[0].trim();
-                let catColor = null;
-                let dayNumStr, desc;
-
-                if (parts[1].trim().startsWith('#')) {
-                    catColor = parts[1].trim();
-                    dayNumStr = parts[2] ? parts[2].trim() : '';
-                    desc = parts.slice(3).join(';').trim();
-                } else {
-                    dayNumStr = parts[1].trim();
-                    desc = parts.slice(2).join(';').trim();
-                }
-
-                const dayNum = parseInt(dayNumStr);
-                if (!catName || isNaN(dayNum) || !desc) return;
-
-                let category = compData.categories.find(c => c.label.toLowerCase() === catName.toLowerCase());
-                if (!category) {
-                  let finalColor = catColor || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-                  category = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), label: catName, color: finalColor };
-                  compData.categories.push(category);
-                }
-
-                compData.events.push({ day: dayNum, text: desc, color: category.id, month: month, year: year, createdBy: 'Importação' });
-              });
-
-              db.collection('companies').doc(compId).set({
-                  name: compName, events: compData.events, categories: compData.categories, statuses: compData.statuses || {}
-              }, { merge: true }).then(() => {
-                  setSelectedCompany(compId);
-                  alert(`Eventos importados com sucesso!`);
-              });
-
-              e.target.value = ''; 
-            };
-            reader.readAsText(file);
-          };
-
           const safeEvents = Array.isArray(events) ? events : [];
           const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
 
-          // Função base de filtro que recebe qual estado de filtro olhar
           const getEventsByFilterType = (filterType) => {
               let monthEvents = safeEvents.filter(e => e.month === month && e.year === year);
               if (filterType === 'ALL') return monthEvents;
@@ -502,7 +495,6 @@
               return monthEvents.filter(e => e.color === filterType);
           };
 
-          // Eventos para desenhar no calendário (Usa calendarFilter)
           const getCalendarEventsForDay = (day) => getEventsByFilterType(calendarFilter).filter(e => e.day === day);
           
           const getLegendItems = () => {
@@ -539,17 +531,15 @@
             for (let i = 1; i < words.length; i++) {
                 const word = words[i];
                 const width = ctx.measureText(currentLine + " " + word).width;
-                if (width < maxWidth) {
-                    currentLine += " " + word;
-                } else {
-                    lines.push(currentLine);
-                    currentLine = word;
-                }
+                if (width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
             }
             lines.push(currentLine);
             return lines;
           };
 
+          // ==============================
+          // MOTOR DE EXPORTAÇÃO 4K 
+          // ==============================
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -569,7 +559,7 @@
               let maxWeekHeightCalc = 0;
               week.forEach(day => {
                 if (day) {
-                  const dayEvents = getCalendarEventsForDay(day); // Usa o filtro do calendário pro PDF
+                  const dayEvents = getCalendarEventsForDay(day);
                   let colHeight = 0;
                   dayEvents.forEach(event => {
                     let displayText = event.text || '';
@@ -783,216 +773,13 @@
             } catch (error) { alert('Erro ao exportar PDF.'); }
           };
 
-          const renderCalendarUI = () => {
-            const weeks = getWeeks();
-            const daysInMonth = getDaysInMonth(year, month);
-            const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
-
-            return (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                
-                <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b dark:border-gray-700 pb-4 gap-4">
-                  <div className="flex items-center gap-4">
-                      <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl">⬅️</button>
-                      <h2 className="text-2xl md:text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[200px]">
-                        {months[month]} {year}
-                      </h2>
-                      <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl">➡️</button>
-                  </div>
-                  <span className="text-gray-400 font-medium text-xl hidden md:block">|</span>
-                  <h3 className="text-xl md:text-3xl font-black text-blue-600 dark:text-blue-400 uppercase">{companies.find(c => c.id === selectedCompany)?.name}</h3>
-                </div>
-
-                {/* FILTRO 1: SOMENTE PARA O CALENDÁRIO */}
-                <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border dark:border-gray-700 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros do Calendário:</span>
-                    <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                    <button onClick={() => setCalendarFilter('DONE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>Concluídos ✓</button>
-                    <button onClick={() => setCalendarFilter('LATE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>Atrasados ⚠</button>
-                    <span className="text-gray-300 mx-1">|</span>
-                    {getLegendItems().map(cat => (
-                        <button key={cat.id} onClick={() => setCalendarFilter(cat.id)} style={calendarFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter !== cat.id && 'bg-gray-100 border border-gray-300 text-gray-600 opacity-70 hover:opacity-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
-                            {cat.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="hidden md:block overflow-x-auto pb-4">
-                  <div className="min-w-[800px]">
-                    <div className="grid grid-cols-7 gap-4 mb-4">
-                      {fullWeekDays.map(day => (
-                        <div key={day} className="bg-black dark:bg-gray-700 text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
-                          {day}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-4">
-                      {weeks.map((week, wIdx) => (
-                        <div key={wIdx} className="flex flex-col">
-                          <div className="bg-gray-200 dark:bg-gray-700 rounded-t-xl h-8 flex items-center px-4">
-                            {week.map((day, dIdx) => (
-                              <div key={dIdx} className="flex-1 text-gray-800 dark:text-gray-200 font-black text-sm px-2 text-center border-r border-gray-300 dark:border-gray-600 last:border-0">
-                                {day || ''}
-                              </div>
-                            ))}
-                          </div>
-                          
-                          <div className="grid grid-cols-7 gap-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-b-xl p-2 min-h-[100px]">
-                            {week.map((day, dIdx) => (
-                              <div 
-                                key={dIdx} 
-                                className="flex flex-col gap-2 p-1 min-h-[80px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                                onDragOver={onDragOver}
-                                onDrop={(e) => day ? onDrop(e, day) : null}
-                              >
-                                {day && getCalendarEventsForDay(day).map((event, eIdx) => {
-                                  const color = safeColorOptions.find(c => c.id === event.color);
-                                  if (!color) return null;
-                                  
-                                  const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                                  const status = getEventStatus(originalIndex);
-                                  const finalColor = getStatusColor(color.color, status);
-                                  const textColor = getTextColor(finalColor);
-                                  
-                                  return (
-                                    <div
-                                      key={eIdx}
-                                      draggable={userRole === 'admin'}
-                                      onDragStart={(e) => onDragStart(e, originalIndex)}
-                                      style={{ backgroundColor: finalColor, color: textColor }}
-                                      className={`rounded-xl p-2 text-[11px] font-bold text-center shadow-sm relative group break-words whitespace-normal leading-tight ${userRole === 'admin' ? 'cursor-grab active:cursor-grabbing hover:scale-105 transition-transform' : 'cursor-pointer'}`}
-                                      onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
-                                    >
-                                      {event.imageUrl && (
-                                          <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto" title="Possui Anexo"><ImageIcon /></div>
-                                      )}
-                                      
-                                      <span>
-                                          {event.text}
-                                          {event.notes && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
-                                          {status === 'done' && <span className="ml-1">✓</span>}
-                                          {status === 'late' && <span className="ml-1">⚠</span>}
-                                      </span>
-                                      
-                                      {expandedNoteIndex === originalIndex && (
-                                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-white p-3 rounded-lg shadow-2xl z-50 text-left text-xs cursor-text">
-                                              {event.notes && (
-                                                  <div className="mb-2">
-                                                      <p className="font-black border-b pb-1 mb-1">Anotações:</p>
-                                                      <p className="whitespace-pre-wrap">{event.notes}</p>
-                                                  </div>
-                                              )}
-                                              <div className="text-[9px] text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t dark:border-gray-600">
-                                                  <p>Criado: {event.createdBy} ({formatDateStr(event.createdAt)})</p>
-                                                  {event.updatedBy && <p>Editado: {event.updatedBy} ({formatDateStr(event.updatedAt)})</p>}
-                                              </div>
-                                          </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* --- MODO CELULAR (AGENDA VERTICAL COM DRAG AND DROP) --- */}
-                <div className="block md:hidden space-y-4 mt-2">
-                  {daysArray.map(day => {
-                    const dayEvents = getCalendarEventsForDay(day);
-                    const date = new Date(year, month, day);
-                    const dayOfWeek = fullWeekDays[date.getDay()];
-                    
-                    if(calendarFilter !== 'ALL' && dayEvents.length === 0) return null; 
-
-                    return (
-                      <div key={day} 
-                           className={`border-2 rounded-2xl p-4 shadow-sm transition dark:border-gray-700 ${dayEvents.length > 0 ? 'bg-white dark:bg-gray-800 border-gray-300' : 'bg-gray-50 dark:bg-gray-900 border-gray-100'}`}
-                           onDragOver={onDragOver}
-                           onDrop={(e) => day ? onDrop(e, day) : null}
-                      >
-                        <div className="flex items-center gap-3 mb-3 border-b dark:border-gray-700 pb-2">
-                          <span className={`w-10 h-10 flex items-center justify-center rounded-full font-black text-lg ${dayEvents.length > 0 ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-                            {day}
-                          </span>
-                          <span className={`font-black text-sm uppercase tracking-wide ${dayEvents.length > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                            {dayOfWeek}
-                          </span>
-                        </div>
-                        
-                        {dayEvents.length > 0 ? (
-                          <div className="flex flex-col gap-3 pl-2">
-                            {dayEvents.map((event, eIdx) => {
-                              const color = safeColorOptions.find(c => c.id === event.color);
-                              if (!color) return null;
-                              
-                              const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                              const status = getEventStatus(originalIndex);
-                              const finalColor = getStatusColor(color.color, status);
-                              const textColor = getTextColor(finalColor);
-                              
-                              return (
-                                <div
-                                  key={eIdx}
-                                  draggable={userRole === 'admin'}
-                                  onDragStart={(e) => onDragStart(e, originalIndex)}
-                                  style={{ backgroundColor: finalColor, color: textColor }}
-                                  className={`rounded-xl px-4 py-3 text-sm font-bold shadow-md flex flex-col break-words whitespace-normal leading-tight ${userRole === 'admin' ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                                >
-                                  {event.imageUrl && (
-                                    <div className="mb-2 flex flex-col gap-1">
-                                        <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm">🔗 Ver Arte/Link</a>
-                                        <img src={event.imageUrl} className="w-full h-32 object-cover rounded border border-black border-opacity-20" alt="Arte" onError={(e) => e.target.style.display='none'} />
-                                    </div>
-                                  )}
-                                  <span>
-                                      {event.text}
-                                      {status === 'done' && <span className="ml-2">✓</span>}
-                                      {status === 'late' && <span className="ml-2">⚠</span>}
-                                  </span>
-                                  {event.notes && (
-                                    <div style={{ backgroundColor: 'rgba(255,255,255,0.2)'}} className="mt-2 p-2 rounded-lg text-xs font-normal border border-white border-opacity-30">
-                                        <p className="whitespace-pre-wrap">{event.notes}</p>
-                                    </div>
-                                  )}
-                                  <div className="mt-2 text-[10px] opacity-70 bg-black bg-opacity-10 p-1 rounded">
-                                     👤 Criado: {event.createdBy} {event.updatedBy ? `| ✏️ Editado: ${event.updatedBy}` : ''}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-xs font-bold text-gray-400 dark:text-gray-500 italic pl-2">Nenhum post agendado ou solte aqui...</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {getLegendItems().length > 0 && (
-                  <div className="mt-8 md:mt-12 pt-6 border-t dark:border-gray-700">
-                    <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA</h3>
-                    <div className="flex flex-wrap gap-2 md:gap-3">
-                      {getLegendItems().map(item => (
-                        <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-1 md:py-2 text-xs md:text-sm font-bold shadow-sm">
-                          {item.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          };
+          // ==============================
+          // TELAS PRINCIPAIS
+          // ==============================
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 font-bold text-gray-500">Carregando Nuvem...</div>;
 
+          // A TRAVA DE SEGURANÇA: Se não houver usuário logado, SÓ mostra a tela de login.
           if (!user) {
               return (
                   <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
@@ -1022,7 +809,11 @@
               );
           }
 
-          // A lista de Gerenciar Posts usa seu próprio filtro (listFilter)
+          // Variáveis úteis para a lista e calendário
+          const daysInMonth = getDaysInMonth(year, month);
+          const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
+          const weeks = getWeeks();
+          
           const filteredListEvents = getEventsByFilterType(listFilter).map(e => {
               const oIdx = safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month);
               return {...e, originalIndex: oIdx};
@@ -1031,26 +822,27 @@
           return (
             <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
               
+              {/* MODAL DE PERFIL RESTRITO */}
               {showProfileModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
+                          
+                          <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
+                              <p className="text-lg font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
+                                  {userRole === 'master' ? '👑 Master' : userRole === 'admin' ? '🛡️ Administrador' : '🔒 Cliente'}
+                              </p>
+                              <p className="text-[10px] text-gray-500 mt-1">Seu cargo só pode ser alterado pela diretoria.</p>
+                          </div>
+
                           <div>
                               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Nome de Exibição</label>
                               <input type="text" value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Ex: Stefany..." />
                           </div>
-                          
-                          <div className="pt-2">
-                              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Modo de Visão</label>
-                              <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-                                  <button onClick={() => setUserRole('admin')} className={`flex-1 py-1 text-sm font-bold rounded-md transition ${userRole === 'admin' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>Administrador</button>
-                                  <button onClick={() => setUserRole('cliente')} className={`flex-1 py-1 text-sm font-bold rounded-md transition ${userRole === 'cliente' ? 'bg-white dark:bg-gray-600 shadow text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>Cliente (Só Ver)</button>
-                              </div>
-                              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-tight">Cliente não vê botões de apagar e editar para não bagunçar o calendário.</p>
-                          </div>
 
                           <div className="pt-4 flex flex-col gap-2">
-                              <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Perfil</button>
+                              <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Nome</button>
                               <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">Redefinir Senha</button>
                               <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">Fechar</button>
                           </div>
@@ -1058,9 +850,52 @@
                   </div>
               )}
 
+              {/* PAINEL SECRETO DO MASTER */}
+              {showRolesModal && userRole === 'master' && (
+                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Gerenciar Acessos</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Qualquer pessoa não listada aqui entra automaticamente como "Cliente" (sem poder editar).</p>
+                          
+                          <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600">
+                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">E-mail do Usuário</label>
+                              <input type="email" value={roleEmailInput} onChange={e => setRoleEmailInput(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none mb-3" placeholder="exemplo@gmail.com" />
+                              
+                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Permissão</label>
+                              <select value={roleSelectInput} onChange={e => setRoleSelectInput(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3">
+                                  <option value="admin">Administrador (Pode editar tudo)</option>
+                                  <option value="cliente">Cliente (Somente visualização)</option>
+                              </select>
+                              
+                              <button onClick={handleSaveRole} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Permissão</button>
+                          </div>
+
+                          <div className="mt-4">
+                              <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos Concedidos:</h4>
+                              <div className="space-y-2">
+                                  {Object.keys(globalRoles).map(email => (
+                                      <div key={email} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded border dark:border-gray-700">
+                                          <div className="flex flex-col">
+                                              <span className="font-bold text-sm">{email}</span>
+                                              <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>{globalRoles[email]}</span>
+                                          </div>
+                                          <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 dark:bg-red-900 px-2 py-1 rounded">Rebaixar</button>
+                                      </div>
+                                  ))}
+                                  {Object.keys(globalRoles).length === 0 && <p className="text-xs text-gray-400">Nenhum acesso cadastrado.</p>}
+                              </div>
+                          </div>
+
+                          <button onClick={() => setShowRolesModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-4">Fechar Painel</button>
+                      </div>
+                  </div>
+              )}
+
               <div className="max-w-7xl mx-auto space-y-6">
+                
+                {/* 1. CABEÇALHO SUPERIOR */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 border-b dark:border-gray-700 pb-4">
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div>
                       <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800 dark:text-white">
                         <CalendarDays /> Calendário UPLI
@@ -1073,99 +908,119 @@
                           {darkMode ? '☀️' : '🌙'}
                       </button>
 
+                      {userRole === 'master' && (
+                          <button onClick={() => setShowRolesModal(true)} className="bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-yellow-500 transition flex items-center gap-2">
+                              <KeyIcon /> Acessos
+                          </button>
+                      )}
+
                       <div className="flex items-center gap-3 mr-2 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 px-4 py-2 rounded-xl shadow-sm w-full md:w-auto">
                           <div className="bg-blue-200 dark:bg-gray-600 text-blue-700 dark:text-blue-300 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
                           <div className="flex flex-col leading-tight flex-1">
                               <span className="text-sm font-black text-gray-800 dark:text-white">{currentUserName}</span>
-                              <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'admin' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>{userRole === 'admin' ? 'Administrador' : 'Modo Cliente'}</span>
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'master' ? 'text-yellow-600 dark:text-yellow-400' : userRole === 'admin' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Administrador' : 'Cliente'}
+                              </span>
                           </div>
-                          <button onClick={() => { setNewDisplayName(user.displayName || ''); setShowProfileModal(true); }} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition p-1 ml-1"><Edit2/></button>
+                          <button onClick={() => setShowProfileModal(true)} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition p-1 ml-1"><Edit2/></button>
                       </div>
+
+                      {/* BOTÕES DE EXPORTAÇÃO RESTAURADOS */}
+                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm"><ImageIcon /> Baixar PNG</button>
+                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm"><PDFIcon /> Baixar PDF</button>
 
                       <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
                     </div>
                   </div>
+                </div>
 
-                  {userRole === 'admin' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <div className="bg-gray-50 dark:bg-gray-900 p-4 md:p-5 rounded-xl border border-gray-200 dark:border-gray-700">
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                        <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                          <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                          <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
+                {/* 2. PAINEL DE ADMINISTRAÇÃO (SÓ APARECE SE FOR ADMIN OU MASTER) */}
+                {isAdmin && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
+                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                        <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
+                      </div>
+                      {companies.map(company => (
+                            <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
+                                  <div className="flex-1 font-bold cursor-pointer dark:text-white" onClick={() => setSelectedCompany(company.id)}>{company.name}</div>
+                                  <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 px-2"><Trash2 /></button>
+                            </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
+                      <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias</h3>
+                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                        <div className="flex gap-2">
+                            <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
+                            <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto">Add</button>
                         </div>
-                        {companies.map(company => (
-                              <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700'}`}>
-                                    <div className="flex-1 font-bold cursor-pointer dark:text-white" onClick={() => setSelectedCompany(company.id)}>{company.name}</div>
-                                    <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 px-2"><Trash2 /></button>
-                              </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {safeColorOptions.map(color => (
+                            <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                              {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm">×</button>
+                            </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="space-y-6">
-                      <div className="bg-blue-50 dark:bg-gray-900 p-4 rounded-xl border border-blue-100 dark:border-gray-700">
-                        <h3 className="font-bold text-blue-900 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias</h3>
-                        <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                          <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                          <div className="flex gap-2">
-                              <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
-                              <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto">Add</button>
-                          </div>
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
+                      <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
+                            <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {safeColorOptions.map(color => (
-                              <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold">
-                                {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm">×</button>
-                              </div>
-                          ))}
+                        
+                        <textarea placeholder="Anotações / Roteiro..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none text-sm h-12 resize-none"></textarea>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border-2 border-green-200 dark:border-gray-600 flex items-center gap-2">
+                            <span className="text-xl">🔗</span>
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400">Link da Imagem / Arte (Opcional)</label>
+                                <input type="url" placeholder="Cole o link do Drive, Site..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none bg-transparent dark:border-gray-600" />
+                            </div>
+                            {newEvent.imageUrl && <img src={newEvent.imageUrl} className="h-8 w-8 object-cover rounded border shadow-sm" alt="" onError={(e) => e.target.style.display='none'} />}
                         </div>
-                      </div>
 
-                      <div className="bg-green-50 dark:bg-gray-900 p-4 rounded-xl border border-green-100 dark:border-gray-700">
-                        <h3 className="font-bold text-green-900 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-col sm:flex-row gap-2">
-                              <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
-                              <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                          </div>
-                          
-                          <textarea placeholder="Anotações / Roteiro..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm h-12 resize-none"></textarea>
-                          
-                          {/* CAMPO DE LINK DE IMAGEM SUBSTITUINDO O UPLOAD */}
-                          <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border-2 border-green-200 dark:border-gray-600 flex items-center gap-2">
-                              <span className="text-xl">🔗</span>
-                              <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400">Link da Imagem / Arte (Opcional)</label>
-                                  <input type="url" placeholder="Cole o link do Drive, Site..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none dark:bg-gray-700 dark:border-gray-600" />
-                              </div>
-                              {newEvent.imageUrl && <img src={newEvent.imageUrl} className="h-8 w-8 object-cover rounded border" alt="" onError={(e) => e.target.style.display='none'} />}
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 font-bold w-full">
-                                <option value="">Escolher cor...</option>
-                                {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                              </select>
-                              <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold w-full sm:w-auto">Postar</button>
-                          </div>
+                        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                            <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full">
+                              <option value="">Escolher cor...</option>
+                              {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold w-full sm:w-auto shadow-sm">Postar</button>
                         </div>
                       </div>
                     </div>
                   </div>
                   )}
 
-                  {/* FILTRO 2: SOMENTE PARA A LISTA DE GERENCIAR POSTS */}
-                  <div className="mt-8 border-t dark:border-gray-700 pt-6">
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
-                        <h3 className="font-bold text-gray-800 dark:text-white">Gerenciar Posts ({filteredListEvents.length})</h3>
+                  {/* 3. TELA DE GERENCIAR POSTS (LISTA) */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                        <h3 className="font-bold text-xl text-gray-800 dark:text-white">Gerenciar Posts (Mostrando {filteredListEvents.length})</h3>
                         
+                        {/* FILTRO 2: LISTA (AGORA COM AS CATEGORIAS) */}
                         <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700 flex flex-wrap items-center gap-2">
                             <span className="text-xs font-bold text-gray-500 dark:text-gray-400"><FilterIcon/> Filtros da Lista:</span>
-                            <button onClick={() => setListFilter('ALL')} className={`px-2 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                            <button onClick={() => setListFilter('DONE')} className={`px-2 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>Feitos ✓</button>
-                            <button onClick={() => setListFilter('LATE')} className={`px-2 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>Atrasos ⚠</button>
+                            <button onClick={() => setListFilter('ALL')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
+                            <button onClick={() => setListFilter('DONE')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>Feitos ✓</button>
+                            <button onClick={() => setListFilter('LATE')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>Atrasos ⚠</button>
+                            <span className="text-gray-300 dark:text-gray-600 mx-1 hidden sm:inline">|</span>
+                            {/* CATEGORIAS NA LISTA */}
+                            {getLegendItems().map(cat => (
+                                <button key={cat.id} onClick={() => setListFilter(cat.id)} style={listFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter !== cat.id && 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:opacity-80'}`}>
+                                    {cat.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -1178,25 +1033,25 @@
                           
                           if (editingEventIndex === originalIndex) {
                             return (
-                              <div key={originalIndex} className="bg-blue-50 dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-600 rounded-lg p-3 flex flex-col gap-2 shadow-md">
+                              <div key={originalIndex} className="bg-blue-50 dark:bg-gray-700 border-2 border-blue-400 dark:border-blue-600 rounded-xl p-4 flex flex-col gap-3 shadow-md">
                                 <div className="flex flex-col sm:flex-row gap-2">
-                                  <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-full sm:w-20 border-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-lg outline-none font-bold text-center" />
-                                  <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-lg outline-none w-full" />
+                                  <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-full sm:w-20 border p-2 rounded-lg outline-none font-bold text-center dark:bg-gray-800 dark:text-white dark:border-gray-600" />
+                                  <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border p-2 rounded-lg outline-none w-full dark:bg-gray-800 dark:text-white dark:border-gray-600" />
                                 </div>
-                                <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-lg outline-none text-sm h-16" placeholder="Anotações..."></textarea>
+                                <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border p-2 rounded-lg outline-none text-sm h-16 dark:bg-gray-800 dark:text-white dark:border-gray-600" placeholder="Anotações..."></textarea>
                                 
                                 <div className="flex flex-col gap-1">
-                                    <label className="text-[10px] font-bold text-gray-500">🔗 Link da Imagem / Arte</label>
-                                    <input type="url" value={editEventForm.imageUrl} onChange={e => setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-lg outline-none text-sm" placeholder="Cole o link aqui..."/>
+                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-300">🔗 Link da Imagem / Arte</label>
+                                    <input type="url" value={editEventForm.imageUrl} onChange={e => setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border p-2 rounded-lg outline-none text-sm dark:bg-gray-800 dark:text-white dark:border-gray-600" placeholder="Cole o link aqui..."/>
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                                    <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-lg font-bold">
+                                    <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border p-2 rounded-lg font-bold bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600">
                                       {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                                     </select>
                                     <div className="flex gap-2 w-full sm:w-auto">
-                                        <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg font-bold">Salvar</button>
-                                        <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-4 py-2 rounded-lg font-bold">Cancelar</button>
+                                        <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-green-600 transition">Salvar</button>
+                                        <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-gray-500 transition">Cancelar</button>
                                     </div>
                                 </div>
                               </div>
@@ -1204,46 +1059,44 @@
                           }
 
                           return (
-                            <div key={originalIndex} className="bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-lg p-3 flex flex-col gap-2 transition hover:bg-white dark:hover:bg-gray-800 hover:shadow-md">
-                              <div className="flex items-start gap-2">
-                                <span className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-black text-xs px-2 py-1 rounded mt-0.5">D{event.day}</span>
-                                <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-xs font-bold px-2 py-1 rounded-md">{event.text}</span>
+                            <div key={originalIndex} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex flex-col gap-2 transition hover:bg-white dark:hover:bg-gray-800 hover:shadow-lg">
+                              <div className="flex items-start gap-3">
+                                <span className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-black text-sm px-3 py-1 rounded-lg mt-0.5 shadow-sm">D{event.day}</span>
+                                <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-sm font-bold px-3 py-1 rounded-lg shadow-sm">{event.text}</span>
                               </div>
                               
-                              {/* RENDERIZA O LINK SE EXISTIR */}
                               {event.imageUrl && (
-                                  <div className="mt-1 flex flex-col items-start gap-1">
-                                      <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-10 dark:bg-opacity-50 hover:bg-opacity-20 text-gray-800 dark:text-gray-200 rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm font-bold">
+                                  <div className="mt-2 flex flex-col items-start gap-1">
+                                      <a href={event.imageUrl} target="_blank" className="text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm font-bold">
                                           🔗 Acessar Link da Arte
                                       </a>
-                                      <img src={event.imageUrl} alt="" className="h-16 w-auto object-cover rounded border border-gray-300 dark:border-gray-600" onError={(e) => e.target.style.display='none'} />
+                                      <img src={event.imageUrl} alt="" className="h-20 w-auto object-cover rounded border border-gray-300 dark:border-gray-600 shadow-sm" onError={(e) => e.target.style.display='none'} />
                                   </div>
                               )}
 
                               {event.notes && (
-                                  <div className="bg-yellow-50 dark:bg-yellow-900 dark:text-yellow-200 text-yellow-800 text-xs p-2 rounded border border-yellow-200 dark:border-yellow-700 flex gap-2 items-start mt-1">
-                                      <MessageSquare /> <p className="whitespace-pre-wrap">{event.notes}</p>
+                                  <div className="bg-yellow-50 dark:bg-yellow-900 dark:text-yellow-200 text-yellow-800 text-xs p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 flex gap-2 items-start mt-2 shadow-sm">
+                                      <MessageSquare /> <p className="whitespace-pre-wrap font-medium">{event.notes}</p>
                                   </div>
                               )}
                               
-                              <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded px-2 py-1 flex flex-col mt-1 border dark:border-gray-700">
-                                  <span>👤 Criado por: {event.createdBy} em {formatDateStr(event.createdAt)}</span>
+                              <div className="text-[10px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg px-3 py-2 flex flex-col mt-2 border border-gray-200 dark:border-gray-700 shadow-sm font-medium">
+                                  <span>👤 Criado por: {event.createdBy || 'Desconhecido'} em {formatDateStr(event.createdAt) || '-'}</span>
                                   {event.updatedBy && <span>✏️ Editado por: {event.updatedBy} em {formatDateStr(event.updatedAt)}</span>}
                               </div>
 
-                              {userRole === 'admin' && (
-                                  <div className="flex flex-col sm:flex-row justify-between sm:items-center mt-2 gap-3 sm:gap-0">
-                                    <div className="flex gap-1 w-full sm:w-auto">
-                                      <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`flex-1 sm:flex-none px-3 py-1 rounded text-xs font-bold transition ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>✓ Feito</button>
-                                      <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`flex-1 sm:flex-none px-3 py-1 rounded text-xs font-bold transition ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>⚠ Atraso</button>
+                              {isAdmin && (
+                                  <div className="flex flex-col sm:flex-row justify-between sm:items-center mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                      <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>✓ Feito</button>
+                                      <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>⚠ Atraso</button>
                                     </div>
                                     <div className="flex gap-2 w-full sm:w-auto">
-                                      <button onClick={() => exportSingleToGoogleCalendar(event)} className="flex-1 sm:flex-none bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 px-3 py-1 rounded text-xs font-bold transition flex items-center justify-center gap-1">
+                                      <button onClick={() => exportSingleToGoogleCalendar(event)} className="flex-1 sm:flex-none bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm">
                                           + Agenda
                                       </button>
-                                      <span className="text-gray-300 dark:text-gray-600 mx-1 hidden sm:inline">|</span>
-                                      <button onClick={() => startEditEvent(event, originalIndex)} className="flex-1 sm:flex-none text-blue-500 dark:text-blue-400 hover:text-blue-700 bg-blue-50 dark:bg-gray-700 px-3 py-1 rounded transition font-bold"><Edit2 /></button>
-                                      <button onClick={() => removeEvent(originalIndex)} className="flex-1 sm:flex-none text-red-500 dark:text-red-400 hover:text-red-700 bg-red-50 dark:bg-gray-700 px-3 py-1 rounded transition font-bold"><Trash2 /></button>
+                                      <button onClick={() => startEditEvent(event, originalIndex)} className="flex-1 sm:flex-none text-blue-600 dark:text-blue-400 hover:text-blue-800 bg-blue-50 dark:bg-gray-700 hover:bg-blue-100 px-4 py-2 rounded-lg transition font-bold shadow-sm flex justify-center items-center"><Edit2 /></button>
+                                      <button onClick={() => removeEvent(originalIndex)} className="flex-1 sm:flex-none text-red-600 dark:text-red-400 hover:text-red-800 bg-red-50 dark:bg-gray-700 hover:bg-red-100 px-4 py-2 rounded-lg transition font-bold shadow-sm flex justify-center items-center"><Trash2 /></button>
                                     </div>
                                   </div>
                               )}
@@ -1252,10 +1105,209 @@
                       })}
                     </div>
                   </div>
+
+                {/* 4. TELA DO CALENDÁRIO VISUAL */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                
+                  {/* NAVEGAÇÃO DE MÊS */}
+                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
+                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">⬅️</button>
+                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[200px]">
+                          {months[month]} {year}
+                        </h2>
+                        <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">➡️</button>
+                    </div>
+                    <h3 className="text-xl md:text-2xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm">{companies.find(c => c.id === selectedCompany)?.name}</h3>
+                  </div>
+
+                  {/* FILTRO 1: CALENDÁRIO */}
+                  <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
+                      <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros do Calendário:</span>
+                      <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
+                      <button onClick={() => setCalendarFilter('DONE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'DONE' ? 'bg-green-600 text-white shadow-md' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>Concluídos ✓</button>
+                      <button onClick={() => setCalendarFilter('LATE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'LATE' ? 'bg-red-600 text-white shadow-md' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>Atrasados ⚠</button>
+                      <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                      {getLegendItems().map(cat => (
+                          <button key={cat.id} onClick={() => setCalendarFilter(cat.id)} style={calendarFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter !== cat.id && 'bg-gray-200 border border-gray-300 text-gray-600 opacity-70 hover:opacity-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                              {cat.label}
+                          </button>
+                      ))}
+                  </div>
+
+                  {/* CALENDÁRIO VISÃO PC */}
+                  <div className="hidden md:block overflow-x-auto pb-4">
+                    <div className="min-w-[800px]">
+                      <div className="grid grid-cols-7 gap-4 mb-4">
+                        {fullWeekDays.map(day => (
+                          <div key={day} className="bg-black dark:bg-gray-700 text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
+                            {day}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-4">
+                        {weeks.map((week, wIdx) => (
+                          <div key={wIdx} className="flex flex-col">
+                            <div className="bg-gray-200 dark:bg-gray-700 rounded-t-xl h-10 flex items-center px-4 shadow-sm">
+                              {week.map((day, dIdx) => (
+                                <div key={dIdx} className="flex-1 text-gray-800 dark:text-gray-200 font-black text-sm px-2 text-center border-r border-gray-300 dark:border-gray-600 last:border-0">
+                                  {day || ''}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <div className="grid grid-cols-7 gap-2 bg-gray-50 dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-xl p-2 min-h-[120px] shadow-sm">
+                              {week.map((day, dIdx) => (
+                                <div 
+                                  key={dIdx} 
+                                  className="flex flex-col gap-2 p-1 min-h-[100px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                                  onDragOver={onDragOver}
+                                  onDrop={(e) => day ? onDrop(e, day) : null}
+                                >
+                                  {day && getCalendarEventsForDay(day).map((event, eIdx) => {
+                                    const color = safeColorOptions.find(c => c.id === event.color);
+                                    if (!color) return null;
+                                    
+                                    const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                    const status = getEventStatus(originalIndex);
+                                    const finalColor = getStatusColor(color.color, status);
+                                    const textColor = getTextColor(finalColor);
+                                    
+                                    return (
+                                      <div
+                                        key={eIdx}
+                                        draggable={isAdmin}
+                                        onDragStart={(e) => onDragStart(e, originalIndex)}
+                                        style={{ backgroundColor: finalColor, color: textColor }}
+                                        className={`rounded-xl p-2 text-[11px] font-bold text-center shadow-md relative group break-words whitespace-normal leading-tight ${isAdmin ? 'cursor-grab active:cursor-grabbing hover:scale-105 transition-transform' : 'cursor-pointer'}`}
+                                        onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
+                                      >
+                                        {event.imageUrl && (
+                                            <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
+                                        )}
+                                        
+                                        <span>
+                                            {event.text}
+                                            {event.notes && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
+                                            {status === 'done' && <span className="ml-1">✓</span>}
+                                            {status === 'late' && <span className="ml-1">⚠</span>}
+                                        </span>
+                                        
+                                        {/* POPUP DE INFORMAÇÕES NO CALENDÁRIO */}
+                                        {expandedNoteIndex === originalIndex && (
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-white p-4 rounded-xl shadow-2xl z-50 text-left text-xs cursor-text">
+                                                {event.notes && (
+                                                    <div className="mb-3">
+                                                        <p className="font-black text-sm border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">Anotações:</p>
+                                                        <p className="whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700">{event.notes}</p>
+                                                    </div>
+                                                )}
+                                                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
+                                                    <p>👤 Criado por <span className="font-bold">{event.createdBy}</span></p>
+                                                    {event.updatedBy && <p>✏️ Editado por <span className="font-bold">{event.updatedBy}</span></p>}
+                                                </div>
+                                            </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CALENDÁRIO VISÃO CELULAR (VERTICAL COM DRAG AND DROP) */}
+                  <div className="block md:hidden space-y-4 mt-2">
+                    {daysArray.map(day => {
+                      const dayEvents = getCalendarEventsForDay(day);
+                      const date = new Date(year, month, day);
+                      const dayOfWeek = fullWeekDays[date.getDay()];
+                      
+                      if(calendarFilter !== 'ALL' && dayEvents.length === 0) return null; 
+
+                      return (
+                        <div key={day} 
+                             className={`border-2 rounded-2xl p-4 shadow-sm transition dark:border-gray-700 ${dayEvents.length > 0 ? 'bg-white dark:bg-gray-800 border-gray-300' : 'bg-gray-50 dark:bg-gray-900 border-gray-100'}`}
+                             onDragOver={onDragOver}
+                             onDrop={(e) => day ? onDrop(e, day) : null}
+                        >
+                          <div className="flex items-center gap-3 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
+                            <span className={`w-10 h-10 flex items-center justify-center rounded-full font-black text-lg ${dayEvents.length > 0 ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                              {day}
+                            </span>
+                            <span className={`font-black text-sm uppercase tracking-wide ${dayEvents.length > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                              {dayOfWeek}
+                            </span>
+                          </div>
+                          
+                          {dayEvents.length > 0 ? (
+                            <div className="flex flex-col gap-3 pl-2">
+                              {dayEvents.map((event, eIdx) => {
+                                const color = safeColorOptions.find(c => c.id === event.color);
+                                if (!color) return null;
+                                
+                                const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                const status = getEventStatus(originalIndex);
+                                const finalColor = getStatusColor(color.color, status);
+                                const textColor = getTextColor(finalColor);
+                                
+                                return (
+                                  <div
+                                    key={eIdx}
+                                    draggable={isAdmin}
+                                    onDragStart={(e) => onDragStart(e, originalIndex)}
+                                    style={{ backgroundColor: finalColor, color: textColor }}
+                                    className={`rounded-xl px-4 py-3 text-sm font-bold shadow-md flex flex-col break-words whitespace-normal leading-tight ${isAdmin ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                                  >
+                                    {event.imageUrl && (
+                                      <div className="mb-2 flex flex-col gap-1">
+                                          <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm">🔗 Ver Arte/Link</a>
+                                          <img src={event.imageUrl} className="w-full h-32 object-cover rounded border border-black border-opacity-20" alt="Arte" onError={(e) => e.target.style.display='none'} />
+                                      </div>
+                                    )}
+                                    <span className="text-base">
+                                        {event.text}
+                                        {status === 'done' && <span className="ml-2">✓</span>}
+                                        {status === 'late' && <span className="ml-2">⚠</span>}
+                                    </span>
+                                    {event.notes && (
+                                      <div style={{ backgroundColor: 'rgba(255,255,255,0.2)'}} className="mt-2 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner">
+                                          <p className="whitespace-pre-wrap">{event.notes}</p>
+                                      </div>
+                                    )}
+                                    <div className="mt-2 text-[10px] opacity-80 bg-black bg-opacity-10 p-2 rounded-lg font-medium">
+                                       👤 Criado: {event.createdBy} {event.updatedBy ? `| ✏️ Editado: ${event.updatedBy}` : ''}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 italic pl-2">Nenhum post agendado ou solte aqui...</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {getLegendItems().length > 0 && (
+                    <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA</h3>
+                      <div className="flex flex-wrap gap-2 md:gap-3">
+                        {getLegendItems().map(item => (
+                          <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-2 text-xs md:text-sm font-bold shadow-md border border-black border-opacity-10">
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {selectedCompany && renderCalendarUI()}
-
               </div>
             </div>
           );
