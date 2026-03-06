@@ -17,7 +17,7 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        // --- RADAR DE ERROS (Evita a tela branca) ---
+        // --- RADAR DE ERROS ---
         class ErrorBoundary extends React.Component {
             constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
             static getDerivedStateFromError(error) { return { hasError: true, errorMsg: error.toString() }; }
@@ -27,7 +27,7 @@
                         <div className="min-h-screen flex items-center justify-center bg-red-50 p-8">
                             <div className="bg-white p-8 rounded-xl shadow-xl border-2 border-red-500 max-w-2xl w-full">
                                 <h2 className="text-2xl font-black text-red-600 mb-4">Oops! Algo bloqueou a tela.</h2>
-                                <p className="text-gray-700 mb-4">O login funcionou, mas houve um erro ao desenhar o calendário. Copie o texto abaixo e mande para o desenvolvedor:</p>
+                                <p className="text-gray-700 mb-4">Copie o texto abaixo e mande para o desenvolvedor:</p>
                                 <pre className="bg-gray-100 p-4 rounded text-sm text-red-800 overflow-auto">{this.state.errorMsg}</pre>
                                 <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-2 rounded font-bold hover:bg-red-700">Recarregar Página</button>
                             </div>
@@ -67,14 +67,22 @@
         const DatabaseIcon = () => <span>☁️</span>;
         
         const CalendarCreator = () => {
+          // --- SISTEMA DE LOGIN E PERFIL ---
           const [user, setUser] = useState(null);
           const [email, setEmail] = useState('');
           const [password, setPassword] = useState('');
           const [loadingAuth, setLoadingAuth] = useState(true);
+          
+          const [currentUserName, setCurrentUserName] = useState('');
+          const [showProfileModal, setShowProfileModal] = useState(false);
+          const [newDisplayName, setNewDisplayName] = useState('');
 
           useEffect(() => {
              const unsubscribe = auth.onAuthStateChanged(u => {
                  setUser(u);
+                 if (u) {
+                     setCurrentUserName(u.displayName || u.email);
+                 }
                  setLoadingAuth(false);
              });
              return () => unsubscribe();
@@ -89,6 +97,30 @@
 
           const handleLogout = () => auth.signOut();
 
+          const handleUpdateProfile = () => {
+              if (!user) return;
+              user.updateProfile({
+                  displayName: newDisplayName
+              }).then(() => {
+                  setCurrentUserName(newDisplayName);
+                  setShowProfileModal(false);
+                  alert("Nome de usuário atualizado com sucesso!");
+              }).catch(error => {
+                  alert("Erro ao atualizar nome: " + error.message);
+              });
+          };
+
+          const handleResetPassword = () => {
+              if (!user || !user.email) return;
+              auth.sendPasswordResetEmail(user.email).then(() => {
+                  alert(`Um e-mail de redefinição de senha foi enviado para: ${user.email}. Verifique sua caixa de entrada (e o Spam)!`);
+                  setShowProfileModal(false);
+              }).catch(error => {
+                  alert("Erro ao enviar e-mail: " + error.message);
+              });
+          };
+
+          // --- ESTADOS DO CALENDÁRIO ---
           const [year, setYear] = useState(2026);
           const [month, setMonth] = useState(2); 
           const [events, setEvents] = useState([]);
@@ -304,6 +336,15 @@
             if (confirm('⚠️ Apagar TODOS os eventos e categorias desta empresa?')) {
                 saveToCloud({ events: [], categories: [], statuses: {} });
             }
+          };
+
+          const exportData = () => {
+            const dataStr = JSON.stringify({ events, categories: colorOptions, exportDate: new Date().toISOString() }, null, 2);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob([dataStr], { type: 'application/json' }));
+            const compName = companies.find(c => c.id === selectedCompany)?.name || 'backup';
+            link.download = `backup-${compName}-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
           };
 
           const handleFileUpload = (e) => {
@@ -809,6 +850,7 @@
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 font-bold text-gray-500">Carregando Nuvem...</div>;
 
+          // --- TELA DE LOGIN ---
           if (!user) {
               return (
                   <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
@@ -833,6 +875,39 @@
 
           return (
             <div className="min-h-screen bg-gray-100 p-2 md:p-8">
+              
+              {/* MODAL DE PERFIL */}
+              {showProfileModal && (
+                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
+                          <h3 className="text-xl font-black text-gray-800 border-b pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
+                          
+                          <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1">Nome de Exibição</label>
+                              <input 
+                                  type="text" 
+                                  value={newDisplayName} 
+                                  onChange={e => setNewDisplayName(e.target.value)} 
+                                  className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
+                                  placeholder="Ex: Stefany..."
+                              />
+                          </div>
+
+                          <div className="pt-4 flex flex-col gap-2">
+                              <button onClick={handleUpdateProfile} className="w-full bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition shadow-sm">
+                                  Salvar Nome
+                              </button>
+                              <button onClick={handleResetPassword} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">
+                                  Redefinir Senha (E-mail)
+                              </button>
+                              <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">
+                                  Fechar
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
               <div className="max-w-7xl mx-auto space-y-6">
                 
                 <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-200">
@@ -843,7 +918,24 @@
                       </h1>
                       <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Conectado à Nuvem Firebase</p>
                     </div>
+                    
+                    {/* BARRA DE USUÁRIO E BOTÕES */}
                     <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                      
+                      {/* CRACHÁ DO USUÁRIO */}
+                      <div className="flex items-center gap-3 mr-2 bg-blue-50 border border-blue-200 px-4 py-2 rounded-xl shadow-sm">
+                          <div className="bg-blue-200 text-blue-700 w-8 h-8 flex items-center justify-center rounded-full text-lg">
+                              👤
+                          </div>
+                          <div className="flex flex-col leading-tight">
+                              <span className="text-sm font-black text-gray-800">{currentUserName}</span>
+                              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Administrador(a)</span>
+                          </div>
+                          <button onClick={() => { setNewDisplayName(user.displayName || ''); setShowProfileModal(true); }} className="text-blue-400 hover:text-blue-700 transition p-1 ml-1" title="Editar Perfil">
+                              <Edit2/>
+                          </button>
+                      </div>
+
                       <label className="flex-1 md:flex-none bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm cursor-pointer" title="Importar TXT com cores">
                         <Upload /> Importar TXT
                         <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
@@ -1046,7 +1138,6 @@
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        // Envolvendo o site na Armadura
         root.render(<ErrorBoundary><CalendarCreator /></ErrorBoundary>);
     </script>
 </body>
