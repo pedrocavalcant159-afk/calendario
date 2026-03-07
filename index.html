@@ -17,9 +17,9 @@
         });
     </script>
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -55,9 +55,8 @@
                         <div className="min-h-screen flex items-center justify-center bg-red-50 p-8">
                             <div className="bg-white p-8 rounded-xl shadow-xl border-2 border-red-500 max-w-2xl w-full">
                                 <h2 className="text-2xl font-black text-red-600 mb-4">Oops! Erro na Interface.</h2>
-                                <p className="text-gray-700 mb-4">Copie o texto abaixo e mande para o desenvolvedor:</p>
                                 <pre className="bg-gray-100 p-4 rounded text-sm text-red-800 overflow-auto">{this.state.errorMsg}</pre>
-                                <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-2 rounded font-bold hover:bg-red-700">Recarregar Página</button>
+                                <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-2 rounded font-bold">Recarregar Página</button>
                             </div>
                         </div>
                     );
@@ -66,7 +65,6 @@
             }
         }
 
-        // --- SUAS CHAVES DO FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
           authDomain: "calendario-upli.firebaseapp.com",
@@ -85,7 +83,7 @@
         const { useState, useEffect } = React;
         
         const Download = () => <span>⬇️</span>;
-        const Upload = () => <span>📤</span>;
+        const Upload = () => <span>📥</span>;
         const Trash2 = () => <span>🗑️</span>;
         const CalendarDays = () => <span>📅</span>;
         const Edit2 = () => <span>✏️</span>;
@@ -96,12 +94,56 @@
         const ImageIcon = () => <span>🖼️</span>;
         const PDFIcon = () => <span>📄</span>;
         const KeyIcon = () => <span>🔑</span>;
+        const CheckIcon = () => <span>✓</span>;
+        const MultiSelectIcon = () => <span>✅</span>;
         
-        // =====================================================================
-        // SEU E-MAIL JÁ PREENCHIDO AQUI (NÃO MEXER)
         // =====================================================================
         const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
         // =====================================================================
+        const UPLI_GERAL_ID = "upli_geral_master";
+
+        const STANDARD_CATEGORIES = [
+            { id: 'cat_reels', label: 'Reels', color: '#E1306C' },
+            { id: 'cat_fotos', label: 'Fotos', color: '#1DA1F2' },
+            { id: 'cat_stories', label: 'Stories', color: '#F56040' },
+            { id: 'cat_design', label: 'Design', color: '#405DE6' },
+            { id: 'cat_evento', label: 'Evento', color: '#FFDC80' }
+        ];
+
+        const STATUS_PIPELINE = {
+            'criacao': { label: 'Criação', bg: '#3B82F6', text: '#FFFFFF' }, 
+            'gravacao': { label: 'Gravação', bg: '#8B5CF6', text: '#FFFFFF' }, 
+            'producao': { label: 'Produção', bg: '#F59E0B', text: '#FFFFFF' }, 
+            'aprovacao': { label: 'Aprovação', bg: '#06B6D4', text: '#FFFFFF' }, 
+            'atrasado': { label: 'Atrasado', bg: '#EF4444', text: '#FFFFFF' }, 
+            'publicado': { label: 'Publicado', bg: '#10B981', text: '#FFFFFF' } 
+        };
+
+        const stringToColor = (str) => {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            let color = '#';
+            for (let i = 0; i < 3; i++) {
+                const value = (hash >> (i * 8)) & 0xFF;
+                color += ('00' + value.toString(16)).substr(-2);
+            }
+            return color;
+        };
+
+        // O LIMPADOR DE TEXTO MÁGICO (CORTA OS PREFIXOS DAS EMPRESAS)
+        const getCleanDisplayText = (text, isCentral, compLabel) => {
+            let cleanText = text || '';
+            if (isCentral && compLabel) {
+                const prefix1 = compLabel.toLowerCase() + ':';
+                const prefix2 = compLabel.toLowerCase() + ' :';
+                if (cleanText.toLowerCase().startsWith(prefix1)) {
+                    cleanText = cleanText.substring(prefix1.length).trim();
+                } else if (cleanText.toLowerCase().startsWith(prefix2)) {
+                    cleanText = cleanText.substring(prefix2.length).trim();
+                }
+            }
+            return cleanText;
+        };
 
         const CalendarCreator = () => {
           const [user, setUser] = useState(null);
@@ -117,6 +159,12 @@
           const [userRole, setUserRole] = useState('cliente'); 
           const [globalRoles, setGlobalRoles] = useState({});
           const [showRolesModal, setShowRolesModal] = useState(false);
+          
+          const [newAccEmail, setNewAccEmail] = useState('');
+          const [newAccPassword, setNewAccPassword] = useState('');
+          const [newAccRole, setNewAccRole] = useState('admin');
+          const [creatingAcc, setCreatingAcc] = useState(false);
+
           const [roleEmailInput, setRoleEmailInput] = useState('');
           const [roleSelectInput, setRoleSelectInput] = useState('admin');
 
@@ -125,10 +173,7 @@
           useEffect(() => {
              try {
                  const savedTheme = localStorage.getItem('theme');
-                 if (savedTheme === 'dark') {
-                     setDarkMode(true);
-                     document.documentElement.classList.add('dark');
-                 }
+                 if (savedTheme === 'dark') { setDarkMode(true); document.documentElement.classList.add('dark'); }
              } catch(e) {}
 
              const unsubscribe = auth.onAuthStateChanged(u => {
@@ -141,27 +186,20 @@
                              const rolesData = doc.data().userRoles || {};
                              setGlobalRoles(rolesData);
                              
-                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
-                                 setUserRole('master'); 
-                             } else if (rolesData[u.email.toLowerCase()] === 'admin') {
-                                 setUserRole('admin'); 
-                             } else {
-                                 setUserRole('cliente'); 
-                             }
+                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) setUserRole('master'); 
+                             else if (rolesData[u.email.toLowerCase()] === 'master') setUserRole('master'); 
+                             else if (rolesData[u.email.toLowerCase()] === 'admin') setUserRole('admin'); 
+                             else setUserRole('cliente'); 
                          } else {
                              if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
                                  db.collection('system').doc('roles').set({ userRoles: {} });
                                  setUserRole('master');
-                             } else {
-                                 setUserRole('cliente');
-                             }
+                             } else setUserRole('cliente');
                          }
                          setLoadingAuth(false);
                      });
-
                  } else {
-                     setUser(null);
-                     setLoadingAuth(false);
+                     setUser(null); setLoadingAuth(false);
                  }
              });
              return () => unsubscribe();
@@ -169,21 +207,33 @@
 
           const isAdmin = userRole === 'master' || userRole === 'admin';
 
+          const handleCreateAccount = async () => {
+              if (!newAccEmail || !newAccPassword) return alert("Preencha email e senha!");
+              if (newAccPassword.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
+              setCreatingAcc(true);
+              try {
+                  let secondaryApp = firebase.apps.find(app => app.name === 'Secondary') || firebase.initializeApp(firebaseConfig, 'Secondary');
+                  await secondaryApp.auth().createUserWithEmailAndPassword(newAccEmail.trim().toLowerCase(), newAccPassword);
+                  await secondaryApp.auth().signOut();
+                  const emailToSave = newAccEmail.trim().toLowerCase();
+                  const updatedRoles = { ...globalRoles, [emailToSave]: newAccRole };
+                  await db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true });
+                  alert(`Conta ${emailToSave} criada com acesso de ${newAccRole.toUpperCase()}!`);
+                  setNewAccEmail(''); setNewAccPassword('');
+              } catch (error) { alert("Erro ao criar: " + error.message); }
+              setCreatingAcc(false);
+          };
+
           const handleSaveRole = () => {
               if(!roleEmailInput) return;
               const emailToSave = roleEmailInput.toLowerCase().trim();
               const updatedRoles = { ...globalRoles, [emailToSave]: roleSelectInput };
-              
-              db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true })
-                .then(() => { 
-                    setRoleEmailInput(''); 
-                    alert(`Permissão de ${roleSelectInput.toUpperCase()} concedida para ${emailToSave}!`); 
-                })
-                .catch(err => alert("Erro ao salvar permissão: " + err.message));
+              db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true }).then(() => { setRoleEmailInput(''); alert(`Permissão atualizada!`); });
           };
 
           const handleRemoveRole = (emailToRemove) => {
-              if(confirm(`Tem certeza que deseja rebaixar ${emailToRemove} para CLIENTE?`)) {
+              if(emailToRemove === MEU_EMAIL_MASTER) return alert("O Mestre Original não pode ser rebaixado!");
+              if(confirm(`Rebaixar ${emailToRemove} para CLIENTE?`)) {
                   const updatedRoles = { ...globalRoles };
                   delete updatedRoles[emailToRemove];
                   db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true });
@@ -191,50 +241,18 @@
           };
 
           const toggleDarkMode = () => {
-              const newMode = !darkMode;
-              setDarkMode(newMode);
+              const newMode = !darkMode; setDarkMode(newMode);
               try {
-                  if (newMode) {
-                      document.documentElement.classList.add('dark');
-                      localStorage.setItem('theme', 'dark');
-                  } else {
-                      document.documentElement.classList.remove('dark');
-                      localStorage.setItem('theme', 'light');
-                  }
+                  if (newMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); } 
+                  else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
               } catch(e) {}
           };
 
-          const handleLogin = (e) => {
-             e.preventDefault();
-             auth.signInWithEmailAndPassword(email, password).catch(err => alert("Erro ao entrar: Verifique o e-mail e a senha."));
-          };
-
+          const handleLogin = (e) => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => alert("Erro ao entrar. Verifique credenciais.")); };
           const handleLogout = () => auth.signOut();
-
-          const handleUpdateProfile = () => {
-              if (!user) return;
-              user.updateProfile({ displayName: newDisplayName }).then(() => {
-                  setCurrentUserName(newDisplayName);
-                  setShowProfileModal(false);
-              }).catch(error => alert("Erro ao atualizar nome: " + error.message));
-          };
-
-          const handleResetPasswordLogged = () => {
-              if (!user || !user.email) return;
-              auth.sendPasswordResetEmail(user.email).then(() => {
-                  alert(`E-mail de redefinição enviado para: ${user.email}.`);
-                  setShowProfileModal(false);
-              }).catch(error => alert("Erro ao enviar: " + error.message));
-          };
-
-          const handleForgotPasswordSubmit = (e) => {
-              e.preventDefault();
-              if (!email) return alert("Digite seu e-mail.");
-              auth.sendPasswordResetEmail(email).then(() => {
-                  alert(`Link enviado para: ${email}`);
-                  setIsResetMode(false);
-              }).catch(error => alert("Erro: E-mail não encontrado."));
-          };
+          const handleUpdateProfile = () => { if(user) user.updateProfile({ displayName: newDisplayName }).then(() => { setCurrentUserName(newDisplayName); setShowProfileModal(false); }); };
+          const handleResetPasswordLogged = () => { if(user) auth.sendPasswordResetEmail(user.email).then(() => { alert("E-mail de redefinição enviado."); setShowProfileModal(false); }); };
+          const handleForgotPasswordSubmit = (e) => { e.preventDefault(); auth.sendPasswordResetEmail(email).then(() => { alert("Link enviado."); setIsResetMode(false); }); };
 
           const [year, setYear] = useState(new Date().getFullYear());
           const [month, setMonth] = useState(new Date().getMonth()); 
@@ -243,6 +261,7 @@
           
           const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
+          const [sendToUpliGeral, setSendToUpliGeral] = useState(true); 
           
           const [editingColor, setEditingColor] = useState(null);
           const [editLabel, setEditLabel] = useState('');
@@ -250,111 +269,139 @@
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
           const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
-          const [expandedNoteIndex, setExpandedNoteIndex] = useState(null); 
           
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
           const [selectedCompany, setSelectedCompany] = useState(null);
           const [newCompanyName, setNewCompanyName] = useState('');
+          
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
-          const [listFilter, setListFilter] = useState('ALL');         
+
+          // ESTADOS DE SELEÇÃO E IMPORTAÇÃO
+          const [isSelectionMode, setIsSelectionMode] = useState(false);
+          const [selectedEvents, setSelectedEvents] = useState([]); 
+          
+          const [showImportModal, setShowImportModal] = useState(false);
+          const [importTargetCompany, setImportTargetCompany] = useState('');
+          const [importFile, setImportFile] = useState(null);
+          const [importToCentral, setImportToCentral] = useState(true); 
+          const [importing, setImporting] = useState(false);
 
           useEffect(() => {
             if (!user) return;
             const unsubscribe = db.collection('companies').onSnapshot(snapshot => {
-                try {
-                    const fetchedCompanies = [];
-                    snapshot.forEach(doc => {
-                        const data = doc.data() || {};
-                        fetchedCompanies.push({ 
-                            id: doc.id, 
-                            name: data.name || 'Nova Empresa', 
-                            events: Array.isArray(data.events) ? data.events : [],
-                            categories: Array.isArray(data.categories) ? data.categories : [],
-                            statuses: data.statuses || {}
-                        });
-                    });
-                    fetchedCompanies.sort((a,b) => String(a.name).localeCompare(String(b.name)));
-                    setCompanies(fetchedCompanies);
+                let fetchedCompanies = [];
+                let hasUpliGeral = false;
+                
+                snapshot.forEach(doc => {
+                    if (doc.id === UPLI_GERAL_ID) hasUpliGeral = true;
+                    const data = doc.data() || {};
+                    let safeCategories = Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES];
 
-                    if (!selectedCompany && fetchedCompanies.length > 0) setSelectedCompany(fetchedCompanies[0].id);
-                } catch (err) { console.error("Erro:", err); }
+                    fetchedCompanies.push({ 
+                        id: doc.id, 
+                        name: data.name || 'Empresa', 
+                        events: Array.isArray(data.events) ? data.events : [],
+                        categories: safeCategories,
+                        statuses: data.statuses || {} 
+                    });
+                });
+
+                if (!hasUpliGeral && (userRole === 'master' || userRole === 'admin')) {
+                    db.collection('companies').doc(UPLI_GERAL_ID).set({
+                        name: 'UPLI Geral', events: [], categories: STANDARD_CATEGORIES, statuses: {}
+                    });
+                }
+
+                fetchedCompanies.sort((a,b) => {
+                    if(a.id === UPLI_GERAL_ID) return -1;
+                    if(b.id === UPLI_GERAL_ID) return 1;
+                    return String(a.name).localeCompare(String(b.name));
+                });
+                
+                setCompanies(fetchedCompanies);
+                if (!selectedCompany && fetchedCompanies.length > 0) setSelectedCompany(fetchedCompanies[0].id);
             });
             return () => unsubscribe();
-          }, [user, selectedCompany]);
+          }, [user, userRole]);
 
           useEffect(() => {
               if (selectedCompany) {
                   const comp = companies.find(c => c.id === selectedCompany);
                   if (comp) {
                       setEvents(Array.isArray(comp.events) ? comp.events : []);
-                      setColorOptions(Array.isArray(comp.categories) ? comp.categories : []);
                       setEventStatuses(comp.statuses || {});
                       setCalendarFilter('ALL'); 
-                      setListFilter('ALL');
+                      setIsSelectionMode(false);
+                      setSelectedEvents([]);
+
+                      if (selectedCompany === UPLI_GERAL_ID) {
+                          let dynamicCats = [...STANDARD_CATEGORIES];
+                          companies.forEach(c => {
+                              if (c.id !== UPLI_GERAL_ID) {
+                                  dynamicCats.push({ id: c.id, label: c.name, color: stringToColor(c.name) });
+                              }
+                          });
+                          setColorOptions(dynamicCats);
+                      } else {
+                          setColorOptions(comp.categories);
+                      }
                   }
-              } else {
-                  setEvents([]); setColorOptions([]); setEventStatuses({});
               }
           }, [selectedCompany, companies]);
 
           const saveToCloud = (updates) => {
               if (!selectedCompany) return;
-              db.collection('companies').doc(selectedCompany).set(updates, { merge: true }).catch(err => alert("Erro ao salvar na nuvem!"));
+              db.collection('companies').doc(selectedCompany).set(updates, { merge: true });
           };
 
           const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
           const fullWeekDays = ['DOMINGO', 'SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO'];
-
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
           const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
-          const handlePrevMonth = () => {
-              if (month === 0) { setMonth(11); setYear(year - 1); } 
-              else { setMonth(month - 1); }
-          };
-          const handleNextMonth = () => {
-              if (month === 11) { setMonth(0); setYear(year + 1); } 
-              else { setMonth(month + 1); }
-          };
+          const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
+          const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
 
           const formatDateStr = (isoString) => {
               if(!isoString) return '';
-              const date = new Date(isoString);
-              return date.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'});
+              return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'});
           };
 
-          const toggleEventStatus = (eventIndex, status) => {
-            if (!isAdmin) return; 
-            const eventKey = `event_${eventIndex}`;
-            const current = eventStatuses[eventKey];
-            const newStatuses = {...eventStatuses};
-            
-            // CORREÇÃO: Se clicar de novo no mesmo, ele desmarca (envia null)
-            if (current === status) {
-                newStatuses[eventKey] = null; 
-            } else {
-                newStatuses[eventKey] = status;
-            }
-            
-            saveToCloud({ statuses: newStatuses });
+          const toggleEventStatus = (originalIndex, newStatus) => {
+              if (!isAdmin) return;
+              const updatedEvents = [...events];
+              const evt = updatedEvents[originalIndex];
+              
+              if (evt.status === newStatus) evt.status = null;
+              else evt.status = newStatus;
+              
+              evt.updatedBy = currentUserName;
+              evt.updatedAt = new Date().toISOString();
+              saveToCloud({ events: updatedEvents });
+
+              if (selectedCompany !== UPLI_GERAL_ID) {
+                  const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
+                  if (upliGeral) {
+                      const upliEvents = [...upliGeral.events];
+                      const linkedIdx = upliEvents.findIndex(e => e.id === evt.id || e.id === evt.id + "_clone");
+                      if (linkedIdx !== -1) {
+                          upliEvents[linkedIdx].status = evt.status;
+                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
+                      }
+                  }
+              }
           };
 
-          const getEventStatus = (eventIndex) => eventStatuses[`event_${eventIndex}`] || null;
-
-          const getStatusColor = (originalColor, status) => {
-            if (status === 'done') return '#22c55e'; 
-            if (status === 'late') return '#ef4444'; 
-            return originalColor || '#cccccc';
-          };
+          const getEventStatus = (eventIndex) => { return events[eventIndex]?.status || null; };
 
           const addCompany = () => {
             if (newCompanyName.trim()) {
               const id = Date.now().toString();
-              db.collection('companies').doc(id).set({ name: newCompanyName.trim(), events: [], categories: [], statuses: {} });
+              db.collection('companies').doc(id).set({ name: newCompanyName.trim(), events: [], categories: STANDARD_CATEGORIES, statuses: {} });
               setSelectedCompany(id); setNewCompanyName('');
             }
           };
@@ -362,12 +409,13 @@
           const removeCompany = (companyId) => {
             if (confirm('ATENÇÃO: Apagar a empresa e TODOS os eventos?')) {
               db.collection('companies').doc(companyId).delete();
-              if (selectedCompany === companyId) setSelectedCompany(null);
+              if (selectedCompany === companyId) setSelectedCompany(UPLI_GERAL_ID);
             }
           };
 
           const startEditCompany = (company) => { setEditingCompany(company.id); setEditCompanyName(company.name); };
           const saveEditCompany = () => {
+            if(!editCompanyName.trim()) return;
             db.collection('companies').doc(editingCompany).update({ name: editCompanyName.trim() });
             setEditingCompany(null); setEditCompanyName('');
           };
@@ -377,11 +425,8 @@
             if (!bgColor) return '#000000';
             const hex = bgColor.replace('#', '');
             if (hex.length < 6) return '#000000';
-            const r = parseInt(hex.substr(0, 2), 16);
-            const g = parseInt(hex.substr(2, 2), 16);
-            const b = parseInt(hex.substr(4, 2), 16);
-            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            return brightness > 155 ? '#000000' : '#ffffff';
+            const r = parseInt(hex.substr(0, 2), 16); const g = parseInt(hex.substr(2, 2), 16); const b = parseInt(hex.substr(4, 2), 16);
+            return ((r * 299 + g * 587 + b * 114) / 1000) > 155 ? '#000000' : '#ffffff';
           };
 
           const addEvent = () => {
@@ -390,8 +435,11 @@
             if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
             
+            const eventId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
             const eventToAdd = { 
                 ...newEvent, 
+                id: eventId,
+                status: null, 
                 day: dayNum, month: month, year: year,
                 createdBy: currentUserName,
                 createdAt: new Date().toISOString()
@@ -399,22 +447,43 @@
 
             const updatedEvents = [...events, eventToAdd];
             saveToCloud({ events: updatedEvents });
+
+            const selectedCat = colorOptions.find(c => c.id === newEvent.color);
+            const catName = selectedCat ? selectedCat.label : '';
+            const isEvento = newEvent.color === 'cat_evento' || catName.toLowerCase().includes('evento');
+
+            if (selectedCompany !== UPLI_GERAL_ID && sendToUpliGeral && !isEvento) {
+                const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
+                if (upliGeral) {
+                    const formattedText = catName ? `${catName}: ${eventToAdd.text}` : eventToAdd.text;
+                    const clonedEvent = { ...eventToAdd, text: formattedText, sourceCompanyId: selectedCompany, color: selectedCompany };
+                    db.collection('companies').doc(UPLI_GERAL_ID).set({ events: [...upliGeral.events, clonedEvent] }, { merge: true });
+                }
+            }
             setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '', imageUrl: '' });
           };
 
           const removeEvent = (index) => {
-              const updatedEvents = events.filter((_, i) => i !== index);
-              saveToCloud({ events: updatedEvents });
+              if (confirm("Tem certeza que quer apagar esse post?")) {
+                  const evToRemove = events[index];
+                  const updatedEvents = events.filter((_, i) => i !== index);
+                  saveToCloud({ events: updatedEvents });
+                  setEditingEventIndex(null); 
+                  
+                  if (selectedCompany !== UPLI_GERAL_ID) {
+                      const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
+                      if (upliGeral) {
+                          const upliEvents = upliGeral.events.filter(e => e.id !== evToRemove.id && e.id !== evToRemove.id + "_clone");
+                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
+                      }
+                  }
+              }
           };
 
           const startEditEvent = (event, originalIndex) => {
             setEditingEventIndex(originalIndex);
             setEditEventForm({
-                day: event.day || '',
-                text: event.text || '',
-                color: event.color || '',
-                notes: event.notes || '',
-                imageUrl: event.imageUrl || ''
+                day: event.day || '', text: event.text || '', color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || ''
             });
           };
 
@@ -424,32 +493,56 @@
             if (!editEventForm.day || !editEventForm.text || !editEventForm.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
 
-            const updatedEvents = [...events];
-            
-            updatedEvents[editingEventIndex] = {
-                ...updatedEvents[editingEventIndex],
-                day: dayNum,
-                text: editEventForm.text,
-                color: editEventForm.color,
-                notes: editEventForm.notes,
-                imageUrl: editEventForm.imageUrl,
-                updatedBy: currentUserName,
-                updatedAt: new Date().toISOString()
+            const updatedEvt = {
+                ...events[editingEventIndex],
+                day: dayNum, text: editEventForm.text, color: editEventForm.color, notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
+                updatedBy: currentUserName, updatedAt: new Date().toISOString()
             };
+
+            const updatedEvents = [...events];
+            updatedEvents[editingEventIndex] = updatedEvt;
             saveToCloud({ events: updatedEvents });
+
+            if (selectedCompany !== UPLI_GERAL_ID) {
+                const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
+                if (upliGeral) {
+                    const upliEvents = [...upliGeral.events];
+                    const linkedIdx = upliEvents.findIndex(e => e.id === updatedEvt.id || e.id === updatedEvt.id + "_clone");
+                    
+                    const selectedCat = colorOptions.find(c => c.id === editEventForm.color);
+                    const catName = selectedCat ? selectedCat.label : '';
+                    const isEvento = editEventForm.color === 'cat_evento' || catName.toLowerCase().includes('evento');
+
+                    if (isEvento) {
+                        if (linkedIdx !== -1) {
+                            upliEvents.splice(linkedIdx, 1);
+                            db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
+                        }
+                    } else {
+                        if (linkedIdx !== -1) {
+                            let newText = updatedEvt.text;
+                            if (catName && !newText.startsWith(`${catName}:`)) newText = `${catName}: ${newText}`;
+                            upliEvents[linkedIdx] = { ...upliEvents[linkedIdx], day: updatedEvt.day, text: newText, notes: updatedEvt.notes, imageUrl: updatedEvt.imageUrl };
+                            db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
+                        }
+                    }
+                }
+            }
             setEditingEventIndex(null);
           };
 
           const cancelEditEvent = () => setEditingEventIndex(null);
 
-          const onDragStart = (e, originalIndex) => {
-              e.dataTransfer.setData("eventIndex", originalIndex);
+          const onDragStart = (e, originalIndex) => { 
+              if (isSelectionMode) { e.preventDefault(); return; } 
+              e.dataTransfer.setData("eventIndex", originalIndex); 
           };
+          const onDragOver = (e) => { if (!isSelectionMode) e.preventDefault(); };
 
           const onDrop = (e, targetDay) => {
+              if (isSelectionMode) return;
               e.preventDefault();
               if(!isAdmin) return; 
-              
               const originalIndex = e.dataTransfer.getData("eventIndex");
               if(originalIndex === null || originalIndex === '') return;
               
@@ -457,11 +550,20 @@
               updatedEvents[originalIndex].day = targetDay;
               updatedEvents[originalIndex].updatedBy = currentUserName;
               updatedEvents[originalIndex].updatedAt = new Date().toISOString();
-              
               saveToCloud({ events: updatedEvents });
-          };
 
-          const onDragOver = (e) => e.preventDefault();
+              if (selectedCompany !== UPLI_GERAL_ID) {
+                  const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
+                  if (upliGeral) {
+                      const upliEvents = [...upliGeral.events];
+                      const linkedIdx = upliEvents.findIndex(evt => evt.id === updatedEvents[originalIndex].id || evt.id === updatedEvents[originalIndex].id + "_clone");
+                      if (linkedIdx !== -1) {
+                          upliEvents[linkedIdx].day = targetDay;
+                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
+                      }
+                  }
+              }
+          };
 
           const addCategory = () => {
             if (newCategory.label.trim()) {
@@ -470,73 +572,310 @@
               setNewCategory({ label: '', color: '#3b82f6' });
             }
           };
-
           const removeCategory = (id) => {
             const updatedCats = colorOptions.filter(c => c.id !== id);
             const updatedEvts = events.filter(e => e.color !== id);
             saveToCloud({ categories: updatedCats, events: updatedEvts });
-            if (editingColor === id) cancelEditCategory();
           };
-
           const startEditCategory = (category) => {
             setEditingColor(category.id);
             setEditLabel(category.label || '');
             setEditColorValue(category.color || '#000000');
           };
-
           const saveEditCategory = () => {
+            if(!editLabel.trim()) return;
             const updatedCats = colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c);
             saveToCloud({ categories: updatedCats });
             setEditingColor(null);
           };
-
           const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
-          const exportSingleToGoogleCalendar = (event) => {
-              const companyName = companies.find(c => c.id === selectedCompany)?.name || 'UPLI';
-              const startDate = new Date(year, month, event.day);
-              const endDate = new Date(year, month, event.day + 1);
-              const startStr = `${startDate.getFullYear()}${String(startDate.getMonth() + 1).padStart(2, '0')}${String(startDate.getDate()).padStart(2, '0')}`;
-              const endStr = `${endDate.getFullYear()}${String(endDate.getMonth() + 1).padStart(2, '0')}${String(endDate.getDate()).padStart(2, '0')}`;
-              const dates = `${startStr}/${endStr}`;
-              const title = encodeURIComponent(`[${companyName}] ${event.text}`);
-              const details = encodeURIComponent(event.notes || 'Sem anotações.');
-              window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`, '_blank');
-          };
-
+          // =========================================================================
+          // MOTOR DE SELEÇÃO E IMPORTAÇÃO (COM DETETIVE CORRIGIDO)
+          // =========================================================================
           const safeEvents = Array.isArray(events) ? events : [];
           const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
 
-          const getEventsByFilterType = (filterType) => {
-              let monthEvents = safeEvents.filter(e => e.month === month && e.year === year);
-              if (filterType === 'ALL') return monthEvents;
-              if (filterType === 'DONE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'done');
-              if (filterType === 'LATE') return monthEvents.filter(e => getEventStatus(safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month)) === 'late');
-              return monthEvents.filter(e => e.color === filterType);
+          const currentViewEvents = safeEvents
+              .map((e, index) => ({ ...e, _origIdx: index, _key: e.id || `legacy_${index}` }))
+              .filter(e => e.month === month && e.year === year);
+          
+          const getFilteredEvents = () => {
+              if (calendarFilter === 'ALL') return currentViewEvents;
+              if (STATUS_PIPELINE[calendarFilter]) {
+                  return currentViewEvents.filter(e => getEventStatus(e._origIdx) === calendarFilter);
+              }
+              return currentViewEvents.filter(e => e.color === calendarFilter);
           };
 
-          const getCalendarEventsForDay = (day) => getEventsByFilterType(calendarFilter).filter(e => e.day === day);
-          
+          const filteredViewEvents = getFilteredEvents();
+          const getCalendarEventsForDay = (day) => filteredViewEvents.filter(e => e.day === day);
+
+          const handleSelectionToggle = () => {
+              setIsSelectionMode(!isSelectionMode);
+              setSelectedEvents([]);
+          };
+
+          const toggleEventSelection = (eventKey) => {
+              if (selectedEvents.includes(eventKey)) setSelectedEvents(selectedEvents.filter(key => key !== eventKey));
+              else setSelectedEvents([...selectedEvents, eventKey]);
+          };
+
+          const toggleCategorySelection = (categoryId) => {
+              const catEvents = currentViewEvents.filter(e => e.color === categoryId);
+              const eventKeys = catEvents.map(e => e._key);
+              if (eventKeys.length === 0) return;
+
+              const allSelected = eventKeys.every(key => selectedEvents.includes(key));
+              if (allSelected) {
+                  setSelectedEvents(prev => prev.filter(key => !eventKeys.includes(key)));
+              } else {
+                  setSelectedEvents(prev => {
+                      const newSelected = [...prev];
+                      eventKeys.forEach(key => { if (!newSelected.includes(key)) newSelected.push(key); });
+                      return newSelected;
+                  });
+              }
+          };
+
+          const exportSelectedToTXT = () => {
+              const comp = companies.find(c => c.id === selectedCompany);
+              if (!comp) return;
+
+              let textContent = `Empresa ; Categoria ; Dia ; Título ; Status ; Anotações\n`;
+              const eventsToExport = currentViewEvents.filter(e => selectedEvents.includes(e._key));
+
+              eventsToExport.forEach(e => {
+                  const cat = safeColorOptions.find(c => c.id === e.color);
+                  const catName = cat ? cat.label : 'Sem Categoria';
+                  const statusName = e.status && STATUS_PIPELINE[e.status] ? STATUS_PIPELINE[e.status].label : '';
+                  const cleanNotes = e.notes ? e.notes.replace(/\n/g, ' ') : '';
+                  textContent += `${comp.name} ; ${catName} ; ${e.day} ; ${e.text} ; ${statusName} ; ${cleanNotes}\n`;
+              });
+
+              const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `Export_${comp.name}_${selectedEvents.length}_posts.txt`;
+              link.click();
+              URL.revokeObjectURL(url);
+
+              setIsSelectionMode(false);
+              setSelectedEvents([]);
+          };
+
+          const deleteSelectedEvents = () => {
+              if (selectedEvents.length === 0) return alert("Selecione pelo menos um post.");
+              if (confirm(`⚠️ Tem certeza que deseja apagar ${selectedEvents.length} post(s) de vez?`)) {
+                  
+                  const eventsToRemove = currentViewEvents.filter(e => selectedEvents.includes(e._key));
+                  const keysToRemove = eventsToRemove.map(e => e._key);
+                  
+                  const updatedEvents = safeEvents.filter((e, idx) => {
+                      const key = e.id || `legacy_${idx}`;
+                      return !keysToRemove.includes(key);
+                  });
+                  
+                  saveToCloud({ events: updatedEvents });
+
+                  if (selectedCompany !== UPLI_GERAL_ID) {
+                      const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
+                      if (upliGeral) {
+                          const upliEvents = upliGeral.events.filter(e => !eventsToRemove.some(rem => e.id === rem.id || e.id === rem.id + "_clone"));
+                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
+                      }
+                  }
+
+                  setIsSelectionMode(false);
+                  setSelectedEvents([]);
+              }
+          };
+
+          const processImport = async () => {
+            if (!importFile) return alert("Por favor, selecione um arquivo TXT primeiro.");
+            if (!importTargetCompany) return alert("Por favor, selecione a empresa de destino.");
+
+            setImporting(true);
+            try {
+                const text = await importFile.text();
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                
+                const snapshot = await db.collection('companies').get();
+                let allCompanies = {};
+                snapshot.forEach(doc => { 
+                    const data = doc.data();
+                    allCompanies[doc.id] = { 
+                        id: doc.id, 
+                        name: data.name,
+                        events: Array.isArray(data.events) ? data.events : [],
+                        categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES],
+                        statuses: data.statuses || {} 
+                    }; 
+                });
+
+                let upliGeral = allCompanies[UPLI_GERAL_ID];
+                if (!upliGeral) {
+                    upliGeral = { id: UPLI_GERAL_ID, name: 'UPLI Geral', events: [], categories: STANDARD_CATEGORIES, statuses: {} };
+                    allCompanies[UPLI_GERAL_ID] = upliGeral;
+                }
+
+                let compData = allCompanies[importTargetCompany];
+                if (!compData) throw new Error("Empresa de destino não encontrada.");
+
+                let updatesNeeded = {};
+                updatesNeeded[importTargetCompany] = compData; 
+
+                let importedCount = 0;
+                
+                const normCat = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/s$/, '').trim();
+
+                lines.forEach(line => {
+                    if(line.toLowerCase().startsWith('empresa')) return; 
+
+                    const parts = line.split(';');
+                    if (parts.length < 4) return;
+
+                    const compNameTXT = parts[0] ? parts[0].trim() : ''; 
+                    let catName = parts[1].trim();
+                    const dayNum = parseInt(parts[2].trim());
+                    let title = parts[3].trim();
+                    const statusStr = parts[4] ? parts[4].trim().toLowerCase() : '';
+                    const notes = parts[5] ? parts[5].trim() : '';
+
+                    if (isNaN(dayNum) || !title) return;
+
+                    // O DETETIVE MÁXIMO DE TÍTULOS E CATEGORIAS
+                    let cleanTitle = title;
+                    const destCompPrefix = compData.name.toLowerCase() + ':';
+                    const txtCompPrefix = compNameTXT.toLowerCase() + ':';
+                    
+                    if (cleanTitle.toLowerCase().startsWith(destCompPrefix)) {
+                        cleanTitle = cleanTitle.substring(destCompPrefix.length).trim();
+                    } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix)) {
+                        cleanTitle = cleanTitle.substring(txtCompPrefix.length).trim();
+                    }
+
+                    if (catName.toLowerCase() === compData.name.toLowerCase() || catName.toLowerCase() === compNameTXT.toLowerCase() || catName.toLowerCase() === 'upli geral') {
+                        catName = ""; 
+                    }
+
+                    let finalCatName = catName;
+                    let finalTitle = cleanTitle;
+                    
+                    const colonIndex = cleanTitle.indexOf(':');
+                    if (colonIndex !== -1 && colonIndex < 30) {
+                        const possibleCat = cleanTitle.substring(0, colonIndex).trim();
+                        const possibleTitle = cleanTitle.substring(colonIndex + 1).trim();
+                        
+                        const isKnownCat = compData.categories.some(c => normCat(c.label) === normCat(possibleCat)) || 
+                                           STANDARD_CATEGORIES.some(c => normCat(c.label) === normCat(possibleCat));
+                        
+                        if (isKnownCat) {
+                            finalCatName = possibleCat;
+                            finalTitle = possibleTitle;
+                        } else {
+                            let mappedCat = possibleCat;
+                            if (normCat(mappedCat) === 'foto') mappedCat = 'Fotos';
+                            if (normCat(mappedCat) === 'story') mappedCat = 'Stories';
+                            if (normCat(mappedCat) === 'reel') mappedCat = 'Reels';
+                            
+                            if (STANDARD_CATEGORIES.some(c => normCat(c.label) === normCat(mappedCat))) {
+                                finalCatName = mappedCat;
+                                finalTitle = possibleTitle;
+                            }
+                        }
+                    }
+
+                    if (!finalCatName) finalCatName = "Geral";
+
+                    let category = compData.categories.find(c => normCat(c.label) === normCat(finalCatName));
+                    if (!category) {
+                        category = { id: 'cat_' + Date.now() + Math.random().toString(36).substr(2, 3), label: finalCatName, color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0') };
+                        compData.categories.push(category);
+                    }
+
+                    let exactStatus = null;
+                    if(statusStr.includes('criação') || statusStr.includes('criacao')) exactStatus = 'criacao';
+                    else if(statusStr.includes('gravação') || statusStr.includes('gravacao')) exactStatus = 'gravacao';
+                    else if(statusStr.includes('produção') || statusStr.includes('producao')) exactStatus = 'producao';
+                    else if(statusStr.includes('aprovação') || statusStr.includes('aprovacao')) exactStatus = 'aprovacao';
+                    else if(statusStr.includes('atrasado')) exactStatus = 'atrasado';
+                    else if(statusStr.includes('publicado') || statusStr.includes('feito') || statusStr.includes('concluid')) exactStatus = 'publicado';
+
+                    const eventId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+                    const newEvent = {
+                        id: eventId,
+                        day: dayNum,
+                        month: month,
+                        year: year,
+                        text: finalTitle, 
+                        color: category.id,
+                        notes: notes,
+                        status: exactStatus,
+                        createdBy: 'Importação TXT',
+                        createdAt: new Date().toISOString()
+                    };
+
+                    compData.events.push(newEvent);
+                    importedCount++;
+
+                    const isEvento = category.id === 'cat_evento' || finalCatName.toLowerCase().includes('evento');
+                    
+                    if (importTargetCompany !== UPLI_GERAL_ID && !isEvento && importToCentral) {
+                        const clonedEvent = {
+                            ...newEvent,
+                            id: eventId + "_clone",
+                            text: `${finalCatName}: ${finalTitle}`,
+                            sourceCompanyId: importTargetCompany,
+                            color: importTargetCompany 
+                        };
+                        upliGeral.events.push(clonedEvent);
+                        updatesNeeded[UPLI_GERAL_ID] = upliGeral;
+                    }
+                });
+
+                if (importedCount === 0) {
+                    alert("Nenhum evento válido encontrado no arquivo TXT.");
+                    setImporting(false);
+                    return;
+                }
+
+                const batch = db.batch();
+                Object.values(updatesNeeded).forEach(comp => {
+                    const ref = db.collection('companies').doc(comp.id);
+                    batch.set(ref, {
+                        name: comp.name,
+                        events: comp.events,
+                        categories: comp.categories,
+                        statuses: comp.statuses || {}
+                    }, { merge: true });
+                });
+
+                await batch.commit();
+                alert(`✅ ${importedCount} posts importados com sucesso!`);
+                setShowImportModal(false);
+                setImportFile(null);
+                setImportTargetCompany('');
+
+            } catch (error) {
+                alert("Erro ao importar: " + error.message);
+            }
+            setImporting(false);
+          };
+
           const getLegendItems = () => {
-            const currentEvents = safeEvents.filter(e => e.month === month && e.year === year);
-            const uniqueColors = [...new Set(currentEvents.map(e => e.color))];
+            const uniqueColors = [...new Set(currentViewEvents.map(e => e.color))];
             return safeColorOptions.filter(c => uniqueColors.includes(c.id));
           };
 
           const getWeeks = () => {
-            const weeks = [];
-            let currentWeek = new Array(7).fill(null);
+            const weeks = []; let currentWeek = new Array(7).fill(null);
             const daysInMonth = getDaysInMonth(year, month);
             let currentDayOfWeek = getFirstDayOfMonth(year, month);
-
             for (let day = 1; day <= daysInMonth; day++) {
-              currentWeek[currentDayOfWeek] = day;
-              currentDayOfWeek++;
-              if (currentDayOfWeek === 7) {
-                weeks.push(currentWeek);
-                currentWeek = new Array(7).fill(null);
-                currentDayOfWeek = 0;
-              }
+              currentWeek[currentDayOfWeek] = day; currentDayOfWeek++;
+              if (currentDayOfWeek === 7) { weeks.push(currentWeek); currentWeek = new Array(7).fill(null); currentDayOfWeek = 0; }
             }
             if (currentDayOfWeek > 0) weeks.push(currentWeek);
             return weeks;
@@ -544,47 +883,39 @@
 
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
-            const words = text.split(' ');
-            const lines = [];
-            let currentLine = words[0];
-
+            const words = text.split(' '); const lines = []; let currentLine = words[0];
             for (let i = 1; i < words.length; i++) {
                 const word = words[i];
-                const width = ctx.measureText(currentLine + " " + word).width;
-                if (width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
+                if (ctx.measureText(currentLine + " " + word).width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
             }
-            lines.push(currentLine);
-            return lines;
+            lines.push(currentLine); return lines;
           };
 
           const drawCalendarToCanvas = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+            const weeks = getWeeks(); const canvasWidth = 1920; const padding = 60; const contentWidth = canvasWidth - (padding * 2); const colWidth = contentWidth / 7; const eventSpacing = 8;
+            ctx.font = 'bold 14px Arial'; let totalHeight = padding + 100 + 80; 
             
-            const weeks = getWeeks();
-            const canvasWidth = 1920;
-            const padding = 60;
-            const contentWidth = canvasWidth - (padding * 2);
-            const colWidth = contentWidth / 7;
-            const eventSpacing = 8;
-            
-            ctx.font = 'bold 14px Arial';
-            let totalHeight = padding + 100 + 80; 
-            
+            const isCentral = selectedCompany === UPLI_GERAL_ID;
+
             weeks.forEach(week => {
-              totalHeight += 50; 
-              let maxWeekHeightCalc = 0;
+              totalHeight += 50;  let maxWeekHeightCalc = 0;
               week.forEach(day => {
                 if (day) {
-                  const dayEvents = getCalendarEventsForDay(day);
-                  let colHeight = 0;
+                  const dayEvents = getCalendarEventsForDay(day); let colHeight = 0;
                   dayEvents.forEach(event => {
-                    let displayText = event.text || '';
-                    const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                    const status = getEventStatus(originalIndex);
-                    if (status === 'done') displayText += ' ✓';
-                    if (status === 'late') displayText += ' ⚠';
-                    const lines = getLines(ctx, displayText, (colWidth) - 40); 
+                    const colorObj = safeColorOptions.find(c => c.id === event.color);
+                    let displayText = getCleanDisplayText(event.text, isCentral, colorObj?.label);
+                    const status = getEventStatus(event._origIdx);
+                    
+                    if (!isCentral && status && STATUS_PIPELINE[status]) {
+                        displayText += ` [${STATUS_PIPELINE[status].label}]`;
+                    }
+                    
+                    let textWidthArea = colWidth - 40;
+                    if (isCentral) textWidthArea -= 24; 
+
+                    const lines = getLines(ctx, displayText, textWidthArea); 
                     colHeight += (lines.length * 18) + 24 + eventSpacing;
                   });
                   maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
@@ -594,201 +925,110 @@
             });
             
             const legendItems = getLegendItems();
-            if (legendItems.length > 0) {
-              totalHeight += 40; 
-              const itemsPerRow = 5;
-              const legendRows = Math.ceil(legendItems.length / itemsPerRow);
-              totalHeight += legendRows * 45 + padding; 
-            } else {
-              totalHeight += padding; 
-            }
+            if (legendItems.length > 0) { totalHeight += 40; const itemsPerRow = 5; const legendRows = Math.ceil(legendItems.length / itemsPerRow); totalHeight += legendRows * 45 + padding; } else { totalHeight += padding; }
             
-            const finalHeight = Math.max(1080, totalHeight);
-
-            const scale = 3; 
-            canvas.width = canvasWidth * scale;
-            canvas.height = finalHeight * scale;
+            const finalHeight = Math.max(1080, totalHeight); const scale = 3; canvas.width = canvasWidth * scale; canvas.height = finalHeight * scale;
+            ctx.scale(scale, scale); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvasWidth, finalHeight);
             
-            ctx.scale(scale, scale);
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvasWidth, finalHeight);
-            
-            let currentY = padding;
-            
-            const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 48px Arial';
-            ctx.textAlign = 'left';
+            let currentY = padding; const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
+            ctx.fillStyle = '#000000'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'left';
             ctx.fillText(`${months[month]} ${year} ${companyName ? `| ${companyName.toUpperCase()}` : ''}`, padding, currentY + 40);
             
-            currentY += 100;
-
-            ctx.textAlign = 'center';
+            currentY += 100; ctx.textAlign = 'center';
             fullWeekDays.forEach((day, i) => {
-              const x = padding + (i * colWidth);
-              const pillMargin = 10;
-              ctx.fillStyle = '#000000';
-              ctx.beginPath();
-              ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25);
-              ctx.fill();
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 20px Arial';
-              ctx.fillText(day, x + (colWidth / 2), currentY + 33);
+              const x = padding + (i * colWidth); const pillMargin = 10;
+              ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25); ctx.fill();
+              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 33);
             });
             
             currentY += 80;
-
             weeks.forEach(week => {
-              ctx.fillStyle = '#000000';
-              ctx.beginPath();
-              ctx.roundRect(padding, currentY, contentWidth, 36, 18);
-              ctx.fill();
+              ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(padding, currentY, contentWidth, 36, 18); ctx.fill();
+              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'left';
+              week.forEach((day, i) => { if (day) ctx.fillText(day.toString(), padding + (i * colWidth) + 25, currentY + 25); });
               
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 22px Arial';
-              ctx.textAlign = 'left';
-              
-              week.forEach((day, i) => {
-                if (day) {
-                  const x = padding + (i * colWidth);
-                  ctx.fillText(day.toString(), x + 25, currentY + 25);
-                }
-              });
-              
-              currentY += 50;
-              let maxWeekHeight = 0;
+              currentY += 50; let maxWeekHeight = 0;
               
               week.forEach((day, i) => {
                 if (!day) return;
                 
-                const dayEvents = getCalendarEventsForDay(day);
-                let eventY = currentY;
-                const x = padding + (i * colWidth);
-                const eventMargin = 10;
-                const eventW = colWidth - (eventMargin * 2);
+                const dayEvents = getCalendarEventsForDay(day); let eventY = currentY; const x = padding + (i * colWidth); const eventMargin = 10; const eventW = colWidth - (eventMargin * 2);
                 
                 dayEvents.forEach(event => {
-                  const color = safeColorOptions.find(c => c.id === event.color);
-                  if (!color) return;
+                  const color = safeColorOptions.find(c => c.id === event.color); if (!color) return;
+                  const status = getEventStatus(event._origIdx); 
                   
-                  const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
-                  const status = getEventStatus(originalIndex);
-                  const finalColor = getStatusColor(color.color, status);
-                  const textColor = getTextColor(finalColor);
-                  
-                  ctx.font = 'bold 14px Arial';
-                  let displayText = event.text || '';
-                  if (status === 'done') displayText += ' ✓';
-                  if (status === 'late') displayText += ' ⚠';
-                  
-                  const lines = getLines(ctx, displayText, eventW - 20);
-                  
-                  const lineHeight = 18;
-                  const topPadding = 12;
-                  const bottomPadding = 12;
-                  const totalTextHeight = lines.length * lineHeight;
-                  const dynamicHeight = totalTextHeight + topPadding + bottomPadding;
-                  
-                  ctx.fillStyle = finalColor;
-                  ctx.beginPath();
-                  ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 18);
-                  ctx.fill();
-                  
-                  ctx.fillStyle = textColor;
-                  ctx.textAlign = 'center';
-                  
-                  let textY = eventY + topPadding + 12; 
+                  let finalBgColor = color.color;
+                  let finalTextColor = getTextColor(color.color);
 
-                  ctx.font = 'bold 14px Arial';
-                  lines.forEach(line => {
-                      ctx.fillText(line, x + (colWidth / 2), textY);
-                      textY += lineHeight;
-                  });
+                  if (isCentral) {
+                      if (status && STATUS_PIPELINE[status]) {
+                          finalBgColor = STATUS_PIPELINE[status].bg;
+                          finalTextColor = STATUS_PIPELINE[status].text;
+                      } else {
+                          finalBgColor = '#E5E7EB'; 
+                          finalTextColor = '#374151';
+                      }
+                  }
+                  
+                  ctx.font = 'bold 14px Arial'; 
+                  let displayText = getCleanDisplayText(event.text, isCentral, color.label);
+                  
+                  if (!isCentral && status && STATUS_PIPELINE[status]) {
+                      displayText += ` [${STATUS_PIPELINE[status].label}]`;
+                  }
+                  
+                  let textWidthArea = eventW - 20;
+                  if (isCentral) textWidthArea -= 24; 
+
+                  const lines = getLines(ctx, displayText, textWidthArea); const dynamicHeight = (lines.length * 18) + 24;
+                  
+                  ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 20); ctx.fill();
+
+                  // DESENHA A BOLINHA NO PDF
+                  if (isCentral) {
+                      ctx.fillStyle = color.color;
+                      ctx.beginPath();
+                      ctx.arc(x + eventMargin + 18, eventY + (dynamicHeight / 2), 8, 0, 2 * Math.PI);
+                      ctx.fill();
+                      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                      ctx.lineWidth = 2;
+                      ctx.stroke();
+
+                      ctx.fillStyle = finalTextColor;
+                      ctx.textAlign = 'left';
+                      let textY = eventY + 24 - (((lines.length - 1) * 18) / 2); 
+                      lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += 18; });
+                  } else {
+                      ctx.fillStyle = finalTextColor; ctx.textAlign = 'center';
+                      let textY = eventY + 24; 
+                      lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += 18; });
+                  }
                   
                   eventY += dynamicHeight + eventSpacing;
                 });
-                
                 maxWeekHeight = Math.max(maxWeekHeight, eventY - currentY);
               });
-              
               currentY += maxWeekHeight + 30; 
             });
 
             if (legendItems.length > 0) {
-              currentY += 40;
-              ctx.fillStyle = '#000000';
-              ctx.font = 'bold 24px Arial';
-              ctx.textAlign = 'left';
-              ctx.fillText('LEGENDA:', padding, currentY + 24);
-              
-              const itemsPerRow = 5;
-              const itemWidth = (contentWidth - 150 - ((itemsPerRow - 1) * 10)) / itemsPerRow;
-              
+              currentY += 40; ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('LEGENDA:', padding, currentY + 24);
+              const itemsPerRow = 5; const itemWidth = (contentWidth - 150 - ((itemsPerRow - 1) * 10)) / itemsPerRow;
               legendItems.forEach((item, idx) => {
-                const row = Math.floor(idx / itemsPerRow);
-                const col = idx % itemsPerRow;
-                const itemX = padding + 150 + (col * (itemWidth + 10));
-                const itemY = currentY + (row * 45);
-                
-                ctx.fillStyle = item.color || '#000000';
-                ctx.beginPath();
-                ctx.roundRect(itemX, itemY, itemWidth, 36, 18);
-                ctx.fill();
-                
-                ctx.fillStyle = getTextColor(item.color);
-                ctx.font = 'bold 16px Arial';
-                ctx.textAlign = 'center';
-                
-                let label = item.label || '';
-                while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
+                const itemX = padding + 150 + ((idx % itemsPerRow) * (itemWidth + 10)); const itemY = currentY + (Math.floor(idx / itemsPerRow) * 45);
+                ctx.fillStyle = item.color || '#000000'; ctx.beginPath(); ctx.roundRect(itemX, itemY, itemWidth, 36, 18); ctx.fill();
+                ctx.fillStyle = getTextColor(item.color); ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center';
+                let label = item.label || ''; while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
                 ctx.fillText(label, itemX + (itemWidth / 2), itemY + 24);
               });
             }
-            
             return { canvas, finalHeight };
           };
 
-          const exportAsImage = async () => {
-            try {
-              const { canvas } = drawCalendarToCanvas();
-              canvas.toBlob((blob) => {
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
-                link.download = `calendario-${companyName}-${months[month]}-${year}-HQ.png`;
-                link.click();
-                URL.revokeObjectURL(url);
-              }, 'image/png', 1.0);
-            } catch (error) { alert('Erro ao exportar imagem.'); }
-          };
-
-          const exportAsPDF = async () => {
-            try {
-              if (!window.jspdf) {
-                const scriptPDF = document.createElement('script');
-                scriptPDF.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-                document.head.appendChild(scriptPDF);
-                await new Promise((resolve) => scriptPDF.onload = resolve);
-              }
-              const { canvas, finalHeight } = drawCalendarToCanvas();
-              const imgData = canvas.toDataURL('image/png', 1.0);
-              
-              const pdf = new window.jspdf.jsPDF({
-                orientation: finalHeight > 1920 ? 'portrait' : 'landscape',
-                unit: 'px',
-                format: [1920, finalHeight],
-                compress: true
-              });
-              
-              pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight, '', 'FAST');
-              const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa';
-              pdf.save(`calendario-${companyName}-${months[month]}-${year}-HQ.pdf`);
-            } catch (error) { alert('Erro ao exportar PDF.'); }
-          };
+          const exportAsImage = async () => { try { const { canvas } = drawCalendarToCanvas(); canvas.toBlob((blob) => { const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa'; link.download = `calendario-${companyName}-${months[month]}-${year}-HQ.png`; link.click(); URL.revokeObjectURL(url); }, 'image/png', 1.0); } catch (error) { alert('Erro ao exportar imagem.'); } };
+          const exportAsPDF = async () => { try { if (!window.jspdf) { const scriptPDF = document.createElement('script'); scriptPDF.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; document.head.appendChild(scriptPDF); await new Promise((resolve) => scriptPDF.onload = resolve); } const { canvas, finalHeight } = drawCalendarToCanvas(); const imgData = canvas.toDataURL('image/png', 1.0); const pdf = new window.jspdf.jsPDF({ orientation: finalHeight > 1920 ? 'portrait' : 'landscape', unit: 'px', format: [1920, finalHeight], compress: true }); pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight, '', 'FAST'); const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa'; pdf.save(`calendario-${companyName}-${months[month]}-${year}-HQ.pdf`); } catch (error) { alert('Erro ao exportar PDF.'); } };
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 font-bold text-gray-500">Carregando Nuvem...</div>;
 
@@ -801,7 +1041,6 @@
                               <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">{isResetMode ? 'Recuperar Senha' : 'Calendário UPLI'}</h2>
                               <p className="text-gray-500 text-sm mt-1">{isResetMode ? 'Digite seu e-mail para receber o link' : 'Faça login para acessar a nuvem'}</p>
                           </div>
-                          
                           {isResetMode ? (
                               <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
                                   <input type="email" placeholder="Seu e-mail cadastrado" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
@@ -824,34 +1063,138 @@
           const daysInMonth = getDaysInMonth(year, month);
           const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
           const weeks = getWeeks();
-          
-          const filteredListEvents = getEventsByFilterType(listFilter).map(e => {
-              const oIdx = safeEvents.findIndex(ev => ev.day === e.day && ev.text === e.text && ev.month === e.month);
-              return {...e, originalIndex: oIdx};
-          });
+          const isCentral = selectedCompany === UPLI_GERAL_ID;
 
           return (
             <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
               
+              {/* MODAL DE IMPORTAÇÃO */}
+              {showImportModal && (
+                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full relative">
+                          <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportTargetCompany(''); }} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
+                          <h3 className="font-black text-xl mb-4 text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Upload/> Importar Posts</h3>
+                          
+                          <div className="space-y-4">
+                              <div>
+                                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Para qual empresa deseja importar?</label>
+                                  <select value={importTargetCompany} onChange={e => setImportTargetCompany(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
+                                      <option value="">Selecione uma empresa...</option>
+                                      {companies.filter(c => c.id !== UPLI_GERAL_ID).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                              </div>
+                              
+                              <div>
+                                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Selecione o arquivo (.txt)</label>
+                                  <input type="file" accept=".txt" onChange={e => setImportFile(e.target.files[0])} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg text-sm dark:bg-gray-700 dark:text-white cursor-pointer" />
+                              </div>
+                              
+                              <div>
+                                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer bg-indigo-50 dark:bg-indigo-900 p-2 rounded-lg border border-indigo-100 dark:border-indigo-600">
+                                      <input type="checkbox" checked={importToCentral} onChange={e => setImportToCentral(e.target.checked)} className="w-4 h-4 cursor-pointer" />
+                                      Enviar cópia para o Calendário Central (UPLI Geral)
+                                  </label>
+                              </div>
+
+                              <button onClick={processImport} disabled={importing || !importFile || !importTargetCompany} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-indigo-700 transition disabled:opacity-50 mt-4">
+                                  {importing ? 'Importando...' : 'Confirmar Importação'}
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {/* MODAL DE EDIÇÃO DE POST E STATUS */}
+              {editingEventIndex !== null && !isSelectionMode && (
+                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative">
+                          <button onClick={() => setEditingEventIndex(null)} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
+                          <h3 className="font-black text-xl mb-4 text-gray-800 dark:text-white flex items-center gap-2"><Edit2/> Detalhes do Post</h3>
+                          
+                          {isAdmin ? (
+                              <div className="space-y-4">
+                                  <div className="flex gap-2">
+                                      <div className="w-24">
+                                          <label className="block text-xs font-bold text-gray-500 mb-1">Dia</label>
+                                          <input type="number" value={editEventForm.day} onChange={e=>setEditEventForm({...editEventForm, day: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none font-bold text-center dark:bg-gray-700 dark:text-white" />
+                                      </div>
+                                      <div className="flex-1">
+                                          <label className="block text-xs font-bold text-gray-500 mb-1">Título</label>
+                                          <input type="text" value={editEventForm.text} onChange={e=>setEditEventForm({...editEventForm, text: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white" />
+                                      </div>
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 mb-1">Anotações / Roteiro</label>
+                                      <textarea value={editEventForm.notes} onChange={e=>setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg h-24 outline-none resize-none dark:bg-gray-700 dark:text-white" placeholder="Escreva aqui..."></textarea>
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center gap-1">🔗 Link da Arte</label>
+                                      <input type="url" value={editEventForm.imageUrl} onChange={e=>setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg text-sm outline-none dark:bg-gray-700 dark:text-white" placeholder="https://..."/>
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 mb-1">Categoria</label>
+                                      <select value={editEventForm.color} onChange={e=>setEditEventForm({...editEventForm, color: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
+                                          {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                      </select>
+                                  </div>
+                              </div>
+                          ) : (
+                              <div className="space-y-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
+                                  <p className="text-sm"><strong className="text-gray-500">Dia:</strong> {editEventForm.day}</p>
+                                  <p className="text-lg font-black"><strong className="text-gray-500 text-sm font-bold">Título:</strong> {editEventForm.text}</p>
+                                  <p className="text-sm"><strong className="text-gray-500 block mb-1">Anotações:</strong> <span className="whitespace-pre-wrap block bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">{editEventForm.notes || 'Nenhuma anotação.'}</span></p>
+                                  {editEventForm.imageUrl && <a href={editEventForm.imageUrl} target="_blank" className="text-blue-600 dark:text-blue-400 font-bold underline text-sm mt-2 inline-block">🔗 Acessar Link da Arte</a>}
+                              </div>
+                          )}
+
+                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                              <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wide">Status da Etapa</label>
+                              <div className="flex flex-wrap justify-center gap-2">
+                                  {Object.entries(STATUS_PIPELINE).map(([key, val]) => {
+                                      const isActive = getEventStatus(editingEventIndex) === key;
+                                      return (
+                                          <button
+                                              key={key}
+                                              onClick={() => toggleEventStatus(editingEventIndex, key)}
+                                              style={{
+                                                  backgroundColor: isActive ? val.bg : 'transparent',
+                                                  color: isActive ? val.text : (darkMode ? '#D1D5DB' : '#4B5563'),
+                                                  borderColor: val.bg
+                                              }}
+                                              className={`border-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${isActive ? 'shadow-md scale-105' : 'hover:opacity-70'}`}
+                                          >
+                                              {val.label}
+                                          </button>
+                                      )
+                                  })}
+                              </div>
+                          </div>
+                          
+                          {isAdmin && (
+                              <div className="flex gap-2 mt-6">
+                                  <button onClick={saveEditEvent} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-blue-700 transition">Salvar Post</button>
+                                  <button onClick={() => removeEvent(editingEventIndex)} className="bg-red-50 text-red-600 border border-red-200 dark:bg-gray-700 dark:border-gray-600 px-5 py-3 rounded-lg font-bold hover:bg-red-500 hover:text-white transition"><Trash2/></button>
+                              </div>
+                          )}
+                      </div>
+                  </div>
+              )}
+
               {/* MODAL DE PERFIL RESTRITO */}
               {showProfileModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
-                          
                           <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
                               <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
                               <p className="text-lg font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
                                   {userRole === 'master' ? '👑 Master' : userRole === 'admin' ? '🛡️ Administrador' : '🔒 Cliente'}
                               </p>
-                              <p className="text-[10px] text-gray-500 mt-1">Seu cargo só pode ser alterado pela diretoria.</p>
                           </div>
-
                           <div>
                               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Nome de Exibição</label>
                               <input type="text" value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Ex: Stefany..." />
                           </div>
-
                           <div className="pt-4 flex flex-col gap-2">
                               <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Nome</button>
                               <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">Redefinir Senha</button>
@@ -865,56 +1208,84 @@
               {showRolesModal && userRole === 'master' && (
                   <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
-                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Gerenciar Acessos</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Qualquer pessoa não listada aqui entra automaticamente como "Cliente" (sem poder editar).</p>
+                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Painel da Diretoria</h3>
                           
-                          <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600">
-                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">E-mail do Usuário</label>
-                              <input type="email" value={roleEmailInput} onChange={e => setRoleEmailInput(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none mb-3" placeholder="exemplo@gmail.com" />
-                              
-                              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Permissão</label>
-                              <select value={roleSelectInput} onChange={e => setRoleSelectInput(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3">
+                          <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600 shadow-sm">
+                              <h4 className="font-black text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">➕ Criar Nova Conta</h4>
+                              <div className="flex gap-2 mb-2">
+                                  <input type="email" value={newAccEmail} onChange={e => setNewAccEmail(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm" placeholder="E-mail" />
+                                  <input type="text" value={newAccPassword} onChange={e => setNewAccPassword(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm" placeholder="Senha (Min 6)" />
+                              </div>
+                              <select value={newAccRole} onChange={e => setNewAccRole(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3 text-sm">
+                                  <option value="master">Master (Dono)</option>
                                   <option value="admin">Administrador (Pode editar tudo)</option>
-                                  <option value="cliente">Cliente (Somente visualização)</option>
+                                  <option value="cliente">Cliente (Somente visualizar)</option>
                               </select>
-                              
-                              <button onClick={handleSaveRole} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Permissão</button>
+                              <button onClick={handleCreateAccount} disabled={creatingAcc} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex justify-center items-center gap-2">
+                                  {creatingAcc ? 'Sincronizando...' : 'Criar Conta e Liberar Acesso'}
+                              </button>
                           </div>
 
-                          <div className="mt-4">
-                              <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos Concedidos:</h4>
-                              <div className="space-y-2">
-                                  {Object.keys(globalRoles).map(email => (
-                                      <div key={email} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded border dark:border-gray-700">
-                                          <div className="flex flex-col">
-                                              <span className="font-bold text-sm">{email}</span>
-                                              <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>{globalRoles[email]}</span>
-                                          </div>
-                                          <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 dark:bg-red-900 px-2 py-1 rounded">Rebaixar</button>
-                                      </div>
-                                  ))}
-                                  {Object.keys(globalRoles).length === 0 && <p className="text-xs text-gray-400">Nenhum acesso cadastrado.</p>}
+                          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border dark:border-gray-700 mt-4">
+                              <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-2 text-sm">Alterar cargo de uma conta existente:</h4>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                  <input type="email" value={roleEmailInput} onChange={e => setRoleEmailInput(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none text-sm" placeholder="E-mail" />
+                                  <select value={roleSelectInput} onChange={e => setRoleSelectInput(e.target.value)} className="border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none font-bold text-sm">
+                                      <option value="master">Master</option>
+                                      <option value="admin">Admin</option>
+                                      <option value="cliente">Cliente</option>
+                                  </select>
+                                  <button onClick={handleSaveRole} className="bg-gray-800 dark:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm">Salvar</button>
                               </div>
                           </div>
 
-                          <button onClick={() => setShowRolesModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-4">Fechar Painel</button>
+                          <div className="mt-4">
+                              <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos:</h4>
+                              <div className="space-y-2">
+                                  {Object.keys(globalRoles).map(email => (
+                                      <div key={email} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded border dark:border-gray-700 shadow-sm">
+                                          <div className="flex flex-col">
+                                              <span className="font-bold text-sm dark:text-gray-200">{email}</span>
+                                              <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'master' ? 'text-yellow-600' : globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>
+                                                  {globalRoles[email] === 'master' ? '👑 Master' : globalRoles[email]}
+                                              </span>
+                                          </div>
+                                          {email !== MEU_EMAIL_MASTER && (
+                                              <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 border border-red-100 dark:border-red-900 dark:bg-red-900 px-3 py-2 rounded-lg transition">Rebaixar</button>
+                                          )}
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <button onClick={() => setShowRolesModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 rounded-lg hover:bg-gray-300 transition mt-4">Fechar Painel</button>
                       </div>
                   </div>
               )}
 
               <div className="max-w-7xl mx-auto space-y-6">
                 
-                {/* CABEÇALHO SUPERIOR */}
+                {/* CABEÇALHO SUPERIOR LIMPO */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-                    <div>
-                      <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800 dark:text-white">
-                        <CalendarDays /> Calendário UPLI
-                      </h1>
-                      <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Conectado à Nuvem Firebase</p>
+                  <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    
+                    <div className="flex items-center w-full md:w-auto justify-between md:justify-start">
+                        <div>
+                          <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800 dark:text-white">
+                            <CalendarDays /> Calendário UPLI
+                          </h1>
+                          <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Nuvem Online</p>
+                        </div>
+                        
+                        <div className="block md:hidden flex items-center gap-2">
+                            <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition shadow-sm">
+                                {darkMode ? '☀️' : '🌙'}
+                            </button>
+                            <button onClick={handleLogout} className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg p-2 transition shadow-sm"><LogOut /></button>
+                        </div>
                     </div>
                     
-                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                    <div className="hidden md:flex flex-wrap items-center gap-2">
                       <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition hover:scale-110 shadow-sm" title="Alternar Tema">
                           {darkMode ? '☀️' : '🌙'}
                       </button>
@@ -925,26 +1296,27 @@
                           </button>
                       )}
 
-                      <div className="flex items-center gap-3 mr-2 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 px-4 py-2 rounded-xl shadow-sm w-full md:w-auto">
+                      <div className="flex items-center gap-3 mr-2 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 px-4 py-2 rounded-xl shadow-sm">
                           <div className="bg-blue-200 dark:bg-gray-600 text-blue-700 dark:text-blue-300 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
-                          <div className="flex flex-col leading-tight flex-1">
+                          <div className="flex flex-col leading-tight">
                               <span className="text-sm font-black text-gray-800 dark:text-white">{currentUserName}</span>
                               <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'master' ? 'text-yellow-600 dark:text-yellow-400' : userRole === 'admin' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-                                  {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Administrador' : 'Cliente'}
+                                  {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Admin' : 'Cliente'}
                               </span>
                           </div>
                           <button onClick={() => setShowProfileModal(true)} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition p-1 ml-1"><Edit2/></button>
                       </div>
 
-                      <button onClick={exportAsImage} className="flex-1 md:flex-none bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 shadow-sm"><ImageIcon /> Baixar PNG</button>
-                      <button onClick={exportAsPDF} className="flex-1 md:flex-none bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center justify-center gap-2 shadow-sm"><PDFIcon /> Baixar PDF</button>
-
-                      <button onClick={handleLogout} className="flex-1 md:flex-none bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition flex items-center justify-center gap-2 shadow-sm"><LogOut /> Sair</button>
+                      <div className="flex gap-2">
+                          <button onClick={exportAsImage} className="bg-purple-600 text-white rounded-lg px-3 py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center gap-1 shadow-sm"><ImageIcon /> PNG</button>
+                          <button onClick={exportAsPDF} className="bg-purple-800 text-white rounded-lg px-3 py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center gap-1 shadow-sm"><PDFIcon /> PDF HD</button>
+                          <button onClick={handleLogout} className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition flex items-center gap-1 shadow-sm"><LogOut /> Sair</button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* PAINEL DE ADMINISTRAÇÃO (SÓ APARECE SE FOR ADMIN OU MASTER) */}
+                {/* PAINEL DE ADMINISTRAÇÃO */}
                 {isAdmin && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div className="space-y-6">
@@ -954,37 +1326,79 @@
                         <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                         <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
                       </div>
-                      {companies.map(company => (
-                            <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 mb-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
-                                  <div className="flex-1 font-bold cursor-pointer dark:text-white" onClick={() => setSelectedCompany(company.id)}>{company.name}</div>
-                                  <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 px-2"><Trash2 /></button>
-                            </div>
-                      ))}
+                      <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
+                          {companies.map(company => (
+                                <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
+                                    {editingCompany === company.id ? (
+                                        <div className="flex flex-1 items-center gap-2 mr-2">
+                                            <input type="text" value={editCompanyName} onChange={e=>setEditCompanyName(e.target.value)} className="w-full border-2 border-blue-400 rounded px-2 py-1 text-black font-bold outline-none" />
+                                            <button onClick={saveEditCompany} className="bg-green-500 text-white px-3 py-1 rounded font-bold hover:bg-green-600">✓</button>
+                                            <button onClick={cancelEditCompany} className="bg-gray-400 text-white px-3 py-1 rounded font-bold hover:bg-gray-500">X</button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 font-bold cursor-pointer dark:text-white px-2 py-1 flex items-center gap-2" onClick={() => setSelectedCompany(company.id)}>
+                                            {company.id === UPLI_GERAL_ID ? '👑 ' : ''}{company.name}
+                                        </div>
+                                    )}
+                                    
+                                    <div className="flex items-center gap-1">
+                                        {company.id !== UPLI_GERAL_ID && (
+                                            <button onClick={() => startEditCompany(company)} className="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition"><Edit2 /></button>
+                                        )}
+                                        {company.id !== UPLI_GERAL_ID && (
+                                            <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 bg-red-100 hover:bg-red-200 p-2 rounded-lg transition ml-1"><Trash2 /></button>
+                                        )}
+                                    </div>
+                                </div>
+                          ))}
+                      </div>
                     </div>
                   </div>
 
                   <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
-                      <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias</h3>
-                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                        <input type="text" placeholder="Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                        <div className="flex gap-2">
-                            <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
-                            <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto">Add</button>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {safeColorOptions.map(color => (
-                            <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                              {color.label} <button onClick={() => removeCategory(color.id)} className="ml-1 hover:text-red-900 font-black text-sm">×</button>
-                            </div>
-                        ))}
-                      </div>
+                      <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias do Calendário</h3>
+                      {!isCentral ? (
+                          <>
+                              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                                <input type="text" placeholder="Nova Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                                <div className="flex gap-2">
+                                    <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
+                                    <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto hover:bg-blue-700">Adicionar</button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {safeColorOptions.map(color => {
+                                    if (editingColor === color.id) {
+                                        return (
+                                            <div key={color.id} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-blue-300 dark:border-blue-600 shadow-inner">
+                                                <input type="color" value={editColorValue} onChange={e => setEditColorValue(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
+                                                <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-24 text-xs font-bold border border-gray-300 dark:border-gray-600 rounded px-2 py-1 outline-none text-black dark:text-white dark:bg-gray-700" />
+                                                <button onClick={saveEditCategory} className="bg-green-500 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-green-600">✓</button>
+                                                <button onClick={cancelEditCategory} className="bg-gray-400 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-gray-500">X</button>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group transition-transform hover:scale-105">
+                                          {color.label}
+                                          <div className="flex items-center ml-1 border-l border-white border-opacity-30 pl-1 gap-1">
+                                              <button onClick={() => startEditCategory(color)} className="opacity-70 hover:opacity-100 font-black text-[10px] drop-shadow-md" title="Editar Nome/Cor">✏️</button>
+                                              <button onClick={() => removeCategory(color.id)} className="opacity-70 hover:opacity-100 font-black text-[12px] drop-shadow-md" title="Apagar">×</button>
+                                          </div>
+                                        </div>
+                                    );
+                                })}
+                              </div>
+                          </>
+                      ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 italic">As categorias do UPLI Geral são geradas automaticamente com base no nome das outras empresas criadas.</p>
+                      )}
                     </div>
 
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
                       <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-3">
                         <div className="flex flex-col sm:flex-row gap-2">
                             <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
                             <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
@@ -996,17 +1410,23 @@
                             <span className="text-xl">🔗</span>
                             <div className="flex-1">
                                 <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400">Link da Imagem / Arte (Opcional)</label>
-                                <input type="url" placeholder="Cole o link do Drive, Site..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none bg-transparent dark:border-gray-600" />
+                                <input type="url" placeholder="Cole o link do Drive, Canva, etc..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none bg-transparent dark:border-gray-600" />
                             </div>
-                            {newEvent.imageUrl && <img src={newEvent.imageUrl} className="h-8 w-8 object-cover rounded border shadow-sm" alt="" onError={(e) => e.target.style.display='none'} />}
                         </div>
 
+                        {!isCentral && (
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer bg-blue-50 dark:bg-gray-900 p-2 rounded-lg border border-blue-100 dark:border-gray-600">
+                                <input type="checkbox" checked={sendToUpliGeral} onChange={e => setSendToUpliGeral(e.target.checked)} className="w-4 h-4 cursor-pointer" />
+                                Enviar cópia para o Calendário Central (UPLI Geral)
+                            </label>
+                        )}
+
                         <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                            <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full">
-                              <option value="">Escolher cor...</option>
+                            <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
+                              <option value="">Escolher categoria...</option>
                               {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                             </select>
-                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-6 py-2 font-bold w-full sm:w-auto shadow-sm">Postar</button>
+                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-8 py-2 font-black w-full sm:w-auto shadow-md hover:bg-green-700 transition uppercase tracking-wide">Postar</button>
                         </div>
                       </div>
                     </div>
@@ -1014,131 +1434,75 @@
                 </div>
                 )}
 
-                {/* TELA DE GERENCIAR POSTS (LISTA) */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700">
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
-                      <h3 className="font-bold text-xl text-gray-800 dark:text-white">Gerenciar Posts (Mostrando {filteredListEvents.length})</h3>
-                      
-                      <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700 flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-bold text-gray-500 dark:text-gray-400"><FilterIcon/> Filtros da Lista:</span>
-                          <button onClick={() => setListFilter('ALL')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                          <button onClick={() => setListFilter('DONE')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'DONE' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>Feitos ✓</button>
-                          <button onClick={() => setListFilter('LATE')} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter === 'LATE' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>Atrasados ⚠</button>
-                          <span className="text-gray-300 dark:text-gray-600 mx-1 hidden sm:inline">|</span>
-                          {getLegendItems().map(cat => (
-                              <button key={cat.id} onClick={() => setListFilter(cat.id)} style={listFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-[10px] font-bold rounded-full transition ${listFilter !== cat.id && 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:opacity-80'}`}>
-                                  {cat.label}
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-
-                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                    {filteredListEvents.map((event) => {
-                        const originalIndex = event.originalIndex;
-                        const category = safeColorOptions.find(c => c.id === event.color);
-                        if(!category) return null;
-                        const status = getEventStatus(originalIndex);
-                        
-                        if (editingEventIndex === originalIndex) {
-                          return (
-                            <div key={originalIndex} className="bg-blue-50 dark:bg-gray-700 border-2 border-blue-400 dark:border-blue-600 rounded-xl p-4 flex flex-col gap-3 shadow-md">
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <input type="number" placeholder="Dia" value={editEventForm.day} onChange={e => setEditEventForm({...editEventForm, day: e.target.value})} className="w-full sm:w-20 border p-2 rounded-lg outline-none font-bold text-center dark:bg-gray-800 dark:text-white dark:border-gray-600" />
-                                <input type="text" value={editEventForm.text} onChange={e => setEditEventForm({...editEventForm, text: e.target.value})} className="flex-1 border p-2 rounded-lg outline-none w-full dark:bg-gray-800 dark:text-white dark:border-gray-600" />
-                              </div>
-                              <textarea value={editEventForm.notes} onChange={e => setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border p-2 rounded-lg outline-none text-sm h-16 dark:bg-gray-800 dark:text-white dark:border-gray-600" placeholder="Anotações..."></textarea>
-                              
-                              <div className="flex flex-col gap-1">
-                                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-300">🔗 Link da Imagem / Arte</label>
-                                  <input type="url" value={editEventForm.imageUrl} onChange={e => setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border p-2 rounded-lg outline-none text-sm dark:bg-gray-800 dark:text-white dark:border-gray-600" placeholder="Cole o link aqui..."/>
-                              </div>
-
-                              <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                                  <select value={editEventForm.color} onChange={e => setEditEventForm({...editEventForm, color: e.target.value})} className="flex-1 border p-2 rounded-lg font-bold bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600">
-                                    {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                  </select>
-                                  <div className="flex gap-2 w-full sm:w-auto">
-                                      <button onClick={saveEditEvent} className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-green-600 transition">Salvar</button>
-                                      <button onClick={cancelEditEvent} className="flex-1 bg-gray-400 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-gray-500 transition">Cancelar</button>
-                                  </div>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div key={originalIndex} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex flex-col gap-2 transition hover:bg-white dark:hover:bg-gray-800 hover:shadow-lg">
-                            <div className="flex items-start gap-3">
-                              <span className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-black text-sm px-3 py-1 rounded-lg mt-0.5 shadow-sm">D{event.day}</span>
-                              <span style={{backgroundColor: category.color, color: getTextColor(category.color)}} className="text-sm font-bold px-3 py-1 rounded-lg shadow-sm">{event.text}</span>
-                            </div>
-                            
-                            {event.imageUrl && (
-                                <div className="mt-1 flex flex-col items-start gap-1">
-                                    <a href={event.imageUrl} target="_blank" className="text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm font-bold">
-                                        🔗 Acessar Link da Arte
-                                    </a>
-                                    <img src={event.imageUrl} alt="" className="h-16 w-auto object-cover rounded border border-gray-300 dark:border-gray-600" onError={(e) => e.target.style.display='none'} />
-                                </div>
-                            )}
-
-                            {event.notes && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900 dark:text-yellow-200 text-yellow-800 text-xs p-3 rounded-lg border border-yellow-200 dark:border-yellow-700 flex gap-2 items-start mt-2 shadow-sm">
-                                    <MessageSquare /> <p className="whitespace-pre-wrap font-medium">{event.notes}</p>
-                                </div>
-                            )}
-                            
-                            <div className="text-[10px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg px-3 py-2 flex flex-col mt-2 border border-gray-200 dark:border-gray-700 shadow-sm font-medium">
-                                <span>👤 Criado por: {event.createdBy || 'Desconhecido'} em {formatDateStr(event.createdAt) || '-'}</span>
-                                {event.updatedBy && <span>✏️ Editado por: {event.updatedBy} em {formatDateStr(event.updatedAt)}</span>}
-                            </div>
-
-                            {isAdmin && (
-                                <div className="flex flex-col sm:flex-row justify-between sm:items-center mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
-                                  <div className="flex gap-2 w-full sm:w-auto">
-                                    <button onClick={() => toggleEventStatus(originalIndex, 'done')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm ${status === 'done' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>✓ Feito</button>
-                                    <button onClick={() => toggleEventStatus(originalIndex, 'late')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm ${status === 'late' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>⚠ Atraso</button>
-                                  </div>
-                                  <div className="flex gap-2 w-full sm:w-auto">
-                                    <button onClick={() => exportSingleToGoogleCalendar(event)} className="flex-1 sm:flex-none bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm">
-                                        + Agenda
-                                    </button>
-                                    <span className="text-gray-300 dark:text-gray-600 mx-1 hidden sm:inline">|</span>
-                                    <button onClick={() => startEditEvent(event, originalIndex)} className="flex-1 sm:flex-none text-blue-600 dark:text-blue-400 hover:text-blue-800 bg-blue-50 dark:bg-gray-700 hover:bg-blue-100 px-4 py-2 rounded-lg transition font-bold shadow-sm flex justify-center items-center"><Edit2 /></button>
-                                    <button onClick={() => removeEvent(originalIndex)} className="flex-1 sm:flex-none text-red-600 dark:text-red-400 hover:text-red-800 bg-red-50 dark:bg-gray-700 hover:bg-red-100 px-4 py-2 rounded-lg transition font-bold shadow-sm flex justify-center items-center"><Trash2 /></button>
-                                  </div>
-                                </div>
-                            )}
-                          </div>
-                        );
-                    })}
-                  </div>
-                </div>
-
-                {/* TELA DO CALENDÁRIO VISUAL */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                  
+                  {/* PAINEL DE MODO DE SELEÇÃO */}
+                  {isSelectionMode && (
+                      <div className="bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-400 p-4 rounded-xl mb-6 shadow-md transition-all">
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div className="flex-1">
+                                  <h3 className="font-black text-indigo-800 dark:text-indigo-200 flex items-center gap-2">🛠️ MODO DE SELEÇÃO ATIVADO</h3>
+                                  <p className="text-sm text-indigo-600 dark:text-indigo-300">Clique nos posts para selecionar ou use os atalhos por categoria abaixo.</p>
+                                  <div className="flex flex-wrap gap-2 mt-3 items-center">
+                                      {getLegendItems().map(cat => (
+                                          <button 
+                                              key={cat.id} 
+                                              onClick={() => toggleCategorySelection(cat.id)}
+                                              style={{ backgroundColor: cat.color, color: getTextColor(cat.color) }}
+                                              className="px-3 py-1.5 text-[10px] font-black rounded-lg shadow-sm hover:scale-105 transition-transform uppercase"
+                                          >
+                                              + {cat.label}
+                                          </button>
+                                      ))}
+                                  </div>
+                              </div>
+                              <div className="text-right flex flex-col items-start md:items-end w-full md:w-auto gap-3">
+                                  <span className="font-black text-2xl text-indigo-700 dark:text-indigo-300">{selectedEvents.length} selecionados</span>
+                                  <div className="flex flex-wrap gap-2 w-full justify-end">
+                                      <button onClick={exportSelectedToTXT} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Download/> Exportar TXT</button>
+                                      <button onClick={deleteSelectedEvents} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Trash2/> Apagar</button>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+
+                  {/* NAVEGAÇÃO E BOTÕES (CENTRO DO CALENDÁRIO) */}
                   <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
-                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    
+                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full md:w-auto justify-between md:justify-start">
                         <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">⬅️</button>
-                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[200px]">
+                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[150px] md:min-w-[200px]">
                           {months[month]} {year}
                         </h2>
                         <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">➡️</button>
                     </div>
-                    <h3 className="text-xl md:text-2xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm">{companies.find(c => c.id === selectedCompany)?.name}</h3>
+
+                    {isAdmin && (
+                        <div className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
+                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT para qualquer calendário">
+                                <Upload /> Importar
+                            </button>
+                            
+                            <button onClick={handleSelectionToggle} className={`${isSelectionMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm`} title="Selecionar posts">
+                                <MultiSelectIcon /> {isSelectionMode ? `Cancelar Seleção` : 'Selecionar'}
+                            </button>
+                        </div>
+                    )}
+
+                    <h3 className="text-xl md:text-3xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm whitespace-nowrap w-full md:w-auto text-center">
+                        {companies.find(c => c.id === selectedCompany)?.name}
+                    </h3>
                   </div>
 
-                  {/* FILTRO DO CALENDÁRIO */}
+                  {/* FILTRO DE STATUS */}
                   <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
-                      <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros do Calendário:</span>
-                      <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                      <button onClick={() => setCalendarFilter('DONE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'DONE' ? 'bg-green-600 text-white shadow-md' : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'}`}>Concluídos ✓</button>
-                      <button onClick={() => setCalendarFilter('LATE')} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter === 'LATE' ? 'bg-red-600 text-white shadow-md' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}`}>Atrasados ⚠</button>
+                      <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
+                      <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
                       <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                      {getLegendItems().map(cat => (
-                          <button key={cat.id} onClick={() => setCalendarFilter(cat.id)} style={calendarFilter === cat.id ? { backgroundColor: cat.color, color: getTextColor(cat.color) } : {}} className={`px-3 py-1 text-xs font-bold rounded-full transition ${calendarFilter !== cat.id && 'bg-gray-200 border border-gray-300 text-gray-600 opacity-70 hover:opacity-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
-                              {cat.label}
+                      {Object.entries(STATUS_PIPELINE).map(([key, val]) => (
+                          <button key={key} onClick={() => setCalendarFilter(key)} style={{backgroundColor: calendarFilter === key ? val.bg : 'transparent', color: calendarFilter === key ? val.text : (darkMode ? '#9CA3AF' : '#4B5563'), border: `2px solid ${val.bg}`}} className={`px-3 py-1 text-xs font-bold rounded-lg transition ${calendarFilter === key ? 'shadow-md scale-105' : 'hover:opacity-70'}`}>
+                              {val.label}
                           </button>
                       ))}
                   </div>
@@ -1168,7 +1532,7 @@
                               {week.map((day, dIdx) => (
                                 <div 
                                   key={dIdx} 
-                                  className="flex flex-col gap-2 p-1 min-h-[100px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                                  className="flex flex-col gap-2 p-1 min-h-[100px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 relative"
                                   onDragOver={onDragOver}
                                   onDrop={(e) => day ? onDrop(e, day) : null}
                                 >
@@ -1176,45 +1540,69 @@
                                     const color = safeColorOptions.find(c => c.id === event.color);
                                     if (!color) return null;
                                     
-                                    const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                    const originalIndex = event._origIdx;
+                                    const eventKey = event._key;
                                     const status = getEventStatus(originalIndex);
-                                    const finalColor = getStatusColor(color.color, status);
-                                    const textColor = getTextColor(finalColor);
                                     
+                                    let finalBgColor = color.color;
+                                    let finalTextColor = getTextColor(color.color);
+
+                                    if (isCentral) {
+                                        if (status && STATUS_PIPELINE[status]) {
+                                            finalBgColor = STATUS_PIPELINE[status].bg;
+                                            finalTextColor = STATUS_PIPELINE[status].text;
+                                        } else {
+                                            finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
+                                            finalTextColor = darkMode ? '#D1D5DB' : '#374151';
+                                        }
+                                    }
+                                    
+                                    const isSelected = selectedEvents.includes(eventKey);
+
                                     return (
                                       <div
                                         key={eIdx}
-                                        draggable={isAdmin}
+                                        draggable={isAdmin && !isSelectionMode}
                                         onDragStart={(e) => onDragStart(e, originalIndex)}
-                                        style={{ backgroundColor: finalColor, color: textColor }}
-                                        className={`rounded-xl p-2 text-[11px] font-bold text-center shadow-md relative group break-words whitespace-normal leading-tight ${isAdmin ? 'cursor-grab active:cursor-grabbing hover:scale-105 transition-transform' : 'cursor-pointer'}`}
-                                        onClick={() => setExpandedNoteIndex(expandedNoteIndex === originalIndex ? null : originalIndex)}
+                                        style={{ backgroundColor: finalBgColor, color: finalTextColor }}
+                                        className={`rounded-2xl p-3 text-[11px] font-bold shadow-md relative group transition-all 
+                                            ${isAdmin ? 'cursor-pointer' : ''} 
+                                            ${isCentral ? 'flex flex-row items-center gap-2 text-left' : 'flex flex-col text-center justify-center'}
+                                            ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
+                                            ${isSelectionMode && !isSelected ? 'opacity-50 hover:opacity-100' : 'hover:scale-105'}
+                                        `}
+                                        onClick={() => {
+                                            if(isSelectionMode) toggleEventSelection(eventKey);
+                                            else if(isAdmin) startEditEvent(event, originalIndex);
+                                        }}
                                       >
-                                        {event.imageUrl && (
-                                            <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
+                                        {isSelectionMode && isSelected && (
+                                            <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
                                         )}
-                                        
-                                        <span>
-                                            {event.text}
-                                            {event.notes && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
-                                            {status === 'done' && <span className="ml-1">✓</span>}
-                                            {status === 'late' && <span className="ml-1">⚠</span>}
-                                        </span>
-                                        
-                                        {expandedNoteIndex === originalIndex && (
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-white p-4 rounded-xl shadow-2xl z-50 text-left text-xs cursor-text">
-                                                {event.notes && (
-                                                    <div className="mb-3">
-                                                        <p className="font-black text-sm border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">Anotações:</p>
-                                                        <p className="whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-700">{event.notes}</p>
-                                                    </div>
-                                                )}
-                                                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
-                                                    <p>👤 Criado por <span className="font-bold">{event.createdBy}</span></p>
-                                                    {event.updatedBy && <p>✏️ Editado por <span className="font-bold">{event.updatedBy}</span></p>}
+
+                                        {/* A BOLINHA NO UPLI GERAL (DESIGN PÍLULA) */}
+                                        {isCentral && (
+                                            <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
+                                        )}
+
+                                        <div className={`flex flex-col ${isCentral ? 'flex-1 overflow-hidden' : 'items-center w-full'}`}>
+                                            {event.imageUrl && !isCentral && (
+                                                <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
+                                            )}
+                                            
+                                            {/* TEXTO 100% VISÍVEL (QUEBRA LINHA) */}
+                                            <span className="leading-tight whitespace-normal break-words block w-full">
+                                                {getCleanDisplayText(event.text, isCentral, color.label)}
+                                                {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
+                                            </span>
+
+                                            {/* ETIQUETA DE STATUS PARA O CALENDÁRIO DO CLIENTE */}
+                                            {!isCentral && status && STATUS_PIPELINE[status] && (
+                                                <div className="mt-1 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: STATUS_PIPELINE[status].bg, color: STATUS_PIPELINE[status].text }}>
+                                                    {STATUS_PIPELINE[status].label}
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                       </div>
                                     );
                                   })}
@@ -1227,6 +1615,7 @@
                     </div>
                   </div>
 
+                  {/* VISÃO CELULAR */}
                   <div className="block md:hidden space-y-4 mt-2">
                     {daysArray.map(day => {
                       const dayEvents = getCalendarEventsForDay(day);
@@ -1256,37 +1645,68 @@
                                 const color = safeColorOptions.find(c => c.id === event.color);
                                 if (!color) return null;
                                 
-                                const originalIndex = safeEvents.findIndex(e => e.day === event.day && e.text === event.text && e.color === event.color && e.month === event.month && e.year === event.year);
+                                const originalIndex = event._origIdx;
+                                const eventKey = event._key;
                                 const status = getEventStatus(originalIndex);
-                                const finalColor = getStatusColor(color.color, status);
-                                const textColor = getTextColor(finalColor);
+                                
+                                let finalBgColor = color.color;
+                                let finalTextColor = getTextColor(color.color);
+
+                                if (isCentral) {
+                                    if (status && STATUS_PIPELINE[status]) {
+                                        finalBgColor = STATUS_PIPELINE[status].bg;
+                                        finalTextColor = STATUS_PIPELINE[status].text;
+                                    } else {
+                                        finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
+                                        finalTextColor = darkMode ? '#D1D5DB' : '#374151';
+                                    }
+                                }
+
+                                const isSelected = selectedEvents.includes(eventKey);
                                 
                                 return (
                                   <div
                                     key={eIdx}
-                                    draggable={isAdmin}
+                                    draggable={isAdmin && !isSelectionMode}
                                     onDragStart={(e) => onDragStart(e, originalIndex)}
-                                    style={{ backgroundColor: finalColor, color: textColor }}
-                                    className={`rounded-xl px-4 py-3 text-sm font-bold shadow-md flex flex-col break-words whitespace-normal leading-tight ${isAdmin ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                                    style={{ backgroundColor: finalBgColor, color: finalTextColor }}
+                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex whitespace-normal break-words leading-tight relative cursor-pointer transition-all
+                                        ${isCentral ? 'flex-row items-center gap-3 text-left' : 'flex-col text-center'}
+                                        ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
+                                        ${isSelectionMode && !isSelected ? 'opacity-50' : ''}
+                                    `}
+                                    onClick={() => {
+                                        if(isSelectionMode) toggleEventSelection(eventKey);
+                                        else if(isAdmin) startEditEvent(event, originalIndex);
+                                    }}
                                   >
-                                    {event.imageUrl && (
-                                      <div className="mb-2 flex flex-col gap-1">
-                                          <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm">🔗 Ver Arte</a>
-                                          <img src={event.imageUrl} className="w-full h-32 object-cover rounded border border-black border-opacity-20" alt="Arte" onError={(e) => e.target.style.display='none'} />
-                                      </div>
+                                    {isSelectionMode && isSelected && (
+                                        <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
                                     )}
-                                    <span className="text-base">
-                                        {event.text}
-                                        {status === 'done' && <span className="ml-2">✓</span>}
-                                        {status === 'late' && <span className="ml-2">⚠</span>}
-                                    </span>
-                                    {event.notes && (
-                                      <div style={{ backgroundColor: 'rgba(255,255,255,0.2)'}} className="mt-2 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner">
-                                          <p className="whitespace-pre-wrap">{event.notes}</p>
-                                      </div>
+
+                                    {isCentral && (
+                                        <div className="w-5 h-5 rounded-full shadow-inner border border-white border-opacity-50 flex-shrink-0" style={{ backgroundColor: color.color }}></div>
                                     )}
-                                    <div className="mt-2 text-[10px] opacity-80 bg-black bg-opacity-10 p-2 rounded-lg font-medium">
-                                       👤 Criado: {event.createdBy} {event.updatedBy ? `| ✏️ Editado: ${event.updatedBy}` : ''}
+
+                                    <div className={`flex flex-col ${isCentral ? 'flex-1' : 'w-full items-center'}`}>
+                                        {event.imageUrl && !isCentral && (
+                                            <div className="mb-2 flex flex-col gap-1 mt-1">
+                                                <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm" onClick={e => e.stopPropagation()}>🔗 Ver Arte</a>
+                                            </div>
+                                        )}
+                                        <span className="text-base block w-full whitespace-normal break-words">
+                                            {getCleanDisplayText(event.text, isCentral, color.label)}
+                                        </span>
+                                        {event.notes && !isCentral && (
+                                            <div className="mt-2 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
+                                                <p className="whitespace-pre-wrap">{event.notes}</p>
+                                            </div>
+                                        )}
+                                        {!isCentral && status && STATUS_PIPELINE[status] && (
+                                            <div className="mt-2 text-[10px] px-2 py-1 rounded-md inline-block font-black uppercase tracking-wider w-fit shadow-sm" style={{ backgroundColor: STATUS_PIPELINE[status].bg, color: STATUS_PIPELINE[status].text }}>
+                                                {STATUS_PIPELINE[status].label}
+                                            </div>
+                                        )}
                                     </div>
                                   </div>
                                 );
