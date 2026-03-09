@@ -404,13 +404,14 @@
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
           const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
-          const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
-          const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
-
+          // Formatação de data extra para o modal
           const formatDateStr = (isoString) => {
               if(!isoString) return '';
-              return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'});
+              return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit'});
           };
+
+          const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
+          const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
 
           const toggleEventStatus = (originalIndex, newStatus) => {
               if (!isAdmin) return;
@@ -887,7 +888,7 @@
                         color: category.id,
                         notes: notes,
                         status: exactStatus,
-                        createdBy: 'Importação TXT',
+                        createdBy: `Importação TXT por: ${currentUserName}`, // <---- MODIFICADO AQUI!
                         createdAt: new Date().toISOString()
                     };
 
@@ -1267,10 +1268,23 @@
               {/* MODAL DE EDIÇÃO DE POST E STATUS */}
               {editingEventIndex !== null && !isSelectionMode && (
                   <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative max-h-[95vh] overflow-y-auto">
                           <button onClick={() => setEditingEventIndex(null)} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
-                          <h3 className="font-black text-xl mb-4 text-gray-800 dark:text-white flex items-center gap-2"><Edit2/> Detalhes do Post</h3>
+                          <h3 className="font-black text-xl mb-3 text-gray-800 dark:text-white flex items-center gap-2"><Edit2/> Detalhes do Post</h3>
                           
+                          {/* --- NOVO: INFORMAÇÕES DO AUTOR / IMPORTAÇÃO --- */}
+                          <div className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex flex-col gap-1 shadow-sm">
+                              <p className="text-xs text-indigo-900 dark:text-indigo-200">
+                                  <strong className="font-black">Criado por:</strong> {events[editingEventIndex]?.createdBy || 'Desconhecido'}
+                              </p>
+                              {events[editingEventIndex]?.createdAt && (
+                                  <p className="text-[10px] text-indigo-700 dark:text-indigo-400 font-medium">
+                                      <strong>Data da Criação:</strong> {formatDateStr(events[editingEventIndex].createdAt)}
+                                  </p>
+                              )}
+                          </div>
+                          {/* --------------------------------------------- */}
+
                           {isAdmin ? (
                               <div className="space-y-4">
                                   <div className="flex gap-2">
@@ -1332,7 +1346,16 @@
                           
                           {isAdmin && (
                               <div className="flex gap-2 mt-6">
-                                  <button onClick={saveEditEvent} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-blue-700 transition">Salvar Post</button>
+                                  <button 
+                                      onClick={() => removeEvent(editingEventIndex)} 
+                                      className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-4 py-3 rounded-lg font-black text-lg shadow-md hover:bg-red-200 dark:hover:bg-red-800 transition flex items-center justify-center gap-2" 
+                                      title="Excluir Post"
+                                  >
+                                      <Trash2 /> Excluir
+                                  </button>
+                                  <button onClick={saveEditEvent} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-blue-700 transition">
+                                      Salvar Post
+                                  </button>
                               </div>
                           )}
                       </div>
