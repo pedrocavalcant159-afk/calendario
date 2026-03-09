@@ -131,37 +131,18 @@
             return color;
         };
 
-        // =====================================================================
-        // O FORMATADOR DE TEXTO MÁGICO (APLICA A CATEGORIA EM TODOS OS LUGARES)
-        // =====================================================================
-        const getCleanDisplayText = (text, isCentral, categoryLabel) => {
+        const getCleanDisplayText = (text, isCentral, compLabel) => {
             let cleanText = text || '';
-
-            if (isCentral) {
-                // No UPLI Geral, a "categoryLabel" que chega aqui é o nome da Empresa.
-                // A gente arranca o nome da empresa do início do texto para ficar limpo.
-                if (categoryLabel) {
-                    const prefix1 = categoryLabel.toLowerCase() + ':';
-                    const prefix2 = categoryLabel.toLowerCase() + ' :';
-                    if (cleanText.toLowerCase().startsWith(prefix1)) {
-                        cleanText = cleanText.substring(prefix1.length).trim();
-                    } else if (cleanText.toLowerCase().startsWith(prefix2)) {
-                        cleanText = cleanText.substring(prefix2.length).trim();
-                    }
+            if (isCentral && compLabel) {
+                const prefix1 = compLabel.toLowerCase() + ':';
+                const prefix2 = compLabel.toLowerCase() + ' :';
+                if (cleanText.toLowerCase().startsWith(prefix1)) {
+                    cleanText = cleanText.substring(prefix1.length).trim();
+                } else if (cleanText.toLowerCase().startsWith(prefix2)) {
+                    cleanText = cleanText.substring(prefix2.length).trim();
                 }
-                return cleanText; // No Central, a categoria de verdade já vem salva no texto!
-            } else {
-                // Nos Calendários de Clientes, a "categoryLabel" é a categoria de verdade (Reels, Foto...)
-                // Nós garantimos que ela sempre apareça na frente do texto!
-                if (categoryLabel) {
-                    const catPrefix = categoryLabel.toLowerCase() + ':';
-                    // Se o usuário não digitou manualmente a categoria, a gente coloca pra ele.
-                    if (!cleanText.toLowerCase().startsWith(catPrefix)) {
-                        cleanText = `${categoryLabel}: ${cleanText}`;
-                    }
-                }
-                return cleanText;
             }
+            return cleanText;
         };
 
         const CalendarCreator = () => {
@@ -391,11 +372,6 @@
           const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
           const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
 
-          const formatDateStr = (isoString) => {
-              if(!isoString) return '';
-              return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'});
-          };
-
           const toggleEventStatus = (originalIndex, newStatus) => {
               if (!isAdmin) return;
               const updatedEvents = [...events];
@@ -427,13 +403,14 @@
             if (newCompanyName.trim()) {
               const id = Date.now().toString();
               db.collection('companies').doc(id).set({ name: newCompanyName.trim(), events: [], categories: STANDARD_CATEGORIES, statuses: {} });
-              setNewCompanyName('');
+              setSelectedCompany(id); setNewCompanyName('');
             }
           };
 
           const removeCompany = (companyId) => {
             if (confirm('ATENÇÃO: Apagar a empresa e TODOS os eventos?')) {
               db.collection('companies').doc(companyId).delete();
+              if (selectedCompany === companyId) setSelectedCompany(UPLI_GERAL_ID);
             }
           };
 
@@ -508,7 +485,6 @@
             setEditingEventIndex(originalIndex);
             
             let textToEdit = event.text || '';
-            // Se estivermos num calendário secundário, na hora de editar a gente TIRA a categoria do input pro usuário não apagar sem querer.
             if (selectedCompany !== UPLI_GERAL_ID) {
                  const cat = colorOptions.find(c => c.id === event.color);
                  if (cat) {
@@ -690,7 +666,6 @@
                   const statusName = e.status && STATUS_PIPELINE[e.status] ? STATUS_PIPELINE[e.status].label : '';
                   const cleanNotes = e.notes ? e.notes.replace(/\n/g, ' ') : '';
                   
-                  // Ao exportar, garantir que o título está limpo pra não poluir o TXT com coisas tipo "Foto: Foto: Treino"
                   let rawTitle = e.text;
                   const catPrefix = catName.toLowerCase() + ':';
                   if (rawTitle.toLowerCase().startsWith(catPrefix)) {
@@ -750,7 +725,16 @@
                 
                 const snapshot = await db.collection('companies').get();
                 let allCompanies = {};
-                snapshot.forEach(doc => { allCompanies[doc.id] = { id: doc.id, ...doc.data() }; });
+                snapshot.forEach(doc => { 
+                    const data = doc.data();
+                    allCompanies[doc.id] = { 
+                        id: doc.id, 
+                        name: data.name,
+                        events: Array.isArray(data.events) ? data.events : [],
+                        categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES],
+                        statuses: data.statuses || {} 
+                    }; 
+                });
 
                 let upliGeral = allCompanies[UPLI_GERAL_ID];
                 if (!upliGeral) {
@@ -785,7 +769,6 @@
 
                     let cleanTitle = title;
                     
-                    // Detetive 1: Remove prefixo de nome de empresa caso venha no arquivo sujo
                     const txtCompPrefix1 = compNameTXT.toLowerCase() + ':';
                     const txtCompPrefix2 = compNameTXT.toLowerCase() + ' :';
                     
@@ -795,7 +778,6 @@
                         cleanTitle = cleanTitle.substring(txtCompPrefix2.length).trim();
                     }
 
-                    // Detetive 2: Categoria escondida no título ("Foto: Treino")
                     let finalCatName = catName;
                     let finalTitle = cleanTitle;
                     
@@ -920,6 +902,9 @@
             return weeks;
           };
 
+          // =========================================================================
+          // DESENHADOR DE PDF CORRIGIDO (LÓGICA DE HEIGHT E POSIÇÃO Y)
+          // =========================================================================
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
             const words = text.split(' '); const lines = []; let currentLine = words[0];
@@ -932,11 +917,14 @@
 
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-            const weeks = getWeeks(); const canvasWidth = 1920; const padding = 60; const contentWidth = canvasWidth - (padding * 2); const colWidth = contentWidth / 7; const eventSpacing = 8;
+            const weeks = getWeeks(); const canvasWidth = 1920; const padding = 60; const contentWidth = canvasWidth - (padding * 2); const colWidth = contentWidth / 7; const eventSpacing = 10;
             ctx.font = 'bold 14px Arial'; let totalHeight = padding + 100 + 80; 
             
             const isCentral = selectedCompany === UPLI_GERAL_ID;
+            const lineHeight = 18;
+            const paddingY = 12;
 
+            // 1. CALCULA A ALTURA TOTAL DO CANVAS PRIMEIRO
             weeks.forEach(week => {
               totalHeight += 50;  let maxWeekHeightCalc = 0;
               week.forEach(day => {
@@ -961,11 +949,12 @@
                         displayText += ` [${STATUS_PIPELINE[status].label}]`;
                     }
                     
-                    let textWidthArea = colWidth - 40;
+                    let textWidthArea = colWidth - 20;
                     if (isCentral) textWidthArea -= 24; 
 
                     const lines = getLines(ctx, displayText, textWidthArea); 
-                    colHeight += (lines.length * 18) + 24 + eventSpacing;
+                    const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
+                    colHeight += dynamicHeight + eventSpacing;
                   });
                   maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
                 }
@@ -974,33 +963,51 @@
             });
             
             const legendItems = getLegendItems();
-            if (legendItems.length > 0) { totalHeight += 40; const itemsPerRow = 5; const legendRows = Math.ceil(legendItems.length / itemsPerRow); totalHeight += legendRows * 45 + padding; } else { totalHeight += padding; }
+            if (legendItems.length > 0) { 
+                totalHeight += 40; 
+                const itemsPerRow = 6; 
+                const legendRows = Math.ceil(legendItems.length / itemsPerRow); 
+                totalHeight += legendRows * 50 + padding; 
+            } else { 
+                totalHeight += padding; 
+            }
             
-            // Espaço para a Legenda de Status
             totalHeight += 40;
             const statusRows = Math.ceil(Object.keys(STATUS_PIPELINE).length / 7);
-            totalHeight += statusRows * 45 + padding;
+            totalHeight += statusRows * 50 + padding + 60; // Extra padding
             
-            const finalHeight = Math.max(1080, totalHeight); const scale = 3; canvas.width = canvasWidth * scale; canvas.height = finalHeight * scale;
-            ctx.scale(scale, scale); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvasWidth, finalHeight);
+            const finalHeight = Math.max(1080, totalHeight); 
+            const scale = 3; 
+            canvas.width = canvasWidth * scale; 
+            canvas.height = finalHeight * scale;
+            ctx.scale(scale, scale); 
+            ctx.imageSmoothingEnabled = true; 
+            ctx.imageSmoothingQuality = 'high';
             
-            let currentY = padding; const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
-            ctx.fillStyle = '#000000'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'left';
+            // Fundo Branco
+            ctx.fillStyle = '#ffffff'; 
+            ctx.fillRect(0, 0, canvasWidth, finalHeight);
+            
+            // Cabeçalho
+            let currentY = padding; 
+            const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
+            ctx.fillStyle = '#000000'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
             ctx.fillText(`${months[month]} ${year} ${companyName ? `| ${companyName.toUpperCase()}` : ''}`, padding, currentY + 40);
             
-            currentY += 100; ctx.textAlign = 'center';
+            // Dias da Semana
+            currentY += 100; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             fullWeekDays.forEach((day, i) => {
               const x = padding + (i * colWidth); const pillMargin = 10;
               ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25); ctx.fill();
-              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 33);
+              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 25);
             });
             
+            // Semanas e Dias
             currentY += 80;
             weeks.forEach(week => {
               ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(padding, currentY, contentWidth, 36, 18); ctx.fill();
-              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'left';
-              week.forEach((day, i) => { if (day) ctx.fillText(day.toString(), padding + (i * colWidth) + 25, currentY + 25); });
+              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+              week.forEach((day, i) => { if (day) ctx.fillText(day.toString(), padding + (i * colWidth) + 25, currentY + 18); });
               
               currentY += 50; let maxWeekHeight = 0;
               
@@ -1029,7 +1036,6 @@
                   ctx.font = 'bold 14px Arial'; 
                   let displayText = getCleanDisplayText(event.text, isCentral, color.label);
                   
-                  // APLICAÇÃO INTELIGENTE DO PREFIXO NO PDF DE CLIENTE
                   if (!isCentral) {
                       const catLabel = color.label;
                       if (catLabel) {
@@ -1047,28 +1053,29 @@
                   let textWidthArea = eventW - 20;
                   if (isCentral) textWidthArea -= 24; 
 
-                  const lines = getLines(ctx, displayText, textWidthArea); const dynamicHeight = (lines.length * 18) + 24;
+                  const lines = getLines(ctx, displayText, textWidthArea); 
+                  const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
                   
-                  ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 20); ctx.fill();
+                  ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 16); ctx.fill();
 
-                  // DESENHA A BOLINHA NO PDF
+                  ctx.textBaseline = 'middle';
                   if (isCentral) {
                       ctx.fillStyle = color.color;
                       ctx.beginPath();
                       ctx.arc(x + eventMargin + 18, eventY + (dynamicHeight / 2), 8, 0, 2 * Math.PI);
                       ctx.fill();
-                      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
                       ctx.lineWidth = 2;
                       ctx.stroke();
 
                       ctx.fillStyle = finalTextColor;
                       ctx.textAlign = 'left';
-                      let textY = eventY + 24 - (((lines.length - 1) * 18) / 2); 
-                      lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += 18; });
+                      let textY = eventY + paddingY + (lineHeight / 2);
+                      lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += lineHeight; });
                   } else {
                       ctx.fillStyle = finalTextColor; ctx.textAlign = 'center';
-                      let textY = eventY + 24 - (((lines.length - 1) * 18) / 2); 
-                      lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += 18; });
+                      let textY = eventY + paddingY + (lineHeight / 2); 
+                      lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += lineHeight; });
                   }
                   
                   eventY += dynamicHeight + eventSpacing;
@@ -1078,38 +1085,51 @@
               currentY += maxWeekHeight + 30; 
             });
 
+            // LEGENDA 1: CATEGORIAS
             if (legendItems.length > 0) {
-              currentY += 40; ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY + 24);
-              const itemsPerRow = 5; const itemWidth = (contentWidth - 150 - ((itemsPerRow - 1) * 10)) / itemsPerRow;
+              currentY += 40; 
+              ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+              ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY + 24);
+              currentY += 50; // Move para baixo do título
+              
+              const itemsPerRow = 6; 
+              const gap = 15;
+              const itemWidth = (contentWidth - ((itemsPerRow - 1) * gap)) / itemsPerRow;
+              
               legendItems.forEach((item, idx) => {
-                const itemX = padding + 150 + ((idx % itemsPerRow) * (itemWidth + 10)); const itemY = currentY + (Math.floor(idx / itemsPerRow) * 45);
+                const col = idx % itemsPerRow;
+                const row = Math.floor(idx / itemsPerRow);
+                const itemX = padding + (col * (itemWidth + gap)); 
+                const itemY = currentY + (row * 50);
+                
                 ctx.fillStyle = item.color || '#000000'; ctx.beginPath(); ctx.roundRect(itemX, itemY, itemWidth, 36, 18); ctx.fill();
-                ctx.fillStyle = getTextColor(item.color); ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center';
+                ctx.fillStyle = getTextColor(item.color); ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 let label = item.label || ''; while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
-                ctx.fillText(label, itemX + (itemWidth / 2), itemY + 24);
+                ctx.fillText(label, itemX + (itemWidth / 2), itemY + 18);
               });
-              currentY += (Math.ceil(legendItems.length / itemsPerRow) * 45);
+              currentY += (Math.ceil(legendItems.length / itemsPerRow) * 50);
             }
 
-            // LEGENDA 2: STATUS NO PDF
-            currentY += 60;
-            ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY + 24);
+            // LEGENDA 2: STATUS
+            currentY += 40;
+            ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY + 24);
+            currentY += 50;
+            
             const statusItemsPerRow = 7; 
-            const statusItemWidth = (contentWidth - 150 - ((statusItemsPerRow - 1) * 10)) / statusItemsPerRow;
+            const gapStatus = 15;
+            const statusItemWidth = (contentWidth - ((statusItemsPerRow - 1) * gapStatus)) / statusItemsPerRow;
             
             Object.entries(STATUS_PIPELINE).forEach(([key, val], idx) => {
-                const itemX = padding + 150 + ((idx % statusItemsPerRow) * (statusItemWidth + 10)); 
-                const itemY = currentY + (Math.floor(idx / statusItemsPerRow) * 45);
-                ctx.fillStyle = val.bg; 
-                ctx.beginPath(); 
-                ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8);
-                ctx.fill();
-                ctx.fillStyle = val.text; 
-                ctx.font = 'bold 16px Arial'; 
-                ctx.textAlign = 'center';
-                let label = val.label || ''; 
-                while (ctx.measureText(label).width > statusItemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
-                ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 24);
+                const col = idx % statusItemsPerRow;
+                const row = Math.floor(idx / statusItemsPerRow);
+                const itemX = padding + (col * (statusItemWidth + gapStatus)); 
+                const itemY = currentY + (row * 50);
+                
+                ctx.fillStyle = val.bg; ctx.beginPath(); ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8); ctx.fill();
+                ctx.fillStyle = val.text; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                let label = val.label || ''; while (ctx.measureText(label).width > statusItemWidth - 10 && label.length > 3) label = label.slice(0, -4) + '...';
+                ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 18);
             });
 
             return { canvas, finalHeight };
@@ -1261,7 +1281,6 @@
                           {isAdmin && (
                               <div className="flex gap-2 mt-6">
                                   <button onClick={saveEditEvent} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-blue-700 transition">Salvar Post</button>
-                                  <button onClick={() => removeEvent(editingEventIndex)} className="bg-red-50 text-red-600 border border-red-200 dark:bg-gray-700 dark:border-gray-600 px-5 py-3 rounded-lg font-bold hover:bg-red-500 hover:text-white transition"><Trash2/></button>
                               </div>
                           )}
                       </div>
@@ -1566,7 +1585,7 @@
 
                     {isAdmin && (
                         <div className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
-                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
+                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT para qualquer calendário">
                                 <Upload /> Importar
                             </button>
                             
@@ -1671,13 +1690,13 @@
                                             <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
                                         )}
 
-                                        <div className={`flex flex-col ${isCentral ? 'flex-1' : 'items-center w-full'}`}>
+                                        <div className={`flex flex-col ${isCentral ? 'flex-1 overflow-hidden' : 'items-center w-full'}`}>
                                             {event.imageUrl && !isCentral && (
                                                 <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
                                             )}
                                             
-                                            {/* TEXTO 100% VISÍVEL (QUEBRA LINHA) */}
-                                            <span className="leading-tight whitespace-normal break-words block w-full">
+                                            {/* TEXTO 100% VISÍVEL COM QUEBRA DE LINHA NATURAL */}
+                                            <span className="leading-snug whitespace-normal break-words block w-full">
                                                 {getCleanDisplayText(event.text, isCentral, color.label)}
                                                 {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
                                             </span>
@@ -1806,7 +1825,7 @@
                     })}
                   </div>
 
-                  {/* DUAS LEGENDAS: CATEGORIAS E STATUS */}
+                  {/* DUAS LEGENDAS: CATEGORIAS E STATUS (CORRIGIDAS) */}
                   {getLegendItems().length > 0 && (
                     <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA DE CATEGORIAS / EMPRESAS</h3>
