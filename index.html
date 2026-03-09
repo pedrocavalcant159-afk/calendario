@@ -110,7 +110,7 @@
             { id: 'cat_evento', label: 'Evento', color: '#FFDC80' }
         ];
 
-        const STATUS_PIPELINE = {
+        const DEFAULT_STATUS_PIPELINE = {
             'criacao': { label: 'Criação', bg: '#3B82F6', text: '#FFFFFF' }, 
             'gravacao': { label: 'Gravação', bg: '#8B5CF6', text: '#FFFFFF' }, 
             'producao': { label: 'Produção', bg: '#F59E0B', text: '#FFFFFF' }, 
@@ -131,18 +131,34 @@
             return color;
         };
 
+        const handleHexChange = (value, setter) => {
+            let val = value.replace(/[^a-fA-F0-9#]/g, ''); 
+            if (!val.startsWith('#')) val = '#' + val.replace(/#/g, ''); 
+            setter(val.substring(0, 7));
+        };
+
         const getCleanDisplayText = (text, isCentral, compLabel) => {
             let cleanText = text || '';
-            if (isCentral && compLabel) {
-                const prefix1 = compLabel.toLowerCase() + ':';
-                const prefix2 = compLabel.toLowerCase() + ' :';
-                if (cleanText.toLowerCase().startsWith(prefix1)) {
-                    cleanText = cleanText.substring(prefix1.length).trim();
-                } else if (cleanText.toLowerCase().startsWith(prefix2)) {
-                    cleanText = cleanText.substring(prefix2.length).trim();
+            if (isCentral) {
+                if (compLabel) {
+                    const prefix1 = compLabel.toLowerCase() + ':';
+                    const prefix2 = compLabel.toLowerCase() + ' :';
+                    if (cleanText.toLowerCase().startsWith(prefix1)) {
+                        cleanText = cleanText.substring(prefix1.length).trim();
+                    } else if (cleanText.toLowerCase().startsWith(prefix2)) {
+                        cleanText = cleanText.substring(prefix2.length).trim();
+                    }
                 }
+                return cleanText;
+            } else {
+                if (compLabel) {
+                    const catPrefix = compLabel.toLowerCase() + ':';
+                    if (!cleanText.toLowerCase().startsWith(catPrefix)) {
+                        cleanText = `${compLabel}: ${cleanText}`;
+                    }
+                }
+                return cleanText;
             }
-            return cleanText;
         };
 
         const CalendarCreator = () => {
@@ -258,6 +274,7 @@
           const [month, setMonth] = useState(new Date().getMonth()); 
           const [events, setEvents] = useState([]);
           const [colorOptions, setColorOptions] = useState([]);
+          const [statusPipeline, setStatusPipeline] = useState(DEFAULT_STATUS_PIPELINE);
           
           const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
@@ -273,10 +290,13 @@
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
           const [selectedCompany, setSelectedCompany] = useState(null);
+          
           const [newCompanyName, setNewCompanyName] = useState('');
+          const [newCompanyColor, setNewCompanyColor] = useState(() => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
           
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
+          const [editCompanyColor, setEditCompanyColor] = useState('');
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
 
@@ -297,22 +317,28 @@
                 let hasUpliGeral = false;
                 
                 snapshot.forEach(doc => {
-                    if (doc.id === UPLI_GERAL_ID) hasUpliGeral = true;
+                    if (doc.id === UPLI_GERAL_ID) {
+                        hasUpliGeral = true;
+                        const globalData = doc.data() || {};
+                        if (globalData.statusPipeline) {
+                            setStatusPipeline({ ...DEFAULT_STATUS_PIPELINE, ...globalData.statusPipeline });
+                        }
+                    }
                     const data = doc.data() || {};
                     let safeCategories = Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES];
 
                     fetchedCompanies.push({ 
                         id: doc.id, 
                         name: data.name || 'Empresa', 
+                        color: data.color || stringToColor(data.name || 'Empresa'), 
                         events: Array.isArray(data.events) ? data.events : [],
-                        categories: safeCategories,
-                        statuses: data.statuses || {} 
+                        categories: safeCategories
                     });
                 });
 
                 if (!hasUpliGeral && (userRole === 'master' || userRole === 'admin')) {
                     db.collection('companies').doc(UPLI_GERAL_ID).set({
-                        name: 'UPLI Geral', events: [], categories: STANDARD_CATEGORIES, statuses: {}
+                        name: 'UPLI Geral', events: [], categories: STANDARD_CATEGORIES, statusPipeline: DEFAULT_STATUS_PIPELINE
                     });
                 }
 
@@ -348,7 +374,7 @@
                           let dynamicCats = [...STANDARD_CATEGORIES];
                           companies.forEach(c => {
                               if (c.id !== UPLI_GERAL_ID) {
-                                  dynamicCats.push({ id: c.id, label: c.name, color: stringToColor(c.name) });
+                                  dynamicCats.push({ id: c.id, label: c.name, color: c.color });
                               }
                           });
                           setColorOptions(dynamicCats);
@@ -364,6 +390,15 @@
               db.collection('companies').doc(selectedCompany).set(updates, { merge: true });
           };
 
+          const updateStatusColor = (key, newColor) => {
+              const updated = {
+                  ...statusPipeline,
+                  [key]: { ...statusPipeline[key], bg: newColor, text: getTextColor(newColor) }
+              };
+              setStatusPipeline(updated);
+              db.collection('companies').doc(UPLI_GERAL_ID).set({ statusPipeline: updated }, { merge: true });
+          };
+
           const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
           const fullWeekDays = ['DOMINGO', 'SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO'];
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -371,6 +406,11 @@
 
           const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
           const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
+
+          const formatDateStr = (isoString) => {
+              if(!isoString) return '';
+              return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'});
+          };
 
           const toggleEventStatus = (originalIndex, newStatus) => {
               if (!isAdmin) return;
@@ -402,25 +442,40 @@
           const addCompany = () => {
             if (newCompanyName.trim()) {
               const id = Date.now().toString();
-              db.collection('companies').doc(id).set({ name: newCompanyName.trim(), events: [], categories: STANDARD_CATEGORIES, statuses: {} });
-              setSelectedCompany(id); setNewCompanyName('');
+              db.collection('companies').doc(id).set({ 
+                  name: newCompanyName.trim(), 
+                  color: newCompanyColor, 
+                  events: [], 
+                  categories: STANDARD_CATEGORIES, 
+                  statuses: {} 
+              });
+              setNewCompanyName('');
+              setNewCompanyColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
             }
           };
 
           const removeCompany = (companyId) => {
             if (confirm('ATENÇÃO: Apagar a empresa e TODOS os eventos?')) {
               db.collection('companies').doc(companyId).delete();
-              if (selectedCompany === companyId) setSelectedCompany(UPLI_GERAL_ID);
             }
           };
 
-          const startEditCompany = (company) => { setEditingCompany(company.id); setEditCompanyName(company.name); };
+          const startEditCompany = (company) => { 
+              setEditingCompany(company.id); 
+              setEditCompanyName(company.name); 
+              setEditCompanyColor(company.color || stringToColor(company.name));
+          };
           const saveEditCompany = () => {
             if(!editCompanyName.trim()) return;
-            db.collection('companies').doc(editingCompany).update({ name: editCompanyName.trim() });
-            setEditingCompany(null); setEditCompanyName('');
+            db.collection('companies').doc(editingCompany).update({ 
+                name: editCompanyName.trim(),
+                color: editCompanyColor 
+            });
+            setEditingCompany(null); 
+            setEditCompanyName('');
+            setEditCompanyColor('');
           };
-          const cancelEditCompany = () => { setEditingCompany(null); setEditCompanyName(''); };
+          const cancelEditCompany = () => { setEditingCompany(null); setEditCompanyName(''); setEditCompanyColor(''); };
 
           const getTextColor = (bgColor) => {
             if (!bgColor) return '#000000';
@@ -617,7 +672,7 @@
           
           const getFilteredEvents = () => {
               if (calendarFilter === 'ALL') return currentViewEvents;
-              if (STATUS_PIPELINE[calendarFilter]) {
+              if (statusPipeline[calendarFilter]) {
                   return currentViewEvents.filter(e => getEventStatus(e._origIdx) === calendarFilter);
               }
               return currentViewEvents.filter(e => e.color === calendarFilter);
@@ -663,7 +718,7 @@
               eventsToExport.forEach(e => {
                   const cat = safeColorOptions.find(c => c.id === e.color);
                   const catName = cat ? cat.label : 'Sem Categoria';
-                  const statusName = e.status && STATUS_PIPELINE[e.status] ? STATUS_PIPELINE[e.status].label : '';
+                  const statusName = e.status && statusPipeline[e.status] ? statusPipeline[e.status].label : '';
                   const cleanNotes = e.notes ? e.notes.replace(/\n/g, ' ') : '';
                   
                   let rawTitle = e.text;
@@ -725,16 +780,7 @@
                 
                 const snapshot = await db.collection('companies').get();
                 let allCompanies = {};
-                snapshot.forEach(doc => { 
-                    const data = doc.data();
-                    allCompanies[doc.id] = { 
-                        id: doc.id, 
-                        name: data.name,
-                        events: Array.isArray(data.events) ? data.events : [],
-                        categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES],
-                        statuses: data.statuses || {} 
-                    }; 
-                });
+                snapshot.forEach(doc => { allCompanies[doc.id] = { id: doc.id, ...doc.data() }; });
 
                 let upliGeral = allCompanies[UPLI_GERAL_ID];
                 if (!upliGeral) {
@@ -768,14 +814,23 @@
                     if (isNaN(dayNum) || !title) return;
 
                     let cleanTitle = title;
-                    
+                    const destCompPrefix1 = compData.name.toLowerCase() + ':';
+                    const destCompPrefix2 = compData.name.toLowerCase() + ' :';
                     const txtCompPrefix1 = compNameTXT.toLowerCase() + ':';
                     const txtCompPrefix2 = compNameTXT.toLowerCase() + ' :';
                     
-                    if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix1)) {
+                    if (cleanTitle.toLowerCase().startsWith(destCompPrefix1)) {
+                        cleanTitle = cleanTitle.substring(destCompPrefix1.length).trim();
+                    } else if (cleanTitle.toLowerCase().startsWith(destCompPrefix2)) {
+                        cleanTitle = cleanTitle.substring(destCompPrefix2.length).trim();
+                    } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix1)) {
                         cleanTitle = cleanTitle.substring(txtCompPrefix1.length).trim();
                     } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix2)) {
                         cleanTitle = cleanTitle.substring(txtCompPrefix2.length).trim();
+                    }
+
+                    if (catName.toLowerCase() === compData.name.toLowerCase() || catName.toLowerCase() === compNameTXT.toLowerCase() || catName.toLowerCase() === 'upli geral') {
+                        catName = ""; 
                     }
 
                     let finalCatName = catName;
@@ -805,9 +860,7 @@
                         }
                     }
 
-                    if (!finalCatName || finalCatName.toLowerCase() === 'upli geral' || finalCatName.toLowerCase() === compNameTXT.toLowerCase()) {
-                        finalCatName = "Geral";
-                    }
+                    if (!finalCatName) finalCatName = "Geral";
 
                     let category = compData.categories.find(c => normCat(c.label) === normCat(finalCatName));
                     if (!category) {
@@ -903,7 +956,7 @@
           };
 
           // =========================================================================
-          // DESENHADOR DE PDF CORRIGIDO (LÓGICA DE HEIGHT E POSIÇÃO Y)
+          // PDF RENDERER (DESENHO OTIMIZADO)
           // =========================================================================
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
@@ -924,7 +977,7 @@
             const lineHeight = 18;
             const paddingY = 12;
 
-            // 1. CALCULA A ALTURA TOTAL DO CANVAS PRIMEIRO
+            // 1. Calcula a Altura Total para evitar cortes
             weeks.forEach(week => {
               totalHeight += 50;  let maxWeekHeightCalc = 0;
               week.forEach(day => {
@@ -945,8 +998,8 @@
                         }
                     }
 
-                    if (!isCentral && status && STATUS_PIPELINE[status]) {
-                        displayText += ` [${STATUS_PIPELINE[status].label}]`;
+                    if (!isCentral && status && statusPipeline[status]) {
+                        displayText += ` [${statusPipeline[status].label}]`;
                     }
                     
                     let textWidthArea = colWidth - 20;
@@ -972,9 +1025,11 @@
                 totalHeight += padding; 
             }
             
-            totalHeight += 40;
-            const statusRows = Math.ceil(Object.keys(STATUS_PIPELINE).length / 7);
-            totalHeight += statusRows * 50 + padding + 60; // Extra padding
+            if (isCentral) {
+                totalHeight += 40;
+                const statusRows = Math.ceil(Object.keys(statusPipeline).length / 7);
+                totalHeight += statusRows * 50 + padding + 60; 
+            }
             
             const finalHeight = Math.max(1080, totalHeight); 
             const scale = 3; 
@@ -984,17 +1039,14 @@
             ctx.imageSmoothingEnabled = true; 
             ctx.imageSmoothingQuality = 'high';
             
-            // Fundo Branco
             ctx.fillStyle = '#ffffff'; 
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
             
-            // Cabeçalho
             let currentY = padding; 
             const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
             ctx.fillStyle = '#000000'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
             ctx.fillText(`${months[month]} ${year} ${companyName ? `| ${companyName.toUpperCase()}` : ''}`, padding, currentY + 40);
             
-            // Dias da Semana
             currentY += 100; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             fullWeekDays.forEach((day, i) => {
               const x = padding + (i * colWidth); const pillMargin = 10;
@@ -1002,7 +1054,6 @@
               ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 25);
             });
             
-            // Semanas e Dias
             currentY += 80;
             weeks.forEach(week => {
               ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(padding, currentY, contentWidth, 36, 18); ctx.fill();
@@ -1024,9 +1075,9 @@
                   let finalTextColor = getTextColor(color.color);
 
                   if (isCentral) {
-                      if (status && STATUS_PIPELINE[status]) {
-                          finalBgColor = STATUS_PIPELINE[status].bg;
-                          finalTextColor = STATUS_PIPELINE[status].text;
+                      if (status && statusPipeline[status]) {
+                          finalBgColor = statusPipeline[status].bg;
+                          finalTextColor = statusPipeline[status].text;
                       } else {
                           finalBgColor = '#E5E7EB'; 
                           finalTextColor = '#374151';
@@ -1046,8 +1097,8 @@
                       }
                   }
 
-                  if (!isCentral && status && STATUS_PIPELINE[status]) {
-                      displayText += ` [${STATUS_PIPELINE[status].label}]`;
+                  if (!isCentral && status && statusPipeline[status]) {
+                      displayText += ` [${statusPipeline[status].label}]`;
                   }
                   
                   let textWidthArea = eventW - 20;
@@ -1058,7 +1109,7 @@
                   
                   ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 16); ctx.fill();
 
-                  ctx.textBaseline = 'middle';
+                  ctx.textBaseline = 'top';
                   if (isCentral) {
                       ctx.fillStyle = color.color;
                       ctx.beginPath();
@@ -1070,11 +1121,12 @@
 
                       ctx.fillStyle = finalTextColor;
                       ctx.textAlign = 'left';
-                      let textY = eventY + paddingY + (lineHeight / 2);
+                      let textY = eventY + paddingY;
                       lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += lineHeight; });
                   } else {
-                      ctx.fillStyle = finalTextColor; ctx.textAlign = 'center';
-                      let textY = eventY + paddingY + (lineHeight / 2); 
+                      ctx.fillStyle = finalTextColor;
+                      ctx.textAlign = 'center';
+                      let textY = eventY + paddingY; 
                       lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += lineHeight; });
                   }
                   
@@ -1085,12 +1137,11 @@
               currentY += maxWeekHeight + 30; 
             });
 
-            // LEGENDA 1: CATEGORIAS
             if (legendItems.length > 0) {
               currentY += 40; 
               ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-              ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY + 24);
-              currentY += 50; // Move para baixo do título
+              ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY);
+              currentY += 30; 
               
               const itemsPerRow = 6; 
               const gap = 15;
@@ -1107,30 +1158,31 @@
                 let label = item.label || ''; while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
                 ctx.fillText(label, itemX + (itemWidth / 2), itemY + 18);
               });
-              currentY += (Math.ceil(legendItems.length / itemsPerRow) * 50);
+              currentY += (Math.ceil(legendItems.length / itemsPerRow) * 50) + 20;
             }
 
-            // LEGENDA 2: STATUS
-            currentY += 40;
-            ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-            ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY + 24);
-            currentY += 50;
-            
-            const statusItemsPerRow = 7; 
-            const gapStatus = 15;
-            const statusItemWidth = (contentWidth - ((statusItemsPerRow - 1) * gapStatus)) / statusItemsPerRow;
-            
-            Object.entries(STATUS_PIPELINE).forEach(([key, val], idx) => {
-                const col = idx % statusItemsPerRow;
-                const row = Math.floor(idx / statusItemsPerRow);
-                const itemX = padding + (col * (statusItemWidth + gapStatus)); 
-                const itemY = currentY + (row * 50);
+            if (isCentral) {
+                currentY += 30;
+                ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+                ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY);
+                currentY += 30;
                 
-                ctx.fillStyle = val.bg; ctx.beginPath(); ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8); ctx.fill();
-                ctx.fillStyle = val.text; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                let label = val.label || ''; while (ctx.measureText(label).width > statusItemWidth - 10 && label.length > 3) label = label.slice(0, -4) + '...';
-                ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 18);
-            });
+                const statusItemsPerRow = 7; 
+                const gapStatus = 15;
+                const statusItemWidth = (contentWidth - ((statusItemsPerRow - 1) * gapStatus)) / statusItemsPerRow;
+                
+                Object.entries(statusPipeline).forEach(([key, val], idx) => {
+                    const col = idx % statusItemsPerRow;
+                    const row = Math.floor(idx / statusItemsPerRow);
+                    const itemX = padding + (col * (statusItemWidth + gapStatus)); 
+                    const itemY = currentY + (row * 50);
+                    
+                    ctx.fillStyle = val.bg; ctx.beginPath(); ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8); ctx.fill();
+                    ctx.fillStyle = val.text; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    let label = val.label || ''; while (ctx.measureText(label).width > statusItemWidth - 10 && label.length > 3) label = label.slice(0, -4) + '...';
+                    ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 18);
+                });
+            }
 
             return { canvas, finalHeight };
           };
@@ -1178,9 +1230,9 @@
               
               {/* MODAL DE IMPORTAÇÃO */}
               {showImportModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full relative">
-                          <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportTargetCompany(''); }} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
+                          <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportTargetCompany(''); }} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-50 hover:text-white transition">X</button>
                           <h3 className="font-black text-xl mb-4 text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Upload/> Importar Posts</h3>
                           
                           <div className="space-y-4">
@@ -1214,7 +1266,7 @@
 
               {/* MODAL DE EDIÇÃO DE POST E STATUS */}
               {editingEventIndex !== null && !isSelectionMode && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative">
                           <button onClick={() => setEditingEventIndex(null)} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
                           <h3 className="font-black text-xl mb-4 text-gray-800 dark:text-white flex items-center gap-2"><Edit2/> Detalhes do Post</h3>
@@ -1258,7 +1310,7 @@
                           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                               <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wide">Status da Etapa</label>
                               <div className="flex flex-wrap justify-center gap-2">
-                                  {Object.entries(STATUS_PIPELINE).map(([key, val]) => {
+                                  {Object.entries(statusPipeline).map(([key, val]) => {
                                       const isActive = getEventStatus(editingEventIndex) === key;
                                       return (
                                           <button
@@ -1289,8 +1341,8 @@
 
               {/* MODAL DE PERFIL RESTRITO */}
               {showProfileModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
+                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 z-[100]">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4 relative">
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
                           <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
                               <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
@@ -1311,18 +1363,18 @@
 
               {/* PAINEL SECRETO DO MASTER */}
               {showRolesModal && userRole === 'master' && (
-                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Painel da Diretoria</h3>
                           
                           <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600 shadow-sm">
                               <h4 className="font-black text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">➕ Criar Nova Conta</h4>
-                              <div className="flex gap-2 mb-2">
+                              <div className="flex flex-col sm:flex-row gap-2 mb-2">
                                   <input type="email" value={newAccEmail} onChange={e => setNewAccEmail(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm" placeholder="E-mail" />
                                   <input type="text" value={newAccPassword} onChange={e => setNewAccPassword(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm" placeholder="Senha (Min 6)" />
                               </div>
                               <select value={newAccRole} onChange={e => setNewAccRole(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3 text-sm">
-                                  <option value="master">Master (Dono)</option>
+                                  <option value="master">Master (Controle Total)</option>
                                   <option value="admin">Administrador (Pode editar tudo)</option>
                                   <option value="cliente">Cliente (Somente visualizar)</option>
                               </select>
@@ -1370,7 +1422,7 @@
 
               <div className="max-w-7xl mx-auto space-y-6">
                 
-                {/* CABEÇALHO SUPERIOR LIMPO */}
+                {/* CABEÇALHO SUPERIOR */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     
@@ -1428,6 +1480,10 @@
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
                       <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
+                            <input type="color" value={newCompanyColor} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Cor da Empresa no Calendário Central" />
+                            <input type="text" value={newCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
+                        </div>
                         <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                         <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
                       </div>
@@ -1436,12 +1492,21 @@
                                 <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
                                     {editingCompany === company.id ? (
                                         <div className="flex flex-1 items-center gap-2 mr-2">
+                                            {company.id !== UPLI_GERAL_ID && (
+                                                <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded p-1 bg-white dark:bg-gray-700 shrink-0">
+                                                    <input type="color" value={editCompanyColor} onChange={e=>handleHexChange(e.target.value, setEditCompanyColor)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Alterar Cor da Empresa" />
+                                                    <input type="text" value={editCompanyColor.toUpperCase()} onChange={e=>handleHexChange(e.target.value, setEditCompanyColor)} className="w-14 text-[10px] font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
+                                                </div>
+                                            )}
                                             <input type="text" value={editCompanyName} onChange={e=>setEditCompanyName(e.target.value)} className="w-full border-2 border-blue-400 rounded px-2 py-1 text-black font-bold outline-none" />
                                             <button onClick={saveEditCompany} className="bg-green-500 text-white px-3 py-1 rounded font-bold hover:bg-green-600">✓</button>
                                             <button onClick={cancelEditCompany} className="bg-gray-400 text-white px-3 py-1 rounded font-bold hover:bg-gray-500">X</button>
                                         </div>
                                     ) : (
                                         <div className="flex-1 font-bold cursor-pointer dark:text-white px-2 py-1 flex items-center gap-2" onClick={() => setSelectedCompany(company.id)}>
+                                            {company.id !== UPLI_GERAL_ID && (
+                                                <div className="w-4 h-4 rounded-full shadow-inner border border-gray-300 dark:border-gray-600" style={{backgroundColor: company.color}}></div>
+                                            )}
                                             {company.id === UPLI_GERAL_ID ? '👑 ' : ''}{company.name}
                                         </div>
                                     )}
@@ -1468,7 +1533,10 @@
                               <div className="flex flex-col sm:flex-row gap-2 mb-4">
                                 <input type="text" placeholder="Nova Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                                 <div className="flex gap-2">
-                                    <input type="color" value={newCategory.color} onChange={e => setNewCategory({...newCategory, color: e.target.value})} className="w-12 h-11 rounded cursor-pointer border-2 border-blue-200 p-0 shrink-0" />
+                                    <div className="flex items-center gap-1 border-2 border-blue-200 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
+                                        <input type="color" value={newCategory.color} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
+                                        <input type="text" value={newCategory.color.toUpperCase()} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
+                                    </div>
                                     <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto hover:bg-blue-700">Adicionar</button>
                                 </div>
                               </div>
@@ -1477,7 +1545,7 @@
                                     if (editingColor === color.id) {
                                         return (
                                             <div key={color.id} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-blue-300 dark:border-blue-600 shadow-inner">
-                                                <input type="color" value={editColorValue} onChange={e => setEditColorValue(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
+                                                <input type="color" value={editColorValue} onChange={e => handleHexChange(e.target.value, setEditColorValue)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
                                                 <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-24 text-xs font-bold border border-gray-300 dark:border-gray-600 rounded px-2 py-1 outline-none text-black dark:text-white dark:bg-gray-700" />
                                                 <button onClick={saveEditCategory} className="bg-green-500 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-green-600">✓</button>
                                                 <button onClick={cancelEditCategory} className="bg-gray-400 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-gray-500">X</button>
@@ -1501,7 +1569,26 @@
                       )}
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
+                    {/* PAINEL DE CORES DE STATUS (APENAS CENTRAL) */}
+                    {isCentral && (
+                        <div className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-orange-200 dark:border-gray-700">
+                            <h3 className="font-bold text-orange-600 dark:text-orange-400 mb-3 flex items-center gap-2">🚥 Personalizar Cores dos Status</h3>
+                            <div className="flex flex-wrap gap-4">
+                                {Object.entries(statusPipeline).map(([key, val]) => (
+                                    <div key={key} className="flex flex-col gap-1">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">{val.label}</label>
+                                        <div className="flex items-center gap-1 border-2 border-gray-200 dark:border-gray-600 rounded-lg p-1 bg-gray-50 dark:bg-gray-900">
+                                            <input type="color" value={val.bg} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
+                                            <input type="text" value={val.bg.toUpperCase()} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-3 italic">* As cores alteradas aqui refletirão em todos os calendários automaticamente.</p>
+                        </div>
+                    )}
+
+                    <div className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
                       <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
                       <div className="flex flex-col gap-3">
                         <div className="flex flex-col sm:flex-row gap-2">
@@ -1572,7 +1659,7 @@
                       </div>
                   )}
 
-                  {/* NAVEGAÇÃO E BOTÕES (CENTRO DO CALENDÁRIO) */}
+                  {/* NAVEGAÇÃO E BOTÕES */}
                   <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
                     
                     <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full md:w-auto justify-between md:justify-start">
@@ -1585,7 +1672,7 @@
 
                     {isAdmin && (
                         <div className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
-                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT para qualquer calendário">
+                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
                                 <Upload /> Importar
                             </button>
                             
@@ -1600,17 +1687,19 @@
                     </h3>
                   </div>
 
-                  {/* FILTRO DE STATUS */}
-                  <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
-                      <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
-                      <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                      <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                      {Object.entries(STATUS_PIPELINE).map(([key, val]) => (
-                          <button key={key} onClick={() => setCalendarFilter(key)} style={{backgroundColor: calendarFilter === key ? val.bg : 'transparent', color: calendarFilter === key ? val.text : (darkMode ? '#9CA3AF' : '#4B5563'), border: `2px solid ${val.bg}`}} className={`px-3 py-1 text-xs font-bold rounded-lg transition ${calendarFilter === key ? 'shadow-md scale-105' : 'hover:opacity-70'}`}>
-                              {val.label}
-                          </button>
-                      ))}
-                  </div>
+                  {/* FILTRO DE STATUS (APENAS CENTRAL) */}
+                  {isCentral && (
+                      <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
+                          <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
+                          <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
+                          <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                          {Object.entries(statusPipeline).map(([key, val]) => (
+                              <button key={key} onClick={() => setCalendarFilter(key)} style={{backgroundColor: calendarFilter === key ? val.bg : 'transparent', color: calendarFilter === key ? val.text : (darkMode ? '#9CA3AF' : '#4B5563'), border: `2px solid ${val.bg}`}} className={`px-3 py-1 text-xs font-bold rounded-lg transition ${calendarFilter === key ? 'shadow-md scale-105' : 'hover:opacity-70'}`}>
+                                  {val.label}
+                              </button>
+                          ))}
+                      </div>
+                  )}
 
                   <div className="hidden md:block overflow-x-auto pb-4">
                     <div className="min-w-[800px]">
@@ -1653,9 +1742,9 @@
                                     let finalTextColor = getTextColor(color.color);
 
                                     if (isCentral) {
-                                        if (status && STATUS_PIPELINE[status]) {
-                                            finalBgColor = STATUS_PIPELINE[status].bg;
-                                            finalTextColor = STATUS_PIPELINE[status].text;
+                                        if (status && statusPipeline[status]) {
+                                            finalBgColor = statusPipeline[status].bg;
+                                            finalTextColor = statusPipeline[status].text;
                                         } else {
                                             finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
                                             finalTextColor = darkMode ? '#D1D5DB' : '#374151';
@@ -1670,9 +1759,9 @@
                                         draggable={isAdmin && !isSelectionMode}
                                         onDragStart={(e) => onDragStart(e, originalIndex)}
                                         style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                        className={`rounded-2xl p-3 text-[11px] font-bold shadow-md relative group transition-all 
+                                        className={`rounded-2xl p-3 text-[11px] font-bold shadow-md relative group transition-all h-auto flex 
                                             ${isAdmin ? 'cursor-pointer' : ''} 
-                                            ${isCentral ? 'flex flex-row items-center gap-2 text-left' : 'flex flex-col text-center justify-center'}
+                                            ${isCentral ? 'flex-row items-start gap-2 text-left' : 'flex-col text-center justify-center'}
                                             ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
                                             ${isSelectionMode && !isSelected ? 'opacity-50 hover:opacity-100' : 'hover:scale-105'}
                                         `}
@@ -1685,9 +1774,9 @@
                                             <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
                                         )}
 
-                                        {/* A BOLINHA NO UPLI GERAL (DESIGN PÍLULA) */}
+                                        {/* A BOLINHA NO UPLI GERAL */}
                                         {isCentral && (
-                                            <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
+                                            <div className="w-3.5 h-3.5 mt-0.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
                                         )}
 
                                         <div className={`flex flex-col ${isCentral ? 'flex-1 overflow-hidden' : 'items-center w-full'}`}>
@@ -1695,16 +1784,16 @@
                                                 <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
                                             )}
                                             
-                                            {/* TEXTO 100% VISÍVEL COM QUEBRA DE LINHA NATURAL */}
+                                            {/* TEXTO SEM CORTES */}
                                             <span className="leading-snug whitespace-normal break-words block w-full">
                                                 {getCleanDisplayText(event.text, isCentral, color.label)}
                                                 {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
                                             </span>
 
                                             {/* ETIQUETA DE STATUS PARA O CALENDÁRIO DO CLIENTE */}
-                                            {!isCentral && status && STATUS_PIPELINE[status] && (
-                                                <div className="mt-1 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: STATUS_PIPELINE[status].bg, color: STATUS_PIPELINE[status].text }}>
-                                                    {STATUS_PIPELINE[status].label}
+                                            {!isCentral && status && statusPipeline[status] && (
+                                                <div className="mt-2 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
+                                                    {statusPipeline[status].label}
                                                 </div>
                                             )}
                                         </div>
@@ -1758,9 +1847,9 @@
                                 let finalTextColor = getTextColor(color.color);
 
                                 if (isCentral) {
-                                    if (status && STATUS_PIPELINE[status]) {
-                                        finalBgColor = STATUS_PIPELINE[status].bg;
-                                        finalTextColor = STATUS_PIPELINE[status].text;
+                                    if (status && statusPipeline[status]) {
+                                        finalBgColor = statusPipeline[status].bg;
+                                        finalTextColor = statusPipeline[status].text;
                                     } else {
                                         finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
                                         finalTextColor = darkMode ? '#D1D5DB' : '#374151';
@@ -1775,8 +1864,8 @@
                                     draggable={isAdmin && !isSelectionMode}
                                     onDragStart={(e) => onDragStart(e, originalIndex)}
                                     style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex break-words whitespace-normal leading-tight relative cursor-pointer transition-all
-                                        ${isCentral ? 'flex-row items-center gap-3 text-left' : 'flex-col text-center'}
+                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex break-words whitespace-normal leading-tight relative cursor-pointer transition-all h-auto
+                                        ${isCentral ? 'flex-row items-start gap-3 text-left' : 'flex-col text-center'}
                                         ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
                                         ${isSelectionMode && !isSelected ? 'opacity-50' : ''}
                                     `}
@@ -1790,7 +1879,7 @@
                                     )}
 
                                     {isCentral && (
-                                        <div className="w-5 h-5 rounded-full shadow-inner border border-white border-opacity-50 flex-shrink-0" style={{ backgroundColor: color.color }}></div>
+                                        <div className="w-5 h-5 mt-0.5 rounded-full shadow-inner border border-white border-opacity-50 flex-shrink-0" style={{ backgroundColor: color.color }}></div>
                                     )}
 
                                     <div className={`flex flex-col ${isCentral ? 'flex-1' : 'w-full items-center'}`}>
@@ -1799,17 +1888,17 @@
                                                 <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm" onClick={e => e.stopPropagation()}>🔗 Ver Arte</a>
                                             </div>
                                         )}
-                                        <span className="text-base block w-full whitespace-normal break-words">
+                                        <span className="text-base block w-full whitespace-normal break-words leading-snug">
                                             {getCleanDisplayText(event.text, isCentral, color.label)}
                                         </span>
                                         {event.notes && !isCentral && (
-                                            <div className="mt-2 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
+                                            <div className="mt-3 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
                                                 <p className="whitespace-pre-wrap">{event.notes}</p>
                                             </div>
                                         )}
-                                        {!isCentral && status && STATUS_PIPELINE[status] && (
-                                            <div className="mt-2 text-[10px] px-2 py-1 rounded-md inline-block font-black uppercase tracking-wider w-fit shadow-sm" style={{ backgroundColor: STATUS_PIPELINE[status].bg, color: STATUS_PIPELINE[status].text }}>
-                                                {STATUS_PIPELINE[status].label}
+                                        {!isCentral && status && statusPipeline[status] && (
+                                            <div className="mt-3 text-[10px] px-2 py-1 rounded-md inline-block font-black uppercase tracking-wider w-fit shadow-sm" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
+                                                {statusPipeline[status].label}
                                             </div>
                                         )}
                                     </div>
@@ -1825,7 +1914,7 @@
                     })}
                   </div>
 
-                  {/* DUAS LEGENDAS: CATEGORIAS E STATUS (CORRIGIDAS) */}
+                  {/* LEGENDAS */}
                   {getLegendItems().length > 0 && (
                     <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA DE CATEGORIAS / EMPRESAS</h3>
@@ -1839,16 +1928,18 @@
                     </div>
                   )}
 
-                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">STATUS DE PRODUÇÃO</h3>
-                    <div className="flex flex-wrap gap-2 md:gap-3">
-                        {Object.entries(STATUS_PIPELINE).map(([key, val]) => (
-                            <div key={key} style={{ backgroundColor: val.bg, color: val.text }} className="rounded-md px-4 md:px-6 py-2 text-xs md:text-sm font-black shadow-md uppercase tracking-wider">
-                                {val.label}
-                            </div>
-                        ))}
+                  {isCentral && (
+                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">STATUS DE PRODUÇÃO</h3>
+                      <div className="flex flex-wrap gap-2 md:gap-3">
+                          {Object.entries(statusPipeline).map(([key, val]) => (
+                              <div key={key} style={{ backgroundColor: val.bg, color: val.text }} className="rounded-md px-4 md:px-6 py-2 text-xs md:text-sm font-black shadow-md uppercase tracking-wider">
+                                  {val.label}
+                              </div>
+                          ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
                 </div>
               </div>
