@@ -115,6 +115,7 @@
             'gravacao': { label: 'Gravação', bg: '#8B5CF6', text: '#FFFFFF' }, 
             'producao': { label: 'Produção', bg: '#F59E0B', text: '#FFFFFF' }, 
             'aprovacao': { label: 'Aprovação', bg: '#06B6D4', text: '#FFFFFF' }, 
+            'aprovado': { label: 'Aprovado', bg: '#84CC16', text: '#FFFFFF' }, 
             'atrasado': { label: 'Atrasado', bg: '#EF4444', text: '#FFFFFF' }, 
             'publicado': { label: 'Publicado', bg: '#10B981', text: '#FFFFFF' } 
         };
@@ -130,19 +131,37 @@
             return color;
         };
 
-        // O LIMPADOR DE TEXTO MÁGICO (CORTA OS PREFIXOS DAS EMPRESAS)
-        const getCleanDisplayText = (text, isCentral, compLabel) => {
+        // =====================================================================
+        // O FORMATADOR DE TEXTO MÁGICO (APLICA A CATEGORIA EM TODOS OS LUGARES)
+        // =====================================================================
+        const getCleanDisplayText = (text, isCentral, categoryLabel) => {
             let cleanText = text || '';
-            if (isCentral && compLabel) {
-                const prefix1 = compLabel.toLowerCase() + ':';
-                const prefix2 = compLabel.toLowerCase() + ' :';
-                if (cleanText.toLowerCase().startsWith(prefix1)) {
-                    cleanText = cleanText.substring(prefix1.length).trim();
-                } else if (cleanText.toLowerCase().startsWith(prefix2)) {
-                    cleanText = cleanText.substring(prefix2.length).trim();
+
+            if (isCentral) {
+                // No UPLI Geral, a "categoryLabel" que chega aqui é o nome da Empresa.
+                // A gente arranca o nome da empresa do início do texto para ficar limpo.
+                if (categoryLabel) {
+                    const prefix1 = categoryLabel.toLowerCase() + ':';
+                    const prefix2 = categoryLabel.toLowerCase() + ' :';
+                    if (cleanText.toLowerCase().startsWith(prefix1)) {
+                        cleanText = cleanText.substring(prefix1.length).trim();
+                    } else if (cleanText.toLowerCase().startsWith(prefix2)) {
+                        cleanText = cleanText.substring(prefix2.length).trim();
+                    }
                 }
+                return cleanText; // No Central, a categoria de verdade já vem salva no texto!
+            } else {
+                // Nos Calendários de Clientes, a "categoryLabel" é a categoria de verdade (Reels, Foto...)
+                // Nós garantimos que ela sempre apareça na frente do texto!
+                if (categoryLabel) {
+                    const catPrefix = categoryLabel.toLowerCase() + ':';
+                    // Se o usuário não digitou manualmente a categoria, a gente coloca pra ele.
+                    if (!cleanText.toLowerCase().startsWith(catPrefix)) {
+                        cleanText = `${categoryLabel}: ${cleanText}`;
+                    }
+                }
+                return cleanText;
             }
-            return cleanText;
         };
 
         const CalendarCreator = () => {
@@ -280,7 +299,7 @@
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
 
-          // ESTADOS DE SELEÇÃO E IMPORTAÇÃO
+          // ESTADOS DO MODO DE SELEÇÃO E IMPORTAÇÃO
           const [isSelectionMode, setIsSelectionMode] = useState(false);
           const [selectedEvents, setSelectedEvents] = useState([]); 
           
@@ -323,7 +342,13 @@
                 });
                 
                 setCompanies(fetchedCompanies);
-                if (!selectedCompany && fetchedCompanies.length > 0) setSelectedCompany(fetchedCompanies[0].id);
+
+                setSelectedCompany(prev => {
+                    if (!prev && fetchedCompanies.length > 0) return fetchedCompanies[0].id;
+                    if (prev && !fetchedCompanies.find(c => c.id === prev) && fetchedCompanies.length > 0) return fetchedCompanies[0].id;
+                    return prev;
+                });
+
             });
             return () => unsubscribe();
           }, [user, userRole]);
@@ -402,14 +427,13 @@
             if (newCompanyName.trim()) {
               const id = Date.now().toString();
               db.collection('companies').doc(id).set({ name: newCompanyName.trim(), events: [], categories: STANDARD_CATEGORIES, statuses: {} });
-              setSelectedCompany(id); setNewCompanyName('');
+              setNewCompanyName('');
             }
           };
 
           const removeCompany = (companyId) => {
             if (confirm('ATENÇÃO: Apagar a empresa e TODOS os eventos?')) {
               db.collection('companies').doc(companyId).delete();
-              if (selectedCompany === companyId) setSelectedCompany(UPLI_GERAL_ID);
             }
           };
 
@@ -482,8 +506,21 @@
 
           const startEditEvent = (event, originalIndex) => {
             setEditingEventIndex(originalIndex);
+            
+            let textToEdit = event.text || '';
+            // Se estivermos num calendário secundário, na hora de editar a gente TIRA a categoria do input pro usuário não apagar sem querer.
+            if (selectedCompany !== UPLI_GERAL_ID) {
+                 const cat = colorOptions.find(c => c.id === event.color);
+                 if (cat) {
+                     const catPrefix = cat.label.toLowerCase() + ':';
+                     if (textToEdit.toLowerCase().startsWith(catPrefix)) {
+                         textToEdit = textToEdit.substring(catPrefix.length).trim();
+                     }
+                 }
+            }
+
             setEditEventForm({
-                day: event.day || '', text: event.text || '', color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || ''
+                day: event.day || '', text: textToEdit, color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || ''
             });
           };
 
@@ -521,7 +558,9 @@
                     } else {
                         if (linkedIdx !== -1) {
                             let newText = updatedEvt.text;
-                            if (catName && !newText.startsWith(`${catName}:`)) newText = `${catName}: ${newText}`;
+                            if (catName && !newText.toLowerCase().startsWith(`${catName.toLowerCase()}:`)) {
+                                newText = `${catName}: ${newText}`;
+                            }
                             upliEvents[linkedIdx] = { ...upliEvents[linkedIdx], day: updatedEvt.day, text: newText, notes: updatedEvt.notes, imageUrl: updatedEvt.imageUrl };
                             db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
                         }
@@ -591,7 +630,7 @@
           const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
           // =========================================================================
-          // MOTOR DE SELEÇÃO E IMPORTAÇÃO (COM DETETIVE CORRIGIDO)
+          // MOTOR DE SELEÇÃO E IMPORTAÇÃO INTELIGENTE
           // =========================================================================
           const safeEvents = Array.isArray(events) ? events : [];
           const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
@@ -650,7 +689,15 @@
                   const catName = cat ? cat.label : 'Sem Categoria';
                   const statusName = e.status && STATUS_PIPELINE[e.status] ? STATUS_PIPELINE[e.status].label : '';
                   const cleanNotes = e.notes ? e.notes.replace(/\n/g, ' ') : '';
-                  textContent += `${comp.name} ; ${catName} ; ${e.day} ; ${e.text} ; ${statusName} ; ${cleanNotes}\n`;
+                  
+                  // Ao exportar, garantir que o título está limpo pra não poluir o TXT com coisas tipo "Foto: Foto: Treino"
+                  let rawTitle = e.text;
+                  const catPrefix = catName.toLowerCase() + ':';
+                  if (rawTitle.toLowerCase().startsWith(catPrefix)) {
+                      rawTitle = rawTitle.substring(catPrefix.length).trim();
+                  }
+                  
+                  textContent += `${comp.name} ; ${catName} ; ${e.day} ; ${rawTitle} ; ${statusName} ; ${cleanNotes}\n`;
               });
 
               const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
@@ -703,16 +750,7 @@
                 
                 const snapshot = await db.collection('companies').get();
                 let allCompanies = {};
-                snapshot.forEach(doc => { 
-                    const data = doc.data();
-                    allCompanies[doc.id] = { 
-                        id: doc.id, 
-                        name: data.name,
-                        events: Array.isArray(data.events) ? data.events : [],
-                        categories: Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES],
-                        statuses: data.statuses || {} 
-                    }; 
-                });
+                snapshot.forEach(doc => { allCompanies[doc.id] = { id: doc.id, ...doc.data() }; });
 
                 let upliGeral = allCompanies[UPLI_GERAL_ID];
                 if (!upliGeral) {
@@ -745,21 +783,19 @@
 
                     if (isNaN(dayNum) || !title) return;
 
-                    // O DETETIVE MÁXIMO DE TÍTULOS E CATEGORIAS
                     let cleanTitle = title;
-                    const destCompPrefix = compData.name.toLowerCase() + ':';
-                    const txtCompPrefix = compNameTXT.toLowerCase() + ':';
                     
-                    if (cleanTitle.toLowerCase().startsWith(destCompPrefix)) {
-                        cleanTitle = cleanTitle.substring(destCompPrefix.length).trim();
-                    } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix)) {
-                        cleanTitle = cleanTitle.substring(txtCompPrefix.length).trim();
+                    // Detetive 1: Remove prefixo de nome de empresa caso venha no arquivo sujo
+                    const txtCompPrefix1 = compNameTXT.toLowerCase() + ':';
+                    const txtCompPrefix2 = compNameTXT.toLowerCase() + ' :';
+                    
+                    if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix1)) {
+                        cleanTitle = cleanTitle.substring(txtCompPrefix1.length).trim();
+                    } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix2)) {
+                        cleanTitle = cleanTitle.substring(txtCompPrefix2.length).trim();
                     }
 
-                    if (catName.toLowerCase() === compData.name.toLowerCase() || catName.toLowerCase() === compNameTXT.toLowerCase() || catName.toLowerCase() === 'upli geral') {
-                        catName = ""; 
-                    }
-
+                    // Detetive 2: Categoria escondida no título ("Foto: Treino")
                     let finalCatName = catName;
                     let finalTitle = cleanTitle;
                     
@@ -787,7 +823,9 @@
                         }
                     }
 
-                    if (!finalCatName) finalCatName = "Geral";
+                    if (!finalCatName || finalCatName.toLowerCase() === 'upli geral' || finalCatName.toLowerCase() === compNameTXT.toLowerCase()) {
+                        finalCatName = "Geral";
+                    }
 
                     let category = compData.categories.find(c => normCat(c.label) === normCat(finalCatName));
                     if (!category) {
@@ -799,6 +837,7 @@
                     if(statusStr.includes('criação') || statusStr.includes('criacao')) exactStatus = 'criacao';
                     else if(statusStr.includes('gravação') || statusStr.includes('gravacao')) exactStatus = 'gravacao';
                     else if(statusStr.includes('produção') || statusStr.includes('producao')) exactStatus = 'producao';
+                    else if(statusStr.includes('aprovado')) exactStatus = 'aprovado';
                     else if(statusStr.includes('aprovação') || statusStr.includes('aprovacao')) exactStatus = 'aprovacao';
                     else if(statusStr.includes('atrasado')) exactStatus = 'atrasado';
                     else if(statusStr.includes('publicado') || statusStr.includes('feito') || statusStr.includes('concluid')) exactStatus = 'publicado';
@@ -908,6 +947,16 @@
                     let displayText = getCleanDisplayText(event.text, isCentral, colorObj?.label);
                     const status = getEventStatus(event._origIdx);
                     
+                    if (!isCentral) {
+                        const catLabel = colorObj ? colorObj.label : '';
+                        if (catLabel) {
+                            const catPrefix = catLabel.toLowerCase() + ':';
+                            if (!displayText.toLowerCase().startsWith(catPrefix)) {
+                                displayText = `${catLabel}: ${displayText}`;
+                            }
+                        }
+                    }
+
                     if (!isCentral && status && STATUS_PIPELINE[status]) {
                         displayText += ` [${STATUS_PIPELINE[status].label}]`;
                     }
@@ -926,6 +975,11 @@
             
             const legendItems = getLegendItems();
             if (legendItems.length > 0) { totalHeight += 40; const itemsPerRow = 5; const legendRows = Math.ceil(legendItems.length / itemsPerRow); totalHeight += legendRows * 45 + padding; } else { totalHeight += padding; }
+            
+            // Espaço para a Legenda de Status
+            totalHeight += 40;
+            const statusRows = Math.ceil(Object.keys(STATUS_PIPELINE).length / 7);
+            totalHeight += statusRows * 45 + padding;
             
             const finalHeight = Math.max(1080, totalHeight); const scale = 3; canvas.width = canvasWidth * scale; canvas.height = finalHeight * scale;
             ctx.scale(scale, scale); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
@@ -975,6 +1029,17 @@
                   ctx.font = 'bold 14px Arial'; 
                   let displayText = getCleanDisplayText(event.text, isCentral, color.label);
                   
+                  // APLICAÇÃO INTELIGENTE DO PREFIXO NO PDF DE CLIENTE
+                  if (!isCentral) {
+                      const catLabel = color.label;
+                      if (catLabel) {
+                          const catPrefix = catLabel.toLowerCase() + ':';
+                          if (!displayText.toLowerCase().startsWith(catPrefix)) {
+                              displayText = `${catLabel}: ${displayText}`;
+                          }
+                      }
+                  }
+
                   if (!isCentral && status && STATUS_PIPELINE[status]) {
                       displayText += ` [${STATUS_PIPELINE[status].label}]`;
                   }
@@ -1002,7 +1067,7 @@
                       lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += 18; });
                   } else {
                       ctx.fillStyle = finalTextColor; ctx.textAlign = 'center';
-                      let textY = eventY + 24; 
+                      let textY = eventY + 24 - (((lines.length - 1) * 18) / 2); 
                       lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += 18; });
                   }
                   
@@ -1014,7 +1079,7 @@
             });
 
             if (legendItems.length > 0) {
-              currentY += 40; ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('LEGENDA:', padding, currentY + 24);
+              currentY += 40; ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY + 24);
               const itemsPerRow = 5; const itemWidth = (contentWidth - 150 - ((itemsPerRow - 1) * 10)) / itemsPerRow;
               legendItems.forEach((item, idx) => {
                 const itemX = padding + 150 + ((idx % itemsPerRow) * (itemWidth + 10)); const itemY = currentY + (Math.floor(idx / itemsPerRow) * 45);
@@ -1023,7 +1088,30 @@
                 let label = item.label || ''; while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
                 ctx.fillText(label, itemX + (itemWidth / 2), itemY + 24);
               });
+              currentY += (Math.ceil(legendItems.length / itemsPerRow) * 45);
             }
+
+            // LEGENDA 2: STATUS NO PDF
+            currentY += 60;
+            ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY + 24);
+            const statusItemsPerRow = 7; 
+            const statusItemWidth = (contentWidth - 150 - ((statusItemsPerRow - 1) * 10)) / statusItemsPerRow;
+            
+            Object.entries(STATUS_PIPELINE).forEach(([key, val], idx) => {
+                const itemX = padding + 150 + ((idx % statusItemsPerRow) * (statusItemWidth + 10)); 
+                const itemY = currentY + (Math.floor(idx / statusItemsPerRow) * 45);
+                ctx.fillStyle = val.bg; 
+                ctx.beginPath(); 
+                ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8);
+                ctx.fill();
+                ctx.fillStyle = val.text; 
+                ctx.font = 'bold 16px Arial'; 
+                ctx.textAlign = 'center';
+                let label = val.label || ''; 
+                while (ctx.measureText(label).width > statusItemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
+                ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 24);
+            });
+
             return { canvas, finalHeight };
           };
 
@@ -1187,9 +1275,7 @@
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
                           <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
                               <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
-                              <p className="text-lg font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
-                                  {userRole === 'master' ? '👑 Master' : userRole === 'admin' ? '🛡️ Administrador' : '🔒 Cliente'}
-                              </p>
+                              <p className="text-lg font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{userRole === 'master' ? '👑 Master' : userRole === 'admin' ? '🛡️ Administrador' : '🔒 Cliente'}</p>
                           </div>
                           <div>
                               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Nome de Exibição</label>
@@ -1480,7 +1566,7 @@
 
                     {isAdmin && (
                         <div className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
-                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT para qualquer calendário">
+                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
                                 <Upload /> Importar
                             </button>
                             
@@ -1585,7 +1671,7 @@
                                             <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
                                         )}
 
-                                        <div className={`flex flex-col ${isCentral ? 'flex-1 overflow-hidden' : 'items-center w-full'}`}>
+                                        <div className={`flex flex-col ${isCentral ? 'flex-1' : 'items-center w-full'}`}>
                                             {event.imageUrl && !isCentral && (
                                                 <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
                                             )}
@@ -1670,7 +1756,7 @@
                                     draggable={isAdmin && !isSelectionMode}
                                     onDragStart={(e) => onDragStart(e, originalIndex)}
                                     style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex whitespace-normal break-words leading-tight relative cursor-pointer transition-all
+                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex break-words whitespace-normal leading-tight relative cursor-pointer transition-all
                                         ${isCentral ? 'flex-row items-center gap-3 text-left' : 'flex-col text-center'}
                                         ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
                                         ${isSelectionMode && !isSelected ? 'opacity-50' : ''}
@@ -1720,9 +1806,10 @@
                     })}
                   </div>
 
+                  {/* DUAS LEGENDAS: CATEGORIAS E STATUS */}
                   {getLegendItems().length > 0 && (
                     <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA</h3>
+                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA DE CATEGORIAS / EMPRESAS</h3>
                       <div className="flex flex-wrap gap-2 md:gap-3">
                         {getLegendItems().map(item => (
                           <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-2 text-xs md:text-sm font-bold shadow-md border border-black border-opacity-10">
@@ -1732,6 +1819,18 @@
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">STATUS DE PRODUÇÃO</h3>
+                    <div className="flex flex-wrap gap-2 md:gap-3">
+                        {Object.entries(STATUS_PIPELINE).map(([key, val]) => (
+                            <div key={key} style={{ backgroundColor: val.bg, color: val.text }} className="rounded-md px-4 md:px-6 py-2 text-xs md:text-sm font-black shadow-md uppercase tracking-wider">
+                                {val.label}
+                            </div>
+                        ))}
+                    </div>
+                  </div>
+                  
                 </div>
               </div>
             </div>
