@@ -97,9 +97,7 @@
         const CheckIcon = () => <span>✓</span>;
         const MultiSelectIcon = () => <span>✅</span>;
         
-        // =====================================================================
         const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
-        // =====================================================================
         const UPLI_GERAL_ID = "upli_geral_master";
 
         const STANDARD_CATEGORIES = [
@@ -174,15 +172,18 @@
           
           const [userRole, setUserRole] = useState('cliente'); 
           const [globalRoles, setGlobalRoles] = useState({});
+          const [globalUserCompanies, setGlobalUserCompanies] = useState({});
           const [showRolesModal, setShowRolesModal] = useState(false);
           
           const [newAccEmail, setNewAccEmail] = useState('');
           const [newAccPassword, setNewAccPassword] = useState('');
           const [newAccRole, setNewAccRole] = useState('admin');
+          const [newAccCompany, setNewAccCompany] = useState('');
           const [creatingAcc, setCreatingAcc] = useState(false);
 
           const [roleEmailInput, setRoleEmailInput] = useState('');
           const [roleSelectInput, setRoleSelectInput] = useState('admin');
+          const [roleCompanyInput, setRoleCompanyInput] = useState('');
 
           const [darkMode, setDarkMode] = useState(false);
 
@@ -200,7 +201,9 @@
                      db.collection('system').doc('roles').onSnapshot(doc => {
                          if (doc.exists) {
                              const rolesData = doc.data().userRoles || {};
+                             const companiesData = doc.data().userCompanies || {}; 
                              setGlobalRoles(rolesData);
+                             setGlobalUserCompanies(companiesData); 
                              
                              if (u.email.toLowerCase() === MEU_EMAIL_MASTER) setUserRole('master'); 
                              else if (rolesData[u.email.toLowerCase()] === 'master') setUserRole('master'); 
@@ -208,7 +211,7 @@
                              else setUserRole('cliente'); 
                          } else {
                              if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
-                                 db.collection('system').doc('roles').set({ userRoles: {} });
+                                 db.collection('system').doc('roles').set({ userRoles: {}, userCompanies: {} });
                                  setUserRole('master');
                              } else setUserRole('cliente');
                          }
@@ -226,33 +229,84 @@
           const handleCreateAccount = async () => {
               if (!newAccEmail || !newAccPassword) return alert("Preencha email e senha!");
               if (newAccPassword.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
+              if (newAccRole === 'cliente' && !newAccCompany) return alert("Selecione a qual empresa esse cliente pertence!");
+              
               setCreatingAcc(true);
               try {
                   let secondaryApp = firebase.apps.find(app => app.name === 'Secondary') || firebase.initializeApp(firebaseConfig, 'Secondary');
                   await secondaryApp.auth().createUserWithEmailAndPassword(newAccEmail.trim().toLowerCase(), newAccPassword);
                   await secondaryApp.auth().signOut();
+                  
                   const emailToSave = newAccEmail.trim().toLowerCase();
                   const updatedRoles = { ...globalRoles, [emailToSave]: newAccRole };
-                  await db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true });
+                  const updatedCompanies = { ...globalUserCompanies };
+                  
+                  if (newAccRole === 'cliente') {
+                      updatedCompanies[emailToSave] = newAccCompany;
+                  }
+
+                  await db.collection('system').doc('roles').set({ 
+                      userRoles: updatedRoles,
+                      userCompanies: updatedCompanies
+                  }, { merge: true });
+                  
                   alert(`Conta ${emailToSave} criada com acesso de ${newAccRole.toUpperCase()}!`);
-                  setNewAccEmail(''); setNewAccPassword('');
+                  setNewAccEmail(''); setNewAccPassword(''); setNewAccCompany('');
               } catch (error) { alert("Erro ao criar: " + error.message); }
               setCreatingAcc(false);
           };
 
           const handleSaveRole = () => {
               if(!roleEmailInput) return;
+              if(roleSelectInput === 'cliente' && !roleCompanyInput) return alert("Selecione a empresa do cliente!");
+
               const emailToSave = roleEmailInput.toLowerCase().trim();
               const updatedRoles = { ...globalRoles, [emailToSave]: roleSelectInput };
-              db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true }).then(() => { setRoleEmailInput(''); alert(`Permissão atualizada!`); });
+              const updatedCompanies = { ...globalUserCompanies };
+              
+              if (roleSelectInput === 'cliente') {
+                  updatedCompanies[emailToSave] = roleCompanyInput;
+              } else {
+                  delete updatedCompanies[emailToSave];
+              }
+
+              db.collection('system').doc('roles').set({ 
+                  userRoles: updatedRoles,
+                  userCompanies: updatedCompanies
+              }, { merge: true }).then(() => { 
+                  setRoleEmailInput(''); 
+                  setRoleCompanyInput('');
+                  alert(`Permissão atualizada!`); 
+              });
+          };
+
+          const handleChangeClientCompany = (emailToUpdate, newCompanyId) => {
+              const updatedCompanies = { ...globalUserCompanies };
+              
+              if (newCompanyId) {
+                  updatedCompanies[emailToUpdate] = newCompanyId;
+              } else {
+                  delete updatedCompanies[emailToUpdate];
+              }
+
+              db.collection('system').doc('roles').set({ 
+                  userCompanies: updatedCompanies
+              }, { merge: true });
           };
 
           const handleRemoveRole = (emailToRemove) => {
-              if(emailToRemove === MEU_EMAIL_MASTER) return alert("O Mestre Original não pode ser rebaixado!");
-              if(confirm(`Rebaixar ${emailToRemove} para CLIENTE?`)) {
+              if(emailToRemove === MEU_EMAIL_MASTER) return alert("O Mestre Original não pode ser removido!");
+              if(confirm(`Tem certeza que deseja remover ou alterar os acessos de ${emailToRemove}?`)) {
                   const updatedRoles = { ...globalRoles };
+                  const updatedCompanies = { ...globalUserCompanies };
+                  
                   delete updatedRoles[emailToRemove];
-                  db.collection('system').doc('roles').set({ userRoles: updatedRoles }, { merge: true });
+                  delete updatedCompanies[emailToRemove];
+                  
+                  db.collection('system').doc('roles').set({ 
+                      userRoles: updatedRoles,
+                      userCompanies: updatedCompanies
+                  }, { merge: true });
               }
           };
 
@@ -293,6 +347,7 @@
           
           const [newCompanyName, setNewCompanyName] = useState('');
           const [newCompanyColor, setNewCompanyColor] = useState(() => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
+          const [newCompanyIsPrivate, setNewCompanyIsPrivate] = useState(false); 
           
           const [editingCompany, setEditingCompany] = useState(null);
           const [editCompanyName, setEditCompanyName] = useState('');
@@ -300,7 +355,6 @@
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
 
-          // ESTADOS DO MODO DE SELEÇÃO E IMPORTAÇÃO
           const [isSelectionMode, setIsSelectionMode] = useState(false);
           const [selectedEvents, setSelectedEvents] = useState([]); 
           
@@ -317,14 +371,29 @@
                 let hasUpliGeral = false;
                 
                 snapshot.forEach(doc => {
+                    const data = doc.data() || {};
+
+                    // --- TRAVA DE PRIVACIDADE ABSOLUTA ---
+                    // Se a empresa for privada, SÓ O pedrocavalcant159@gmail.com consegue ver
+                    if (data.isPrivate && user.email.toLowerCase() !== MEU_EMAIL_MASTER) {
+                        return; // Esconde das outras contas
+                    }
+                    // -------------------------------------
+
                     if (doc.id === UPLI_GERAL_ID) {
                         hasUpliGeral = true;
-                        const globalData = doc.data() || {};
-                        if (globalData.statusPipeline) {
-                            setStatusPipeline({ ...DEFAULT_STATUS_PIPELINE, ...globalData.statusPipeline });
+                        if (data.statusPipeline) {
+                            setStatusPipeline({ ...DEFAULT_STATUS_PIPELINE, ...data.statusPipeline });
                         }
                     }
-                    const data = doc.data() || {};
+
+                    if (userRole === 'cliente') {
+                        const myCompanyId = globalUserCompanies[user.email.toLowerCase()];
+                        if (doc.id !== myCompanyId) {
+                            return; 
+                        }
+                    }
+
                     let safeCategories = Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES];
 
                     fetchedCompanies.push({ 
@@ -332,7 +401,8 @@
                         name: data.name || 'Empresa', 
                         color: data.color || stringToColor(data.name || 'Empresa'), 
                         events: Array.isArray(data.events) ? data.events : [],
-                        categories: safeCategories
+                        categories: safeCategories,
+                        isPrivate: data.isPrivate 
                     });
                 });
 
@@ -358,7 +428,7 @@
 
             });
             return () => unsubscribe();
-          }, [user, userRole]);
+          }, [user, userRole, globalUserCompanies]);
 
           useEffect(() => {
               if (selectedCompany) {
@@ -404,7 +474,6 @@
           const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
           const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
-          // Formatação de data extra para o modal
           const formatDateStr = (isoString) => {
               if(!isoString) return '';
               return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit'});
@@ -448,10 +517,13 @@
                   color: newCompanyColor, 
                   events: [], 
                   categories: STANDARD_CATEGORIES, 
-                  statuses: {} 
+                  statuses: {},
+                  isPrivate: newCompanyIsPrivate,
+                  ownerEmail: newCompanyIsPrivate ? MEU_EMAIL_MASTER : null 
               });
               setNewCompanyName('');
               setNewCompanyColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
+              setNewCompanyIsPrivate(false); 
             }
           };
 
@@ -556,7 +628,6 @@
             });
           };
 
-          // --- NOVA FUNÇÃO PARA ADICIONAR AO GOOGLE AGENDA ---
           const addToGoogleCalendar = () => {
               const title = encodeURIComponent(editEventForm.text || 'Post UPLI');
               let notesText = editEventForm.notes || '';
@@ -567,7 +638,7 @@
               
               const dayNum = parseInt(editEventForm.day || 1);
               const startDate = new Date(year, month, dayNum);
-              const endDate = new Date(year, month, dayNum + 1); // Dia seguinte para marcar como evento de dia inteiro
+              const endDate = new Date(year, month, dayNum + 1); 
               
               const formatGCalDate = (d) => {
                   return d.getFullYear().toString() + 
@@ -580,7 +651,6 @@
               
               window.open(url, '_blank');
           };
-          // ---------------------------------------------------
 
           const saveEditEvent = () => {
             const dayNum = parseInt(editEventForm.day);
@@ -687,9 +757,6 @@
           };
           const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
 
-          // =========================================================================
-          // MOTOR DE SELEÇÃO E IMPORTAÇÃO INTELIGENTE
-          // =========================================================================
           const safeEvents = Array.isArray(events) ? events : [];
           const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
 
@@ -982,9 +1049,6 @@
             return weeks;
           };
 
-          // =========================================================================
-          // PDF RENDERER (DESENHO OTIMIZADO E LINKS CLICÁVEIS)
-          // =========================================================================
           const getLines = (ctx, text, maxWidth) => {
             if (!text) return [];
             const words = text.split(' '); const lines = []; let currentLine = words[0];
@@ -1004,10 +1068,8 @@
             const lineHeight = 18;
             const paddingY = 12;
 
-            // ARRAY PARA GUARDAR AS COORDENADAS DOS LINKS
             const pdfLinks = [];
 
-            // 1. Calcula a Altura Total para evitar cortes
             weeks.forEach(week => {
               totalHeight += 50;  let maxWeekHeightCalc = 0;
               week.forEach(day => {
@@ -1061,16 +1123,14 @@
                 totalHeight += statusRows * 50 + padding + 60; 
             }
             
-            // ===== AUMENTO DE QUALIDADE PARA SUPER 4K/8K =====
             const finalHeight = Math.max(1080, totalHeight); 
-            const scale = 4; // Qualidade dobrada!
+            const scale = 4; 
             canvas.width = canvasWidth * scale; 
             canvas.height = finalHeight * scale;
             ctx.scale(scale, scale); 
-            ctx.textRendering = 'optimizeLegibility'; // Suaviza as fontes
+            ctx.textRendering = 'optimizeLegibility'; 
             ctx.imageSmoothingEnabled = true; 
             ctx.imageSmoothingQuality = 'high';
-            // =================================================
             
             ctx.fillStyle = '#ffffff'; 
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
@@ -1140,7 +1200,6 @@
                   const lines = getLines(ctx, displayText, textWidthArea); 
                   const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
                   
-                  // SALVA AS COORDENADAS DO EVENTO PARA O PDF SE TIVER LINK
                   if (event.imageUrl) {
                       let urlFormated = event.imageUrl.trim();
                       if (!urlFormated.match(/^https?:\/\//i)) {
@@ -1262,13 +1321,11 @@
                       orientation: finalHeight > 1920 ? 'portrait' : 'landscape', 
                       unit: 'px', 
                       format: [1920, finalHeight], 
-                      compress: false // Remove a compressão para evitar borrar
+                      compress: false 
                   }); 
                   
-                  // Adiciona a imagem no PDF em tamanho real sem perdas
                   pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight); 
                   
-                  // CRIA OS LINKS CLICÁVEIS INVISÍVEIS POR CIMA DA IMAGEM NO PDF
                   pdfLinks.forEach(link => {
                       pdf.link(link.x, link.y, link.w, link.h, { url: link.url });
                   });
@@ -1318,7 +1375,6 @@
           return (
             <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
               
-              {/* MODAL DE IMPORTAÇÃO */}
               {showImportModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full relative">
@@ -1354,7 +1410,6 @@
                   </div>
               )}
 
-              {/* MODAL DE EDIÇÃO DE POST E STATUS */}
               {editingEventIndex !== null && !isSelectionMode && (
                   <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative max-h-[95vh] overflow-y-auto">
@@ -1408,7 +1463,6 @@
                               </div>
                           )}
 
-                          {/* BOTÃO DO GOOGLE AGENDA */}
                           <button onClick={addToGoogleCalendar} className="mt-4 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-blue-300 dark:border-gray-600 font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition shadow-sm text-sm">
                               📅 Salvar no Meu Google Agenda
                           </button>
@@ -1454,7 +1508,6 @@
                   </div>
               )}
 
-              {/* MODAL DE PERFIL RESTRITO */}
               {showProfileModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4 relative">
@@ -1476,7 +1529,6 @@
                   </div>
               )}
 
-              {/* PAINEL SECRETO DO MASTER */}
               {showRolesModal && userRole === 'master' && (
                   <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 z-[100]">
                       <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1493,12 +1545,22 @@
                                   <option value="admin">Administrador (Pode editar tudo)</option>
                                   <option value="cliente">Cliente (Somente visualizar)</option>
                               </select>
+                              
+                              {newAccRole === 'cliente' && (
+                                  <select value={newAccCompany} onChange={e => setNewAccCompany(e.target.value)} className="w-full border-2 border-blue-300 bg-blue-50 dark:border-blue-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3 text-sm">
+                                      <option value="">↳ Selecione a empresa deste cliente...</option>
+                                      {companies.filter(c => c.id !== UPLI_GERAL_ID).map(c => (
+                                          <option key={c.id} value={c.id}>{c.name}</option>
+                                      ))}
+                                  </select>
+                              )}
+
                               <button onClick={handleCreateAccount} disabled={creatingAcc} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex justify-center items-center gap-2">
                                   {creatingAcc ? 'Sincronizando...' : 'Criar Conta e Liberar Acesso'}
                               </button>
                           </div>
 
-                          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border dark:border-gray-700 mt-4">
+                          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border dark:border-gray-700 mt-4 flex flex-col gap-2">
                               <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-2 text-sm">Alterar cargo de uma conta existente:</h4>
                               <div className="flex flex-col sm:flex-row gap-2">
                                   <input type="email" value={roleEmailInput} onChange={e => setRoleEmailInput(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none text-sm" placeholder="E-mail" />
@@ -1507,23 +1569,50 @@
                                       <option value="admin">Admin</option>
                                       <option value="cliente">Cliente</option>
                                   </select>
-                                  <button onClick={handleSaveRole} className="bg-gray-800 dark:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm">Salvar</button>
+                                  <button onClick={handleSaveRole} className="bg-gray-800 dark:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm hover:bg-gray-900 transition">Salvar</button>
                               </div>
+                              {roleSelectInput === 'cliente' && (
+                                  <select value={roleCompanyInput} onChange={e => setRoleCompanyInput(e.target.value)} className="w-full border-2 border-blue-300 bg-blue-50 dark:border-blue-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none font-bold text-sm mt-1">
+                                      <option value="">Qual empresa o cliente vai ver?</option>
+                                      {companies.filter(c => c.id !== UPLI_GERAL_ID).map(c => (
+                                          <option key={c.id} value={c.id}>{c.name}</option>
+                                      ))}
+                                  </select>
+                              )}
                           </div>
 
                           <div className="mt-4">
                               <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos:</h4>
-                              <div className="space-y-2">
+                              <div className="space-y-2 mt-2">
                                   {Object.keys(globalRoles).map(email => (
-                                      <div key={email} className="flex justify-between items-center bg-gray-50 dark:bg-gray-900 p-2 rounded border dark:border-gray-700 shadow-sm">
-                                          <div className="flex flex-col">
-                                              <span className="font-bold text-sm dark:text-gray-200">{email}</span>
-                                              <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'master' ? 'text-yellow-600' : globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>
-                                                  {globalRoles[email] === 'master' ? '👑 Master' : globalRoles[email]}
-                                              </span>
+                                      <div key={email} className="flex flex-col bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border dark:border-gray-700 shadow-sm gap-2">
+                                          <div className="flex justify-between items-center w-full">
+                                              <div className="flex flex-col">
+                                                  <span className="font-bold text-sm dark:text-gray-200">{email}</span>
+                                                  <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'master' ? 'text-yellow-600' : globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>
+                                                      {globalRoles[email] === 'master' ? '👑 Master' : globalRoles[email] === 'admin' ? '🛡️ Admin' : '👤 Cliente'}
+                                                  </span>
+                                              </div>
+                                              {email !== MEU_EMAIL_MASTER && (
+                                                  <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 border border-red-100 dark:border-red-900 dark:bg-red-900 px-3 py-2 rounded-lg transition shrink-0">
+                                                      {globalRoles[email] === 'cliente' ? 'Remover' : 'Rebaixar'}
+                                                  </button>
+                                              )}
                                           </div>
-                                          {email !== MEU_EMAIL_MASTER && (
-                                              <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 border border-red-100 dark:border-red-900 dark:bg-red-900 px-3 py-2 rounded-lg transition">Rebaixar</button>
+
+                                          {globalRoles[email] === 'cliente' && (
+                                              <div className="mt-1 pt-2 border-t border-gray-200 dark:border-gray-700 w-full">
+                                                  <select 
+                                                      value={globalUserCompanies[email] || ''} 
+                                                      onChange={(e) => handleChangeClientCompany(email, e.target.value)}
+                                                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-white rounded-md px-2 py-1.5 outline-none text-xs font-bold text-gray-700"
+                                                  >
+                                                      <option value="">⚠️ Selecione a empresa liberada...</option>
+                                                      {companies.filter(c => c.id !== UPLI_GERAL_ID && (!c.isPrivate || c.ownerEmail === user?.email?.toLowerCase())).map(c => (
+                                                          <option key={c.id} value={c.id}>{c.name}</option>
+                                                      ))}
+                                                  </select>
+                                              </div>
                                           )}
                                       </div>
                                   ))}
@@ -1537,7 +1626,6 @@
 
               <div className="max-w-7xl mx-auto space-y-6">
                 
-                {/* CABEÇALHO SUPERIOR ATUALIZADO MOBILE/DESKTOP */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     
@@ -1549,7 +1637,6 @@
                           <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Nuvem Online</p>
                         </div>
                         
-                        {/* BOTÕES MOBILE (Visíveis apenas no celular) */}
                         <div className="flex md:hidden items-center gap-2">
                             <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition shadow-sm">
                                 {darkMode ? '☀️' : '🌙'}
@@ -1569,7 +1656,6 @@
                           </button>
                       )}
 
-                      {/* PAINEL DE PERFIL DESKTOP (Oculto no celular, pois já tem os ícones acima) */}
                       <div className="hidden md:flex items-center gap-2">
                           <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition hover:scale-110 shadow-sm" title="Alternar Tema">
                               {darkMode ? '☀️' : '🌙'}
@@ -1586,7 +1672,6 @@
                           </div>
                       </div>
 
-                      {/* BOTÕES DE EXPORTAÇÃO */}
                       <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
                           <button onClick={exportAsImage} className="flex-1 md:flex-none justify-center bg-purple-600 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center gap-1 shadow-sm"><ImageIcon /> PNG</button>
                           <button onClick={exportAsPDF} className="flex-1 md:flex-none justify-center bg-purple-800 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center gap-1 shadow-sm"><PDFIcon /> PDF HD</button>
@@ -1597,19 +1682,27 @@
                   </div>
                 </div>
 
-                {/* PAINEL DE ADMINISTRAÇÃO */}
                 {isAdmin && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                        <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
-                            <input type="color" value={newCompanyColor} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Cor da Empresa no Calendário Central" />
-                            <input type="text" value={newCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
+                      <div className="flex flex-col gap-2 mb-4">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
+                                <input type="color" value={newCompanyColor} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Cor da Empresa no Calendário Central" />
+                                <input type="text" value={newCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
+                            </div>
+                            <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
+                            <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
                         </div>
-                        <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                        <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
+                        {/* TRAVA: SÓ O PEDRO VÊ ESSE CHECKBOX */}
+                        {user.email.toLowerCase() === MEU_EMAIL_MASTER && (
+                            <label className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-300 cursor-pointer w-fit p-1">
+                                <input type="checkbox" checked={newCompanyIsPrivate} onChange={e => setNewCompanyIsPrivate(e.target.checked)} className="w-4 h-4 cursor-pointer accent-gray-800" />
+                                🔒 Criar como Calendário Oculto (Só eu vejo)
+                            </label>
+                        )}
                       </div>
                       <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
                           {companies.map(company => (
@@ -1632,6 +1725,7 @@
                                                 <div className="w-4 h-4 rounded-full shadow-inner border border-gray-300 dark:border-gray-600" style={{backgroundColor: company.color}}></div>
                                             )}
                                             {company.id === UPLI_GERAL_ID ? '👑 ' : ''}{company.name}
+                                            {company.isPrivate && <span title="Calendário Oculto">🔒</span>}
                                         </div>
                                     )}
                                     
@@ -1693,7 +1787,6 @@
                       )}
                     </div>
 
-                    {/* PAINEL DE CORES DE STATUS (APENAS CENTRAL) */}
                     {isCentral && (
                         <div className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-orange-200 dark:border-gray-700">
                             <h3 className="font-bold text-orange-600 dark:text-orange-400 mb-3 flex items-center gap-2">🚥 Personalizar Cores dos Status</h3>
@@ -1752,7 +1845,6 @@
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   
-                  {/* PAINEL DE MODO DE SELEÇÃO */}
                   {isSelectionMode && (
                       <div className="bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-400 p-4 rounded-xl mb-6 shadow-md transition-all">
                           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1783,7 +1875,6 @@
                       </div>
                   )}
 
-                  {/* NAVEGAÇÃO E BOTÕES */}
                   <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
                     
                     <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full md:w-auto justify-between md:justify-start">
@@ -1808,10 +1899,10 @@
 
                     <h3 className="text-xl md:text-3xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm whitespace-nowrap w-full md:w-auto text-center">
                         {companies.find(c => c.id === selectedCompany)?.name}
+                        {companies.find(c => c.id === selectedCompany)?.isPrivate ? ' 🔒' : ''}
                     </h3>
                   </div>
 
-                  {/* FILTRO DE STATUS (APENAS CENTRAL) */}
                   {isCentral && (
                       <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
                           <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
@@ -1898,7 +1989,6 @@
                                             <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
                                         )}
 
-                                        {/* A BOLINHA NO UPLI GERAL */}
                                         {isCentral && (
                                             <div className="w-3.5 h-3.5 mt-0.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
                                         )}
@@ -1908,13 +1998,11 @@
                                                 <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
                                             )}
                                             
-                                            {/* TEXTO SEM CORTES */}
                                             <span className="leading-snug whitespace-normal break-words block w-full">
                                                 {getCleanDisplayText(event.text, isCentral, color.label)}
                                                 {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
                                             </span>
 
-                                            {/* ETIQUETA DE STATUS PARA O CALENDÁRIO DO CLIENTE */}
                                             {!isCentral && status && statusPipeline[status] && (
                                                 <div className="mt-2 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
                                                     {statusPipeline[status].label}
@@ -1933,7 +2021,6 @@
                     </div>
                   </div>
 
-                  {/* VISÃO CELULAR */}
                   <div className="block md:hidden space-y-4 mt-2">
                     {daysArray.map(day => {
                       const dayEvents = getCalendarEventsForDay(day);
@@ -2038,7 +2125,6 @@
                     })}
                   </div>
 
-                  {/* LEGENDAS */}
                   {getLegendItems().length > 0 && (
                     <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA DE CATEGORIAS / EMPRESAS</h3>
