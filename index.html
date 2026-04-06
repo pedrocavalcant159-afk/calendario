@@ -98,7 +98,9 @@
         const MultiSelectIcon = () => <span>✅</span>;
         
         const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
-        const UPLI_GERAL_ID = "upli_geral_master";
+        
+        // 🔥 A GRANDE SACADA: Mudamos o ID do banco de dados para despistar o bug.
+        const UPLI_GERAL_ID = "upli_geral_v2";
 
         const STANDARD_CATEGORIES = [
             { id: 'cat_reels', label: 'Reels', color: '#E1306C' },
@@ -371,10 +373,12 @@
                 let hasUpliGeral = false;
                 
                 snapshot.forEach(doc => {
+                    // 🔥 IGNORAMOS TOTALMENTE O CALENDÁRIO BUGADO ANTIGO
+                    if (doc.id === "upli_geral_master") return; 
+
                     const data = doc.data() || {};
 
                     // --- TRAVA DE PRIVACIDADE ABSOLUTA ---
-                    // Se a empresa for privada, SÓ O pedrocavalcant159@gmail.com consegue ver
                     if (data.isPrivate && user.email.toLowerCase() !== MEU_EMAIL_MASTER) {
                         return; // Esconde das outras contas
                     }
@@ -406,10 +410,11 @@
                     });
                 });
 
-                if (!hasUpliGeral && (userRole === 'master' || userRole === 'admin')) {
+                // SE O NOVO COFRE V2 NÃO EXISTIR, NÓS O CRIAMOS SEGURO
+                if (!hasUpliGeral && (userRole === 'master' || userRole === 'admin') && snapshot.docs.length > 0) {
                     db.collection('companies').doc(UPLI_GERAL_ID).set({
-                        name: 'UPLI Geral', events: [], categories: STANDARD_CATEGORIES, statusPipeline: DEFAULT_STATUS_PIPELINE
-                    });
+                        name: 'UPLI Geral', categories: STANDARD_CATEGORIES, statusPipeline: DEFAULT_STATUS_PIPELINE
+                    }, { merge: true });
                 }
 
                 fetchedCompanies.sort((a,b) => {
@@ -481,6 +486,49 @@
 
           const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
           const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
+
+          // BOTÃO DE EMERGÊNCIA (RECONSTRÓI O UPLI GERAL NO NOVO COFRE)
+          const rescueUpliGeral = () => {
+              if (!confirm("🚑 RECUPERAÇÃO DE EMERGÊNCIA: Isso vai copiar todos os posts originais das suas empresas e reconstruir o UPLI Geral definitivamente. Continuar?")) return;
+              
+              let allClones = [];
+              companies.forEach(comp => {
+                  if (comp.id === UPLI_GERAL_ID || comp.id === "upli_geral_master") return;
+                  
+                  const compEvents = comp.events || [];
+                  compEvents.forEach(evt => {
+                      const cat = comp.categories.find(c => c.id === evt.color);
+                      const catName = cat ? cat.label : '';
+                      const isEvento = evt.color === 'cat_evento' || catName.toLowerCase().includes('evento');
+                      
+                      if (!isEvento) {
+                          let formattedText = evt.text;
+                          if (catName && !formattedText.toLowerCase().startsWith(`${catName.toLowerCase()}:`)) {
+                              formattedText = `${catName}: ${formattedText}`;
+                          }
+
+                          allClones.push({
+                              ...evt,
+                              id: evt.id + "_clone",
+                              text: formattedText,
+                              sourceCompanyId: comp.id,
+                              color: comp.id
+                          });
+                      }
+                  });
+              });
+              
+              db.collection('companies').doc(UPLI_GERAL_ID).set({
+                  name: 'UPLI Geral',
+                  categories: STANDARD_CATEGORIES,
+                  statusPipeline: DEFAULT_STATUS_PIPELINE,
+                  events: allClones
+              }, { merge: true }).then(() => {
+                  alert("✅ Tudo restaurado e blindado! O Calendário UPLI Geral foi reconstruído com sucesso em um cofre novo.");
+              }).catch(err => {
+                  alert("Erro ao restaurar: " + err.message);
+              });
+          };
 
           const toggleEventStatus = (originalIndex, newStatus) => {
               if (!isAdmin) return;
@@ -1696,7 +1744,6 @@
                             <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                             <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
                         </div>
-                        {/* TRAVA: SÓ O PEDRO VÊ ESSE CHECKBOX */}
                         {user.email.toLowerCase() === MEU_EMAIL_MASTER && (
                             <label className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-300 cursor-pointer w-fit p-1">
                                 <input type="checkbox" checked={newCompanyIsPrivate} onChange={e => setNewCompanyIsPrivate(e.target.checked)} className="w-4 h-4 cursor-pointer accent-gray-800" />
@@ -1887,6 +1934,11 @@
 
                     {isAdmin && (
                         <div className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
+                            {/* BOTÃO DE RESGATE DEFINITIVO */}
+                            <button onClick={rescueUpliGeral} className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-sm" title="Restaurar UPLI Geral">
+                                🚑 Restaurar
+                            </button>
+
                             <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
                                 <Upload /> Importar
                             </button>
