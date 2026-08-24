@@ -20,6 +20,8 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://api.trello.com/1/client.js?key=d45dbd1071fecc178231b48b73a58e12"></script>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -96,6 +98,7 @@
         const KeyIcon = () => <span>🔑</span>;
         const CheckIcon = () => <span>✓</span>;
         const MultiSelectIcon = () => <span>✅</span>;
+        const TrelloIcon = () => <span title={'Trello'}>📋</span>;
         
         const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
         
@@ -365,6 +368,23 @@
           const [importFile, setImportFile] = useState(null);
           const [importToCentral, setImportToCentral] = useState(true); 
           const [importing, setImporting] = useState(false);
+
+          const [showTrelloModal, setShowTrelloModal] = useState(false);
+          const [trelloMember, setTrelloMember] = useState(null);
+          const [trelloBoards, setTrelloBoards] = useState([]);
+          const [trelloBoardId, setTrelloBoardId] = useState('');
+          const [trelloLists, setTrelloLists] = useState([]);
+          const [trelloCards, setTrelloCards] = useState([]);
+          const [trelloMode, setTrelloMode] = useState('add');
+          const [trelloEventSelection, setTrelloEventSelection] = useState([]);
+          const [trelloEventLists, setTrelloEventLists] = useState({});
+          const [trelloDefaultListId, setTrelloDefaultListId] = useState('');
+          const [trelloDeleteSelection, setTrelloDeleteSelection] = useState([]);
+          const [trelloDeleteConfirmation, setTrelloDeleteConfirmation] = useState('');
+          const [trelloBusy, setTrelloBusy] = useState(false);
+          const [trelloProgress, setTrelloProgress] = useState('');
+          const [trelloError, setTrelloError] = useState('');
+          const [trelloSuccess, setTrelloSuccess] = useState('');
 
           useEffect(() => {
             if (!user) return;
@@ -882,6 +902,331 @@
 
               setIsSelectionMode(false);
               setSelectedEvents([]);
+          };
+
+          const getTrelloErrorMessage = (error) => {
+              if (!error) return 'Erro desconhecido do Trello.';
+              if (typeof error === 'string') return error;
+              return error.responseText || error.message || error.statusText || 'Não foi possível concluir a operação.';
+          };
+
+          const trelloRequest = (path, options = {}) => {
+              const { method = 'GET', params = {}, body = null } = options;
+              return new Promise((resolve, reject) => {
+                  if (!window.Trello || typeof window.Trello.rest !== 'function') {
+                      reject(new Error('A biblioteca do Trello não carregou. Atualize a página e tente novamente.'));
+                      return;
+                  }
+
+                  const cleanPath = path.replace(/^\/+/, '');
+                  const requestParams = body !== null ? { ...params, ...body } : params;
+                  window.Trello.rest(
+                      method,
+                      cleanPath,
+                      requestParams,
+                      response => resolve(response),
+                      error => reject(new Error(getTrelloErrorMessage(error)))
+                  );
+              });
+          };
+
+          const loadTrelloBoard = async (boardId) => {
+              if (!boardId) {
+                  setTrelloLists([]);
+                  setTrelloCards([]);
+                  return;
+              }
+
+              const safeBoardId = encodeURIComponent(boardId);
+              const [listsResponse, cardsResponse] = await Promise.all([
+                  trelloRequest(`/boards/${safeBoardId}/lists`, {
+                      params: { filter: 'open', fields: 'name,pos' }
+                  }),
+                  trelloRequest(`/boards/${safeBoardId}/cards/all`, {
+                      params: { fields: 'name,desc,due,idList,url,closed' }
+                  })
+              ]);
+
+              const loadedLists = Array.isArray(listsResponse) ? listsResponse : [];
+              const loadedCards = Array.isArray(cardsResponse) ? cardsResponse : [];
+              setTrelloLists(loadedLists);
+              setTrelloCards(loadedCards);
+              setTrelloDeleteSelection([]);
+
+              const firstListId = loadedLists[0]?.id || '';
+              setTrelloDefaultListId(firstListId);
+              setTrelloEventLists(
+                  Object.fromEntries(trelloEventSelection.map(eventKey => [eventKey, firstListId]))
+              );
+          };
+
+          const loadConnectedTrelloAccount = async () => {
+              const [member, boardsResponse] = await Promise.all([
+                      trelloRequest('/members/me', {
+                          params: { fields: 'fullName,username' }
+                      }),
+                      trelloRequest('/members/me/boards', {
+                          params: { filter: 'open', fields: 'name,url' }
+                      })
+              ]);
+
+              const loadedBoards = Array.isArray(boardsResponse) ? boardsResponse : [];
+              setTrelloMember(member);
+              setTrelloBoards(loadedBoards);
+
+              if (loadedBoards.length === 0) {
+                  setTrelloBoardId('');
+                  setTrelloLists([]);
+                  setTrelloCards([]);
+                  throw new Error('A conta conectada não possui quadros abertos.');
+              }
+
+              const boardId = loadedBoards.some(board => board.id === trelloBoardId)
+                  ? trelloBoardId
+                  : loadedBoards[0].id;
+              setTrelloBoardId(boardId);
+              setTrelloProgress('Carregando listas e cartões...');
+              await loadTrelloBoard(boardId);
+          };
+
+          const connectTrello = () => {
+              setTrelloError('');
+              setTrelloSuccess('');
+
+              if (!window.Trello || typeof window.Trello.authorize !== 'function') {
+                  setTrelloError('A conexão do Trello não carregou. Atualize a página e tente novamente.');
+                  return;
+              }
+
+              setTrelloBusy(true);
+              setTrelloProgress('Aguardando sua autorização no Trello...');
+              window.Trello.authorize({
+                  type: 'popup',
+                  name: 'Calendário UPLI',
+                  persist: true,
+                  interactive: true,
+                  scope: { read: true, write: true, account: false },
+                  expiration: '30days',
+                  success: async () => {
+                      try {
+                          setTrelloProgress('Carregando sua conta do Trello...');
+                          await loadConnectedTrelloAccount();
+                          setTrelloProgress('');
+                      } catch (error) {
+                          setTrelloMember(null);
+                          setTrelloError(`Não foi possível carregar a conta: ${error.message}`);
+                          setTrelloProgress('');
+                      } finally {
+                          setTrelloBusy(false);
+                      }
+                  },
+                  error: error => {
+                      setTrelloMember(null);
+                      setTrelloBusy(false);
+                      setTrelloProgress('');
+                      setTrelloError(`Autorização não concluída. ${getTrelloErrorMessage(error)} Verifique se o domínio do calendário está em Allowed Origins no Power-Up.`);
+                  }
+              });
+          };
+
+          const disconnectTrello = () => {
+              try {
+                  if (window.Trello && typeof window.Trello.deauthorize === 'function') window.Trello.deauthorize();
+                  else {
+                      if (window.Trello && typeof window.Trello.setToken === 'function') window.Trello.setToken(null);
+                      localStorage.removeItem('trello_token');
+                  }
+              } catch (error) {}
+              setTrelloMember(null);
+              setTrelloBoards([]);
+              setTrelloBoardId('');
+              setTrelloLists([]);
+              setTrelloCards([]);
+              setTrelloDeleteSelection([]);
+              setTrelloProgress('');
+              setTrelloError('');
+              setTrelloSuccess('');
+          };
+
+          const openTrelloIntegration = () => {
+              const initialSelection = selectedEvents.length > 0
+                  ? currentViewEvents.filter(event => selectedEvents.includes(event._key)).map(event => event._key)
+                  : currentViewEvents.map(event => event._key);
+              const defaultList = trelloDefaultListId || trelloLists[0]?.id || '';
+
+              setTrelloEventSelection(initialSelection);
+              setTrelloEventLists(Object.fromEntries(initialSelection.map(eventKey => [eventKey, defaultList])));
+              setTrelloMode('add');
+              setTrelloDeleteSelection([]);
+              setTrelloDeleteConfirmation('');
+              setTrelloError('');
+              setTrelloSuccess('');
+              setTrelloProgress('');
+              setShowTrelloModal(true);
+          };
+
+          const closeTrelloIntegration = () => {
+              if (trelloBusy) return;
+              setShowTrelloModal(false);
+              setTrelloDeleteConfirmation('');
+              setTrelloError('');
+              setTrelloSuccess('');
+              setTrelloProgress('');
+          };
+
+          const changeTrelloBoard = async (boardId) => {
+              setTrelloBoardId(boardId);
+              setTrelloBusy(true);
+              setTrelloError('');
+              setTrelloSuccess('');
+              setTrelloProgress('Carregando listas e cartões do quadro...');
+              try {
+                  await loadTrelloBoard(boardId);
+                  setTrelloProgress('');
+              } catch (error) {
+                  setTrelloLists([]);
+                  setTrelloCards([]);
+                  setTrelloProgress('');
+                  setTrelloError(`Não foi possível carregar o quadro: ${error.message}`);
+              } finally {
+                  setTrelloBusy(false);
+              }
+          };
+
+          const toggleTrelloEvent = (eventKey) => {
+              setTrelloEventSelection(previous => {
+                  if (previous.includes(eventKey)) return previous.filter(key => key !== eventKey);
+                  if (!trelloEventLists[eventKey]) {
+                      setTrelloEventLists(current => ({
+                          ...current,
+                          [eventKey]: trelloDefaultListId || trelloLists[0]?.id || ''
+                      }));
+                  }
+                  return [...previous, eventKey];
+              });
+          };
+
+          const applyDefaultTrelloList = (listId) => {
+              setTrelloDefaultListId(listId);
+              setTrelloEventLists(previous => {
+                  const updated = { ...previous };
+                  trelloEventSelection.forEach(eventKey => { updated[eventKey] = listId; });
+                  return updated;
+              });
+          };
+
+          const toggleTrelloCardDeletion = (cardId) => {
+              setTrelloDeleteSelection(previous =>
+                  previous.includes(cardId)
+                      ? previous.filter(id => id !== cardId)
+                      : [...previous, cardId]
+              );
+          };
+
+          const buildTrelloCard = (event, listId) => {
+              const company = companies.find(item => item.id === selectedCompany);
+              const category = safeColorOptions.find(item => item.id === event.color);
+              const status = getEventStatus(event._origIdx);
+              const statusLabel = status && statusPipeline[status] ? statusPipeline[status].label : '';
+              const cleanTitle = getCleanDisplayText(event.text || 'Post sem título', isCentral, category?.label);
+              const descriptionLines = [
+                  'Criado pelo Calendário UPLI',
+                  `Empresa: ${company?.name || 'Não informada'}`,
+                  category?.label ? `Categoria: ${category.label}` : '',
+                  statusLabel ? `Status: ${statusLabel}` : '',
+                  event.notes ? `\nAnotações:\n${event.notes}` : '',
+                  event.imageUrl ? `\nLink da arte: ${event.imageUrl}` : '',
+                  event.id ? `\nID de origem: ${event.id}` : ''
+              ].filter(Boolean);
+
+              const dueDate = new Date(Number(event.year), Number(event.month), Number(event.day), 12, 0, 0);
+              return {
+                  idList: listId,
+                  name: cleanTitle,
+                  desc: descriptionLines.join('\n'),
+                  due: dueDate.toISOString()
+              };
+          };
+
+          const executeTrelloExport = async () => {
+              setTrelloError('');
+              setTrelloSuccess('');
+
+              const eventsToCreate = currentViewEvents.filter(event => trelloEventSelection.includes(event._key));
+              if (!trelloMember) return setTrelloError('Conecte sua conta do Trello primeiro.');
+              if (!trelloBoardId) return setTrelloError('Escolha um quadro do Trello.');
+              if (eventsToCreate.length === 0) return setTrelloError('Selecione pelo menos um post para adicionar.');
+
+              const eventWithoutList = eventsToCreate.find(event => !trelloEventLists[event._key]);
+              if (eventWithoutList) return setTrelloError('Escolha a lista de destino de todos os posts selecionados.');
+
+              if (trelloMode === 'replace' && trelloDeleteConfirmation.trim().toUpperCase() !== 'APAGAR TUDO') {
+                  return setTrelloError('Digite APAGAR TUDO para confirmar a exclusão permanente.');
+              }
+
+              if (trelloMode === 'selective' && trelloDeleteSelection.length > 0) {
+                  const confirmed = window.confirm(
+                      `Os ${trelloDeleteSelection.length} cartão(ões) selecionados serão excluídos permanentemente. Deseja continuar?`
+                  );
+                  if (!confirmed) return;
+              }
+
+              const cardsToDelete = trelloMode === 'replace'
+                  ? [...trelloCards]
+                  : trelloMode === 'selective'
+                      ? trelloCards.filter(card => trelloDeleteSelection.includes(card.id))
+                      : [];
+
+              setTrelloBusy(true);
+              setTrelloProgress('');
+              const createdCards = [];
+
+              try {
+                  for (let index = 0; index < eventsToCreate.length; index++) {
+                      const event = eventsToCreate[index];
+                      setTrelloProgress(`Adicionando post ${index + 1} de ${eventsToCreate.length}...`);
+                      try {
+                          const createdCard = await trelloRequest('/cards', {
+                              method: 'POST',
+                              body: buildTrelloCard(event, trelloEventLists[event._key])
+                          });
+                          if (createdCard?.id) createdCards.push(createdCard);
+                      } catch (creationError) {
+                          for (const createdCard of createdCards) {
+                              try {
+                                  await trelloRequest(`/cards/${encodeURIComponent(createdCard.id)}`, { method: 'DELETE' });
+                              } catch (rollbackError) {}
+                          }
+                          throw new Error(`A adição foi interrompida no post ${index + 1}. Nenhum cartão antigo foi apagado. ${creationError.message}`);
+                      }
+                  }
+
+                  for (let index = 0; index < cardsToDelete.length; index++) {
+                      const card = cardsToDelete[index];
+                      setTrelloProgress(`Apagando cartão antigo ${index + 1} de ${cardsToDelete.length}...`);
+                      try {
+                          await trelloRequest(`/cards/${encodeURIComponent(card.id)}`, { method: 'DELETE' });
+                      } catch (deletionError) {
+                          throw new Error(
+                              `Os novos cartões foram adicionados, mas a exclusão parou no cartão ${index + 1} de ${cardsToDelete.length}. ${deletionError.message}`
+                          );
+                      }
+                  }
+
+                  const deletionText = cardsToDelete.length > 0
+                      ? ` e ${cardsToDelete.length} cartão(ões) antigo(s) apagado(s)`
+                      : '';
+                  setTrelloSuccess(`${createdCards.length} post(s) adicionado(s)${deletionText} com sucesso.`);
+                  setTrelloDeleteConfirmation('');
+                  setTrelloProgress('Atualizando o quadro...');
+                  await loadTrelloBoard(trelloBoardId);
+                  setTrelloProgress('');
+              } catch (error) {
+                  setTrelloError(error.message);
+                  setTrelloProgress('');
+              } finally {
+                  setTrelloBusy(false);
+              }
           };
 
           const deleteSelectedEvents = () => {
@@ -1422,6 +1767,145 @@
 
           return (
             <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+              {/* Trello modal */}
+              {showTrelloModal && (
+                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[120] p-3 backdrop-blur-sm">
+                      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[96vh] overflow-y-auto">
+                          <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-5 flex justify-between gap-4">
+                              <div>
+                                  <h3 className="font-black text-2xl text-sky-700 dark:text-sky-400 flex gap-2"><TrelloIcon /> Exportar para o Trello</h3>
+                                  <p className="text-sm text-gray-500 mt-1">{months[month]} de {year} · {companies.find(c => c.id === selectedCompany)?.name}</p>
+                              </div>
+                              <button onClick={closeTrelloIntegration} disabled={trelloBusy} className="bg-gray-200 dark:bg-gray-700 w-9 h-9 rounded-full font-black disabled:opacity-50">X</button>
+                          </div>
+                          <div className="p-5 space-y-6">
+                              {!trelloMember ? (
+                                  <section className="text-center border-2 border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-gray-900 rounded-xl p-6">
+                                      <div className="text-5xl mb-3">📋</div>
+                                      <h4 className="font-black text-xl">Conecte sua conta do Trello</h4>
+                                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 mb-5">Uma janela oficial do Trello será aberta. Entre com qualquer conta e autorize o acesso aos seus quadros.</p>
+                                      <button onClick={connectTrello} disabled={trelloBusy} className="bg-sky-600 hover:bg-sky-700 text-white px-7 py-3 rounded-xl font-black shadow-lg disabled:opacity-40">
+                                          {trelloBusy ? 'Aguardando autorização...' : 'Conectar com Trello'}
+                                      </button>
+                                      <p className="text-xs text-gray-500 mt-3">Você não precisa copiar chave nem token. A autorização fica salva somente neste navegador por até 30 dias.</p>
+                                  </section>
+                              ) : (
+                                  <>
+                                      <section className="flex flex-wrap justify-between gap-3 bg-green-50 dark:bg-gray-900 border-2 border-green-200 dark:border-green-900 rounded-xl p-4">
+                                          <p><span className="block text-xs font-black text-green-700">TRELLO CONECTADO</span><strong>{trelloMember.fullName || trelloMember.username}</strong></p>
+                                          <button onClick={disconnectTrello} disabled={trelloBusy} className="text-sm font-black text-red-600 disabled:opacity-50">Desconectar e esquecer token</button>
+                                      </section>
+
+                                      <section className="grid md:grid-cols-2 gap-4">
+                                          <label className="font-black text-sm">2. Quadro
+                                              <select value={trelloBoardId} onChange={e => changeTrelloBoard(e.target.value)} disabled={trelloBusy} className="block w-full mt-1 border-2 dark:border-gray-600 p-3 rounded-lg dark:bg-gray-700">
+                                                  {trelloBoards.map(board => <option key={board.id} value={board.id}>{board.name}</option>)}
+                                              </select>
+                                          </label>
+                                          <label className="font-black text-sm">Lista padrão para todos
+                                              <select value={trelloDefaultListId} onChange={e => applyDefaultTrelloList(e.target.value)} disabled={trelloBusy || !trelloLists.length} className="block w-full mt-1 border-2 dark:border-gray-600 p-3 rounded-lg dark:bg-gray-700">
+                                                  {!trelloLists.length && <option value="">Nenhuma lista aberta</option>}
+                                                  {trelloLists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+                                              </select>
+                                          </label>
+                                      </section>
+                                      <section>
+                                          <h4 className="font-black mb-2">3. Escolha a operação</h4>
+                                          <div className="grid md:grid-cols-3 gap-2">
+                                              {[
+                                                  ['add', 'Somente adicionar', 'Mantém os cartões atuais'],
+                                                  ['replace', 'Adicionar e apagar tudo', 'Exclui todos os cartões antigos'],
+                                                  ['selective', 'Adicionar e escolher o que apagar', 'Você marca cada cartão antigo']
+                                              ].map(([id, title, description]) => (
+                                                  <button key={id} onClick={() => { setTrelloMode(id); setTrelloDeleteConfirmation(''); setTrelloError(''); }} className={`text-left border-2 rounded-xl p-3 ${trelloMode === id ? 'border-sky-600 bg-sky-50 dark:bg-gray-900' : 'border-gray-200 dark:border-gray-700'}`}>
+                                                      <strong className="block">{title}</strong><span className="text-xs text-gray-500">{description}</span>
+                                                  </button>
+                                              ))}
+                                          </div>
+                                      </section>
+
+                                      <section>
+                                          <div className="flex justify-between gap-2 mb-2">
+                                              <div><h4 className="font-black">4. Posts e listas de destino</h4><p className="text-xs text-gray-500">{trelloEventSelection.length} de {currentViewEvents.length} selecionados</p></div>
+                                              <div className="flex gap-3 text-xs font-black">
+                                                  <button onClick={() => {
+                                                      const keys = currentViewEvents.map(event => event._key);
+                                                      setTrelloEventSelection(keys);
+                                                      setTrelloEventLists(previous => {
+                                                          const updated = { ...previous };
+                                                          keys.forEach(key => { updated[key] = updated[key] || trelloDefaultListId; });
+                                                          return updated;
+                                                      });
+                                                  }} className="text-sky-700">Todos</button>
+                                                  <button onClick={() => setTrelloEventSelection([])} className="text-gray-500">Limpar</button>
+                                              </div>
+                                          </div>
+                                          <div className="border-2 dark:border-gray-700 rounded-xl max-h-72 overflow-y-auto divide-y dark:divide-gray-700">
+                                              {!currentViewEvents.length && <p className="p-5 text-center text-sm text-gray-500">Este mês não possui posts.</p>}
+                                              {currentViewEvents.map(event => {
+                                                  const category = safeColorOptions.find(item => item.id === event.color);
+                                                  const checked = trelloEventSelection.includes(event._key);
+                                                  return (
+                                                      <div key={event._key} className={`grid md:grid-cols-[1fr_250px] gap-2 p-3 ${checked ? '' : 'opacity-50 bg-gray-100 dark:bg-gray-900'}`}>
+                                                          <label className="flex gap-3 min-w-0 cursor-pointer">
+                                                              <input type="checkbox" checked={checked} onChange={() => toggleTrelloEvent(event._key)} className="w-5 h-5 flex-shrink-0" />
+                                                              <span><strong className="block text-sm break-words">Dia {event.day} · {getCleanDisplayText(event.text, isCentral, category?.label)}</strong><span className="text-xs text-gray-500">{category?.label || 'Sem categoria'}</span></span>
+                                                          </label>
+                                                          <select value={trelloEventLists[event._key] || ''} onChange={e => setTrelloEventLists(previous => ({ ...previous, [event._key]: e.target.value }))} disabled={!checked || trelloBusy} className="border dark:border-gray-600 p-2 rounded-lg text-sm font-bold dark:bg-gray-700 disabled:opacity-50">
+                                                              <option value="">Escolha a lista...</option>
+                                                              {trelloLists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+                                                          </select>
+                                                      </div>
+                                                  );
+                                              })}
+                                          </div>
+                                      </section>
+                                      {trelloMode === 'selective' && (
+                                          <section className="border-2 border-amber-300 dark:border-amber-900 rounded-xl p-4 bg-amber-50 dark:bg-gray-900">
+                                              <div className="flex justify-between gap-2 mb-2">
+                                                  <div><h4 className="font-black">5. Cartões antigos a apagar</h4><p className="text-xs text-gray-500">{trelloDeleteSelection.length} de {trelloCards.length} selecionados</p></div>
+                                                  <div className="flex gap-3 text-xs font-black">
+                                                      <button onClick={() => setTrelloDeleteSelection(trelloCards.map(card => card.id))}>Todos</button>
+                                                      <button onClick={() => setTrelloDeleteSelection([])}>Limpar</button>
+                                                  </div>
+                                              </div>
+                                              <div className="bg-white dark:bg-gray-800 border rounded-lg max-h-64 overflow-y-auto divide-y dark:divide-gray-700">
+                                                  {!trelloCards.length && <p className="p-4 text-center text-sm text-gray-500">O quadro não possui cartões antigos.</p>}
+                                                  {trelloCards.map(card => (
+                                                      <label key={card.id} className="flex gap-3 p-3 cursor-pointer">
+                                                          <input type="checkbox" checked={trelloDeleteSelection.includes(card.id)} onChange={() => toggleTrelloCardDeletion(card.id)} className="w-5 h-5" />
+                                                          <span><strong className="block text-sm">{card.name}</strong><span className="text-xs text-gray-500">{trelloLists.find(list => list.id === card.idList)?.name || 'Lista arquivada'}{card.closed ? ' · arquivado' : ''}</span></span>
+                                                      </label>
+                                                  ))}
+                                              </div>
+                                          </section>
+                                      )}
+
+                                      {trelloMode === 'replace' && (
+                                          <section className="border-2 border-red-400 bg-red-50 dark:bg-gray-900 rounded-xl p-4">
+                                              <h4 className="font-black text-red-800 dark:text-red-300">5. Exclusão permanente</h4>
+                                              <p className="text-sm text-red-700 dark:text-red-400">Os {trelloCards.length} cartões atuais, inclusive arquivados, serão excluídos. Digite <strong>APAGAR TUDO</strong>.</p>
+                                              <input type="text" value={trelloDeleteConfirmation} onChange={e => setTrelloDeleteConfirmation(e.target.value)} placeholder="APAGAR TUDO" className="mt-3 w-full md:w-80 border-2 border-red-300 p-3 rounded-lg font-black dark:bg-gray-800" />
+                                          </section>
+                                      )}
+                                  </>
+                              )}
+                              {trelloError && <div className="bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-300 p-3 rounded-lg text-sm font-bold">{trelloError}</div>}
+                              {trelloSuccess && <div className="bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300 p-3 rounded-lg text-sm font-bold">{trelloSuccess}</div>}
+                              {trelloProgress && <div className="bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300 p-3 rounded-lg text-sm font-bold animate-pulse">{trelloProgress}</div>}
+
+                              {trelloMember && (
+                                  <div className="border-t dark:border-gray-700 pt-4 flex flex-col md:flex-row justify-between gap-3">
+                                      <p className="text-xs text-gray-500">Os novos cartões são criados antes de qualquer exclusão.</p>
+                                      <button onClick={executeTrelloExport} disabled={trelloBusy || !trelloLists.length || !trelloEventSelection.length} className="bg-sky-600 text-white px-6 py-3 rounded-xl font-black disabled:opacity-40">
+                                          {trelloBusy ? 'Processando...' : `Executar no Trello (${trelloEventSelection.length})`}
+                                      </button>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+              )}
               
               {showImportModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
@@ -1915,6 +2399,7 @@
                                   <span className="font-black text-2xl text-indigo-700 dark:text-indigo-300">{selectedEvents.length} selecionados</span>
                                   <div className="flex flex-wrap gap-2 w-full justify-end">
                                       <button onClick={exportSelectedToTXT} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Download/> Exportar TXT</button>
+                                      <button onClick={openTrelloIntegration} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-sky-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-sky-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><TrelloIcon/> Trello</button>
                                       <button onClick={deleteSelectedEvents} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Trash2/> Apagar</button>
                                   </div>
                               </div>
@@ -1941,6 +2426,10 @@
 
                             <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
                                 <Upload /> Importar
+                            </button>
+
+                            <button onClick={openTrelloIntegration} className="bg-sky-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-sky-700 transition flex items-center justify-center gap-2 shadow-sm" title="Exportar o mês para o Trello">
+                                <TrelloIcon /> Trello
                             </button>
                             
                             <button onClick={handleSelectionToggle} className={`${isSelectionMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm`} title="Selecionar posts">
