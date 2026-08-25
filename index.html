@@ -2176,7 +2176,7 @@
                           aria-modal="true"
                           aria-live="polite"
                           aria-label="Tutorial do Calendário UPLI"
-                          className="fixed left-1/2 bottom-3 md:bottom-6 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-white rounded-2xl shadow-2xl border-2 border-sky-400 overflow-hidden"
+                          className={`fixed left-1/2 bottom-3 md:bottom-6 -translate-x-1/2 w-[calc(100%-1.5rem)] ${tutorialTopic === 'trello' ? 'max-w-4xl' : 'max-w-xl'} max-h-[94vh] overflow-y-auto bg-white dark:bg-gray-800 text-gray-800 dark:text-white rounded-2xl shadow-2xl border-2 border-sky-400`}
                           style={{ zIndex: 200 }}
                       >
                           <div className="h-2 bg-gray-100 dark:bg-gray-700">
@@ -2201,6 +2201,60 @@
                                   <button onClick={finishTutorial} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-red-100 hover:text-red-600 font-black flex-shrink-0" aria-label="Fechar tutorial">×</button>
                               </div>
                               <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mt-3">{activeTutorialStep.text}</p>
+                              {tutorialTopic === 'trello' && (
+                                  <div className="mt-3 rounded-xl border-2 border-sky-200 dark:border-sky-900 bg-gray-50 dark:bg-gray-950 p-3 space-y-2 pointer-events-none">
+                                      <div className="flex items-center justify-between gap-2 border-b dark:border-gray-700 pb-2">
+                                          <div>
+                                              <strong className="flex items-center gap-2 text-sky-700 dark:text-sky-300"><TrelloIcon /> Exportar para o Trello</strong>
+                                              <span className="text-[10px] text-gray-500">{months[month]} de {year} · {companies.find(c => c.id === selectedCompany)?.name}</span>
+                                          </div>
+                                          <span className="text-[9px] font-black bg-sky-100 text-sky-700 rounded-full px-2 py-1">PRÉVIA ILUSTRATIVA</span>
+                                      </div>
+
+                                      <div className={`grid md:grid-cols-3 gap-2 rounded-lg p-2 transition ${tutorialStep === 2 ? 'ring-4 ring-sky-400 bg-sky-50 dark:bg-gray-900' : ''}`}>
+                                          <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-gray-800 p-2">
+                                              <span className="block text-[8px] font-black text-green-700">TRELLO CONECTADO</span>
+                                              <strong className="text-xs">Sua conta</strong>
+                                          </div>
+                                          <label className="text-[9px] font-black">QUADRO PADRÃO
+                                              <select defaultValue="social" className="block w-full mt-1 border rounded p-1.5 text-[10px] bg-white dark:bg-gray-800">
+                                                  <option value="social">Conteúdo Social</option>
+                                              </select>
+                                          </label>
+                                          <label className="text-[9px] font-black">COLUNA PADRÃO
+                                              <select defaultValue="producao" className="block w-full mt-1 border rounded p-1.5 text-[10px] bg-white dark:bg-gray-800">
+                                                  <option value="producao">Produção</option>
+                                              </select>
+                                          </label>
+                                      </div>
+
+                                      <div className={`grid grid-cols-3 gap-1 rounded-lg p-2 transition ${tutorialStep === 4 ? 'ring-4 ring-sky-400 bg-sky-50 dark:bg-gray-900' : ''}`}>
+                                          <div className="border-2 border-sky-500 bg-white dark:bg-gray-800 rounded p-2 text-[9px]"><strong>Somente adicionar</strong><span className="block text-gray-500">Mais seguro</span></div>
+                                          <div className="border dark:border-gray-600 bg-white dark:bg-gray-800 rounded p-2 text-[9px]"><strong>Substituir tudo</strong><span className="block text-gray-500">Apaga antigos</span></div>
+                                          <div className="border dark:border-gray-600 bg-white dark:bg-gray-800 rounded p-2 text-[9px]"><strong>Escolher o que apagar</strong><span className="block text-gray-500">Seleção manual</span></div>
+                                      </div>
+
+                                      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-2">
+                                          <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(220px,1fr)_130px] gap-2 items-center">
+                                              <div className={`flex gap-2 rounded p-1 ${tutorialStep === 1 ? 'ring-4 ring-sky-400' : ''}`}>
+                                                  <input type="checkbox" defaultChecked className="w-4 h-4" />
+                                                  <span><strong className="block text-[10px]">Dia 12 · Reels: Chamada do evento</strong><span className="text-[9px] text-gray-500">Reels</span></span>
+                                              </div>
+                                              <div className={`grid ${isCentral ? 'grid-cols-2' : 'grid-cols-1'} gap-1 rounded p-1 ${tutorialStep === 3 ? 'ring-4 ring-sky-400' : ''}`}>
+                                                  {isCentral && <select defaultValue="cliente" className="border rounded p-1.5 text-[9px] bg-white dark:bg-gray-700"><option value="cliente">Quadro do cliente</option></select>}
+                                                  <select defaultValue="aprovacao" className="border rounded p-1.5 text-[9px] bg-white dark:bg-gray-700"><option value="aprovacao">Aprovação</option></select>
+                                              </div>
+                                              <select defaultValue="pending" className={`border rounded p-1.5 text-[9px] bg-white dark:bg-gray-700 ${tutorialStep === 4 ? 'ring-4 ring-sky-400' : ''}`}>
+                                                  <option value="pending">Não concluído</option>
+                                              </select>
+                                          </div>
+                                      </div>
+
+                                      <div className="flex justify-end">
+                                          <button className={`bg-sky-600 text-white rounded-lg px-4 py-2 text-[10px] font-black ${tutorialStep === 5 ? 'ring-4 ring-sky-300 animate-pulse' : ''}`}>Executar no Trello (1)</button>
+                                      </div>
+                                  </div>
+                              )}
                               {Array.isArray(activeTutorialStep.tips) && activeTutorialStep.tips.length > 0 && (
                                   <ul className="mt-3 space-y-1.5 bg-sky-50 dark:bg-gray-900 border border-sky-100 dark:border-gray-700 rounded-xl p-3">
                                       {activeTutorialStep.tips.map((tip, index) => (
