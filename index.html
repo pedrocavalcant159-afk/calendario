@@ -191,6 +191,10 @@
           const [roleCompanyInput, setRoleCompanyInput] = useState('');
 
           const [darkMode, setDarkMode] = useState(false);
+          const [showTutorial, setShowTutorial] = useState(false);
+          const [tutorialStep, setTutorialStep] = useState(0);
+          const [tutorialTargetRect, setTutorialTargetRect] = useState(null);
+          const [tutorialCheckedUserId, setTutorialCheckedUserId] = useState('');
 
           useEffect(() => {
              try {
@@ -377,8 +381,12 @@
           const [trelloCards, setTrelloCards] = useState([]);
           const [trelloMode, setTrelloMode] = useState('add');
           const [trelloEventSelection, setTrelloEventSelection] = useState([]);
+          const [trelloEventBoards, setTrelloEventBoards] = useState({});
           const [trelloEventLists, setTrelloEventLists] = useState({});
+          const [trelloListsByBoard, setTrelloListsByBoard] = useState({});
           const [trelloDefaultListId, setTrelloDefaultListId] = useState('');
+          const [trelloEventCompleted, setTrelloEventCompleted] = useState({});
+          const [trelloDefaultCompleted, setTrelloDefaultCompleted] = useState(false);
           const [trelloDeleteSelection, setTrelloDeleteSelection] = useState([]);
           const [trelloDeleteConfirmation, setTrelloDeleteConfirmation] = useState('');
           const [trelloBusy, setTrelloBusy] = useState(false);
@@ -930,7 +938,19 @@
               });
           };
 
-          const loadTrelloBoard = async (boardId) => {
+          const loadTrelloListsForBoard = async (boardId) => {
+              if (!boardId) return [];
+              if (Array.isArray(trelloListsByBoard[boardId])) return trelloListsByBoard[boardId];
+
+              const listsResponse = await trelloRequest(`/boards/${encodeURIComponent(boardId)}/lists`, {
+                  params: { filter: 'open', fields: 'name,pos' }
+              });
+              const loadedLists = Array.isArray(listsResponse) ? listsResponse : [];
+              setTrelloListsByBoard(previous => ({ ...previous, [boardId]: loadedLists }));
+              return loadedLists;
+          };
+
+          const loadTrelloBoard = async (boardId, applyToEvents = true) => {
               if (!boardId) {
                   setTrelloLists([]);
                   setTrelloCards([]);
@@ -943,21 +963,29 @@
                       params: { filter: 'open', fields: 'name,pos' }
                   }),
                   trelloRequest(`/boards/${safeBoardId}/cards/all`, {
-                      params: { fields: 'name,desc,due,idList,url,closed' }
+                      params: { fields: 'name,desc,due,dueComplete,idList,url,closed' }
                   })
               ]);
 
               const loadedLists = Array.isArray(listsResponse) ? listsResponse : [];
               const loadedCards = Array.isArray(cardsResponse) ? cardsResponse : [];
               setTrelloLists(loadedLists);
+              setTrelloListsByBoard(previous => ({ ...previous, [boardId]: loadedLists }));
               setTrelloCards(loadedCards);
               setTrelloDeleteSelection([]);
 
               const firstListId = loadedLists[0]?.id || '';
               setTrelloDefaultListId(firstListId);
-              setTrelloEventLists(
-                  Object.fromEntries(trelloEventSelection.map(eventKey => [eventKey, firstListId]))
-              );
+              if (applyToEvents) {
+                  setTrelloEventLists(
+                      Object.fromEntries(trelloEventSelection.map(eventKey => [eventKey, firstListId]))
+                  );
+                  if (selectedCompany === UPLI_GERAL_ID) {
+                      setTrelloEventBoards(
+                          Object.fromEntries(trelloEventSelection.map(eventKey => [eventKey, boardId]))
+                      );
+                  }
+              }
           };
 
           const loadConnectedTrelloAccount = async () => {
@@ -1041,7 +1069,9 @@
               setTrelloBoards([]);
               setTrelloBoardId('');
               setTrelloLists([]);
+              setTrelloListsByBoard({});
               setTrelloCards([]);
+              setTrelloEventBoards({});
               setTrelloDeleteSelection([]);
               setTrelloProgress('');
               setTrelloError('');
@@ -1055,7 +1085,10 @@
               const defaultList = trelloDefaultListId || trelloLists[0]?.id || '';
 
               setTrelloEventSelection(initialSelection);
+              setTrelloEventBoards(Object.fromEntries(initialSelection.map(eventKey => [eventKey, trelloBoardId])));
               setTrelloEventLists(Object.fromEntries(initialSelection.map(eventKey => [eventKey, defaultList])));
+              setTrelloDefaultCompleted(false);
+              setTrelloEventCompleted(Object.fromEntries(initialSelection.map(eventKey => [eventKey, false])));
               setTrelloMode('add');
               setTrelloDeleteSelection([]);
               setTrelloDeleteConfirmation('');
@@ -1093,13 +1126,50 @@
               }
           };
 
+          const changeTrelloEventBoard = async (eventKey, boardId) => {
+              setTrelloBusy(true);
+              setTrelloError('');
+              setTrelloSuccess('');
+              setTrelloProgress('Carregando colunas do quadro escolhido...');
+              try {
+                  const lists = await loadTrelloListsForBoard(boardId);
+                  setTrelloEventBoards(previous => ({ ...previous, [eventKey]: boardId }));
+                  setTrelloEventLists(previous => ({
+                      ...previous,
+                      [eventKey]: lists[0]?.id || ''
+                  }));
+                  setTrelloProgress('');
+              } catch (error) {
+                  setTrelloProgress('');
+                  setTrelloError(`Não foi possível carregar as colunas desse quadro: ${error.message}`);
+              } finally {
+                  setTrelloBusy(false);
+              }
+          };
+
           const toggleTrelloEvent = (eventKey) => {
+              const eventBoardId = trelloEventBoards[eventKey] || trelloBoardId;
+              const eventBoardLists = trelloListsByBoard[eventBoardId] || trelloLists;
               setTrelloEventSelection(previous => {
                   if (previous.includes(eventKey)) return previous.filter(key => key !== eventKey);
+                  if (selectedCompany === UPLI_GERAL_ID && !trelloEventBoards[eventKey]) {
+                      setTrelloEventBoards(current => ({
+                          ...current,
+                          [eventKey]: eventBoardId
+                      }));
+                  }
                   if (!trelloEventLists[eventKey]) {
                       setTrelloEventLists(current => ({
                           ...current,
-                          [eventKey]: trelloDefaultListId || trelloLists[0]?.id || ''
+                          [eventKey]: eventBoardId === trelloBoardId
+                              ? trelloDefaultListId || eventBoardLists[0]?.id || ''
+                              : eventBoardLists[0]?.id || ''
+                      }));
+                  }
+                  if (trelloEventCompleted[eventKey] === undefined) {
+                      setTrelloEventCompleted(current => ({
+                          ...current,
+                          [eventKey]: trelloDefaultCompleted
                       }));
                   }
                   return [...previous, eventKey];
@@ -1110,7 +1180,21 @@
               setTrelloDefaultListId(listId);
               setTrelloEventLists(previous => {
                   const updated = { ...previous };
-                  trelloEventSelection.forEach(eventKey => { updated[eventKey] = listId; });
+                  trelloEventSelection.forEach(eventKey => {
+                      const eventBoardId = trelloEventBoards[eventKey] || trelloBoardId;
+                      if (selectedCompany !== UPLI_GERAL_ID || eventBoardId === trelloBoardId) {
+                          updated[eventKey] = listId;
+                      }
+                  });
+                  return updated;
+              });
+          };
+
+          const applyDefaultTrelloCompleted = (completed) => {
+              setTrelloDefaultCompleted(completed);
+              setTrelloEventCompleted(previous => {
+                  const updated = { ...previous };
+                  trelloEventSelection.forEach(eventKey => { updated[eventKey] = completed; });
                   return updated;
               });
           };
@@ -1123,7 +1207,7 @@
               );
           };
 
-          const buildTrelloCard = (event, listId) => {
+          const buildTrelloCard = (event, listId, completed) => {
               const company = companies.find(item => item.id === selectedCompany);
               const category = safeColorOptions.find(item => item.id === event.color);
               const status = getEventStatus(event._origIdx);
@@ -1144,7 +1228,8 @@
                   idList: listId,
                   name: cleanTitle,
                   desc: descriptionLines.join('\n'),
-                  due: dueDate.toISOString()
+                  due: dueDate.toISOString(),
+                  dueComplete: Boolean(completed)
               };
           };
 
@@ -1157,8 +1242,15 @@
               if (!trelloBoardId) return setTrelloError('Escolha um quadro do Trello.');
               if (eventsToCreate.length === 0) return setTrelloError('Selecione pelo menos um post para adicionar.');
 
-              const eventWithoutList = eventsToCreate.find(event => !trelloEventLists[event._key]);
-              if (eventWithoutList) return setTrelloError('Escolha a lista de destino de todos os posts selecionados.');
+              const eventWithInvalidDestination = eventsToCreate.find(event => {
+                  const boardId = isCentral ? trelloEventBoards[event._key] : trelloBoardId;
+                  const listId = trelloEventLists[event._key];
+                  const availableLists = isCentral ? (trelloListsByBoard[boardId] || []) : trelloLists;
+                  return !boardId || !listId || !availableLists.some(list => list.id === listId);
+              });
+              if (eventWithInvalidDestination) {
+                  return setTrelloError('Escolha um quadro e uma coluna válidos para todos os posts selecionados.');
+              }
 
               if (trelloMode === 'replace' && trelloDeleteConfirmation.trim().toUpperCase() !== 'APAGAR TUDO') {
                   return setTrelloError('Digite APAGAR TUDO para confirmar a exclusão permanente.');
@@ -1188,7 +1280,11 @@
                       try {
                           const createdCard = await trelloRequest('/cards', {
                               method: 'POST',
-                              body: buildTrelloCard(event, trelloEventLists[event._key])
+                              body: buildTrelloCard(
+                                  event,
+                                  trelloEventLists[event._key],
+                                  trelloEventCompleted[event._key]
+                              )
                           });
                           if (createdCard?.id) createdCards.push(createdCard);
                       } catch (creationError) {
@@ -1219,7 +1315,7 @@
                   setTrelloSuccess(`${createdCards.length} post(s) adicionado(s)${deletionText} com sucesso.`);
                   setTrelloDeleteConfirmation('');
                   setTrelloProgress('Atualizando o quadro...');
-                  await loadTrelloBoard(trelloBoardId);
+                  await loadTrelloBoard(trelloBoardId, false);
                   setTrelloProgress('');
               } catch (error) {
                   setTrelloError(error.message);
@@ -1698,7 +1794,7 @@
               } 
           };
           
-          const exportAsPDF = async () => { 
+          const exportAsPDF = async () => {
               try { 
                   if (!window.jspdf) { 
                       const scriptPDF = document.createElement('script'); 
@@ -1729,6 +1825,161 @@
                   alert('Erro ao exportar PDF: ' + error.message); 
               } 
           };
+
+          const getTutorialSteps = () => {
+              const steps = [
+                  {
+                      target: '[data-tutorial="header"]',
+                      icon: '\uD83D\uDC4B',
+                      title: 'Bem-vindo ao Calendário UPLI',
+                      text: 'Este tour mostra onde criar, organizar e exportar os conteúdos. Você pode reabrir o tutorial a qualquer momento pelo botão Tutorial.'
+                  }
+              ];
+
+              if (isAdmin) {
+                  steps.push(
+                      {
+                          target: '[data-tutorial="companies"]',
+                          icon: '\uD83C\uDFE2',
+                          title: 'Empresas e calendários',
+                          text: 'Crie empresas e clique em uma delas para abrir seu calendário. O UPLI Geral reúne automaticamente os conteúdos das empresas.'
+                      },
+                      {
+                          target: '[data-tutorial="categories"]',
+                          icon: '\uD83C\uDFA8',
+                          title: 'Categorias',
+                          text: 'Cadastre e personalize categorias como Reels, Fotos e Stories. Elas definem a identificação visual dos posts.'
+                      },
+                      {
+                          target: '[data-tutorial="add-post"]',
+                          icon: '\uD83D\uDCCC',
+                          title: 'Adicionar um post',
+                          text: 'Informe dia, título, anotações, link da arte e categoria. Nos calendários individuais, você também pode enviar uma cópia ao UPLI Geral.'
+                      }
+                  );
+              }
+
+              steps.push({
+                  target: '[data-tutorial="calendar-controls"]',
+                  icon: '\uD83D\uDCC5',
+                  title: 'Navegação do calendário',
+                  text: 'Use as setas para trocar o mês. O nome à direita mostra qual empresa ou calendário geral está aberto.'
+              });
+
+              if (selectedCompany === UPLI_GERAL_ID) {
+                  steps.push({
+                      target: '[data-tutorial="status-filters"]',
+                      icon: '\uD83D\uDD0D',
+                      title: 'Filtros de produção',
+                      text: 'No UPLI Geral, filtre os posts pela etapa atual: criação, gravação, produção, aprovação, atrasado ou publicado.'
+                  });
+              }
+
+              steps.push({
+                  target: '[data-tutorial="calendar"]',
+                  icon: '\uD83D\uDDD3\uFE0F',
+                  title: 'Organize os posts',
+                  text: isAdmin
+                      ? 'Clique em um post para editar detalhes e status. No computador, você também pode arrastá-lo para outro dia.'
+                      : 'Clique em um post para consultar seus detalhes, anotações, links e status de produção.'
+              });
+
+              if (isAdmin) {
+                  steps.push({
+                      target: '[data-tutorial="calendar-actions"]',
+                      icon: '\uD83D\uDCE4',
+                      title: 'Seleção, importação e Trello',
+                      text: selectedCompany === UPLI_GERAL_ID
+                          ? 'Use Selecionar para trabalhar com posts específicos. No Trello, cada post do UPLI Geral pode escolher seu próprio quadro, coluna e estado de conclusão.'
+                          : 'Use Selecionar para exportar ou apagar posts específicos. O botão Trello envia os conteúdos para o quadro, coluna e estado de conclusão escolhidos.'
+                  });
+              }
+
+              return steps;
+          };
+
+          const startTutorial = () => {
+              setTutorialStep(0);
+              setTutorialTargetRect(null);
+              setShowTutorial(true);
+          };
+
+          const finishTutorial = () => {
+              setShowTutorial(false);
+              setTutorialTargetRect(null);
+              if (user?.uid) {
+                  try { localStorage.setItem(`upli_tutorial_seen_v1_${user.uid}`, 'true'); } catch (error) {}
+              }
+          };
+
+          useEffect(() => {
+              if (loadingAuth || !user || tutorialCheckedUserId === user.uid) return;
+              setTutorialCheckedUserId(user.uid);
+              let tutorialSeen = false;
+              try { tutorialSeen = localStorage.getItem(`upli_tutorial_seen_v1_${user.uid}`) === 'true'; } catch (error) {}
+              if (!tutorialSeen) {
+                  const timer = setTimeout(() => startTutorial(), 700);
+                  return () => clearTimeout(timer);
+              }
+          }, [loadingAuth, user?.uid]);
+
+          useEffect(() => {
+              if (!showTutorial || !user) return;
+              const steps = getTutorialSteps();
+              const step = steps[tutorialStep];
+              if (!step) {
+                  finishTutorial();
+                  return;
+              }
+
+              const target = document.querySelector(step.target);
+              if (!target) {
+                  if (tutorialStep < steps.length - 1) setTutorialStep(previous => previous + 1);
+                  else finishTutorial();
+                  return;
+              }
+
+              const updateTargetRect = () => {
+                  const rect = target.getBoundingClientRect();
+                  const padding = 8;
+                  const left = Math.max(8, rect.left - padding);
+                  const top = Math.max(8, rect.top - padding);
+                  const right = Math.min(window.innerWidth - 8, rect.right + padding);
+                  const bottom = Math.min(window.innerHeight - 8, rect.bottom + padding);
+                  setTutorialTargetRect({
+                      left,
+                      top,
+                      width: Math.max(0, right - left),
+                      height: Math.max(0, bottom - top)
+                  });
+              };
+
+              target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+              updateTargetRect();
+              const timer = setTimeout(updateTargetRect, 450);
+              window.addEventListener('resize', updateTargetRect);
+              window.addEventListener('scroll', updateTargetRect, true);
+              return () => {
+                  clearTimeout(timer);
+                  window.removeEventListener('resize', updateTargetRect);
+                  window.removeEventListener('scroll', updateTargetRect, true);
+              };
+          }, [showTutorial, tutorialStep, userRole, selectedCompany, user]);
+
+          useEffect(() => {
+              if (!showTutorial) return;
+              const handleTutorialKey = (event) => {
+                  const steps = getTutorialSteps();
+                  if (event.key === 'Escape') finishTutorial();
+                  if (event.key === 'ArrowLeft' && tutorialStep > 0) setTutorialStep(previous => previous - 1);
+                  if (event.key === 'ArrowRight') {
+                      if (tutorialStep < steps.length - 1) setTutorialStep(previous => previous + 1);
+                      else finishTutorial();
+                  }
+              };
+              window.addEventListener('keydown', handleTutorialKey);
+              return () => window.removeEventListener('keydown', handleTutorialKey);
+          }, [showTutorial, tutorialStep, userRole, selectedCompany]);
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 font-bold text-gray-500">Carregando Nuvem...</div>;
 
@@ -1764,9 +2015,85 @@
           const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
           const weeks = getWeeks();
           const isCentral = selectedCompany === UPLI_GERAL_ID;
+          const activeTutorialSteps = getTutorialSteps();
+          const activeTutorialStep = activeTutorialSteps[tutorialStep] || activeTutorialSteps[0];
 
           return (
             <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+              {showTutorial && activeTutorialStep && (
+                  <>
+                      <div className="fixed inset-0" style={{ zIndex: 190 }} aria-hidden="true"></div>
+                      {tutorialTargetRect && (
+                          <div
+                              className="fixed rounded-2xl border-4 border-sky-400 transition-all duration-300 pointer-events-none"
+                              style={{
+                                  zIndex: 191,
+                                  left: tutorialTargetRect.left,
+                                  top: tutorialTargetRect.top,
+                                  width: tutorialTargetRect.width,
+                                  height: tutorialTargetRect.height,
+                                  boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.72), 0 0 30px rgba(56, 189, 248, 0.95)'
+                              }}
+                              aria-hidden="true"
+                          ></div>
+                      )}
+                      <section
+                          role="dialog"
+                          aria-modal="true"
+                          aria-live="polite"
+                          aria-label="Tutorial do Calendário UPLI"
+                          className="fixed left-1/2 bottom-3 md:bottom-6 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-white rounded-2xl shadow-2xl border-2 border-sky-400 overflow-hidden"
+                          style={{ zIndex: 200 }}
+                      >
+                          <div className="h-2 bg-gray-100 dark:bg-gray-700">
+                              <div
+                                  className="h-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-300"
+                                  style={{ width: `${((tutorialStep + 1) / activeTutorialSteps.length) * 100}%` }}
+                              ></div>
+                          </div>
+                          <div className="p-4 md:p-5">
+                              <div className="flex items-start justify-between gap-3">
+                                  <div className="flex gap-3 min-w-0">
+                                      <div className="w-11 h-11 rounded-xl bg-sky-100 dark:bg-sky-950 flex items-center justify-center text-2xl flex-shrink-0">
+                                          {activeTutorialStep.icon}
+                                      </div>
+                                      <div>
+                                          <p className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest">
+                                              Etapa {tutorialStep + 1} de {activeTutorialSteps.length}
+                                          </p>
+                                          <h2 className="text-lg md:text-xl font-black leading-tight mt-1">{activeTutorialStep.title}</h2>
+                                      </div>
+                                  </div>
+                                  <button onClick={finishTutorial} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-red-100 hover:text-red-600 font-black flex-shrink-0" aria-label="Fechar tutorial">×</button>
+                              </div>
+                              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mt-3">{activeTutorialStep.text}</p>
+                              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 mt-5">
+                                  <button onClick={finishTutorial} className="text-xs font-black text-gray-500 hover:text-red-600 px-2 py-2">Pular tutorial</button>
+                                  <div className="flex gap-2">
+                                      <button
+                                          onClick={() => setTutorialStep(previous => Math.max(0, previous - 1))}
+                                          disabled={tutorialStep === 0}
+                                          className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 font-black text-sm disabled:opacity-40"
+                                      >
+                                          ← Anterior
+                                      </button>
+                                      <button
+                                          onClick={() => {
+                                              if (tutorialStep < activeTutorialSteps.length - 1) setTutorialStep(previous => previous + 1);
+                                              else finishTutorial();
+                                          }}
+                                          className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-sm shadow-md"
+                                      >
+                                          {tutorialStep < activeTutorialSteps.length - 1 ? 'Próximo →' : 'Concluir ✓'}
+                                      </button>
+                                  </div>
+                              </div>
+                              <p className="hidden md:block text-[10px] text-center text-gray-400 mt-3">Use ← → no teclado para navegar e Esc para fechar.</p>
+                          </div>
+                      </section>
+                  </>
+              )}
+
               {/* Trello modal */}
               {showTrelloModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[120] p-3 backdrop-blur-sm">
@@ -1796,21 +2123,28 @@
                                           <button onClick={disconnectTrello} disabled={trelloBusy} className="text-sm font-black text-red-600 disabled:opacity-50">Desconectar e esquecer token</button>
                                       </section>
 
-                                      <section className="grid md:grid-cols-2 gap-4">
-                                          <label className="font-black text-sm">2. Quadro
+                                      <section className="grid md:grid-cols-3 gap-4">
+                                          <label className="font-black text-sm">{isCentral ? '2. Quadro padrão para todos' : '2. Quadro'}
                                               <select value={trelloBoardId} onChange={e => changeTrelloBoard(e.target.value)} disabled={trelloBusy} className="block w-full mt-1 border-2 dark:border-gray-600 p-3 rounded-lg dark:bg-gray-700">
                                                   {trelloBoards.map(board => <option key={board.id} value={board.id}>{board.name}</option>)}
                                               </select>
                                           </label>
-                                          <label className="font-black text-sm">Lista padrão para todos
+                                          <label className="font-black text-sm">{isCentral ? 'Coluna padrão do quadro padrão' : 'Lista padrão para todos'}
                                               <select value={trelloDefaultListId} onChange={e => applyDefaultTrelloList(e.target.value)} disabled={trelloBusy || !trelloLists.length} className="block w-full mt-1 border-2 dark:border-gray-600 p-3 rounded-lg dark:bg-gray-700">
                                                   {!trelloLists.length && <option value="">Nenhuma lista aberta</option>}
                                                   {trelloLists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
                                               </select>
                                           </label>
+                                          <label className="font-black text-sm">Conclusão padrão para todos
+                                              <select value={trelloDefaultCompleted ? 'completed' : 'pending'} onChange={e => applyDefaultTrelloCompleted(e.target.value === 'completed')} disabled={trelloBusy} className="block w-full mt-1 border-2 dark:border-gray-600 p-3 rounded-lg dark:bg-gray-700">
+                                                  <option value="pending">Não concluído</option>
+                                                  <option value="completed">Concluído</option>
+                                              </select>
+                                          </label>
                                       </section>
                                       <section>
                                           <h4 className="font-black mb-2">3. Escolha a operação</h4>
+                                          {isCentral && <p className="text-xs text-gray-500 mb-2">Nas opções com exclusão, os cartões apagados pertencem somente ao quadro padrão selecionado acima.</p>}
                                           <div className="grid md:grid-cols-3 gap-2">
                                               {[
                                                   ['add', 'Somente adicionar', 'Mantém os cartões atuais'],
@@ -1826,14 +2160,36 @@
 
                                       <section>
                                           <div className="flex justify-between gap-2 mb-2">
-                                              <div><h4 className="font-black">4. Posts e listas de destino</h4><p className="text-xs text-gray-500">{trelloEventSelection.length} de {currentViewEvents.length} selecionados</p></div>
+                                              <div><h4 className="font-black">{isCentral ? '4. Posts, quadros, colunas e conclusão' : '4. Posts, listas e conclusão'}</h4><p className="text-xs text-gray-500">{trelloEventSelection.length} de {currentViewEvents.length} selecionados</p></div>
                                               <div className="flex gap-3 text-xs font-black">
                                                   <button onClick={() => {
                                                       const keys = currentViewEvents.map(event => event._key);
                                                       setTrelloEventSelection(keys);
+                                                      if (isCentral) {
+                                                          setTrelloEventBoards(previous => {
+                                                              const updated = { ...previous };
+                                                              keys.forEach(key => { updated[key] = updated[key] || trelloBoardId; });
+                                                              return updated;
+                                                          });
+                                                      }
                                                       setTrelloEventLists(previous => {
                                                           const updated = { ...previous };
-                                                          keys.forEach(key => { updated[key] = updated[key] || trelloDefaultListId; });
+                                                          keys.forEach(key => {
+                                                              const boardId = isCentral ? (trelloEventBoards[key] || trelloBoardId) : trelloBoardId;
+                                                              const availableLists = isCentral ? (trelloListsByBoard[boardId] || []) : trelloLists;
+                                                              updated[key] = updated[key] || (
+                                                                  boardId === trelloBoardId
+                                                                      ? trelloDefaultListId || availableLists[0]?.id || ''
+                                                                      : availableLists[0]?.id || ''
+                                                              );
+                                                          });
+                                                          return updated;
+                                                      });
+                                                      setTrelloEventCompleted(previous => {
+                                                          const updated = { ...previous };
+                                                          keys.forEach(key => {
+                                                              if (updated[key] === undefined) updated[key] = trelloDefaultCompleted;
+                                                          });
                                                           return updated;
                                                       });
                                                   }} className="text-sky-700">Todos</button>
@@ -1845,15 +2201,27 @@
                                               {currentViewEvents.map(event => {
                                                   const category = safeColorOptions.find(item => item.id === event.color);
                                                   const checked = trelloEventSelection.includes(event._key);
+                                                  const eventBoardId = isCentral ? (trelloEventBoards[event._key] || trelloBoardId) : trelloBoardId;
+                                                  const eventBoardLists = isCentral ? (trelloListsByBoard[eventBoardId] || []) : trelloLists;
                                                   return (
-                                                      <div key={event._key} className={`grid md:grid-cols-[1fr_250px] gap-2 p-3 ${checked ? '' : 'opacity-50 bg-gray-100 dark:bg-gray-900'}`}>
+                                                      <div key={event._key} className={`grid ${isCentral ? 'md:grid-cols-[minmax(0,1fr)_190px_190px_160px]' : 'md:grid-cols-[minmax(0,1fr)_220px_170px]'} gap-2 p-3 ${checked ? '' : 'opacity-50 bg-gray-100 dark:bg-gray-900'}`}>
                                                           <label className="flex gap-3 min-w-0 cursor-pointer">
                                                               <input type="checkbox" checked={checked} onChange={() => toggleTrelloEvent(event._key)} className="w-5 h-5 flex-shrink-0" />
                                                               <span><strong className="block text-sm break-words">Dia {event.day} · {getCleanDisplayText(event.text, isCentral, category?.label)}</strong><span className="text-xs text-gray-500">{category?.label || 'Sem categoria'}</span></span>
                                                           </label>
+                                                          {isCentral && (
+                                                              <select value={eventBoardId} onChange={e => changeTrelloEventBoard(event._key, e.target.value)} disabled={!checked || trelloBusy} className="border dark:border-gray-600 p-2 rounded-lg text-sm font-bold dark:bg-gray-700 disabled:opacity-50">
+                                                                  <option value="">Escolha o quadro...</option>
+                                                                  {trelloBoards.map(board => <option key={board.id} value={board.id}>{board.name}</option>)}
+                                                              </select>
+                                                          )}
                                                           <select value={trelloEventLists[event._key] || ''} onChange={e => setTrelloEventLists(previous => ({ ...previous, [event._key]: e.target.value }))} disabled={!checked || trelloBusy} className="border dark:border-gray-600 p-2 rounded-lg text-sm font-bold dark:bg-gray-700 disabled:opacity-50">
-                                                              <option value="">Escolha a lista...</option>
-                                                              {trelloLists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+                                                              <option value="">Escolha a coluna...</option>
+                                                              {eventBoardLists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+                                                          </select>
+                                                          <select value={trelloEventCompleted[event._key] ? 'completed' : 'pending'} onChange={e => setTrelloEventCompleted(previous => ({ ...previous, [event._key]: e.target.value === 'completed' }))} disabled={!checked || trelloBusy} className="border dark:border-gray-600 p-2 rounded-lg text-sm font-bold dark:bg-gray-700 disabled:opacity-50">
+                                                              <option value="pending">Não concluído</option>
+                                                              <option value="completed">Concluído</option>
                                                           </select>
                                                       </div>
                                                   );
@@ -2158,7 +2526,7 @@
 
               <div className="max-w-7xl mx-auto space-y-6">
                 
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                <div data-tutorial="header" className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     
                     <div className="flex items-center w-full justify-between">
@@ -2181,6 +2549,10 @@
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-start md:justify-end">
+
+                      <button onClick={startTutorial} className="w-full md:w-auto bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-sky-200 dark:hover:bg-sky-900 transition flex items-center justify-center gap-2" title="Abrir tutorial interativo">
+                          ❓ Tutorial
+                      </button>
 
                       {userRole === 'master' && (
                           <button onClick={() => setShowRolesModal(true)} className="w-full md:w-auto bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-yellow-500 transition flex items-center justify-center gap-2">
@@ -2217,7 +2589,7 @@
                 {isAdmin && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                    <div data-tutorial="companies" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
                       <div className="flex flex-col gap-2 mb-4">
                         <div className="flex flex-col sm:flex-row gap-2">
@@ -2275,7 +2647,7 @@
                   </div>
 
                   <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
+                    <div data-tutorial="categories" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
                       <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias do Calendário</h3>
                       {!isCentral ? (
                           <>
@@ -2336,7 +2708,7 @@
                         </div>
                     )}
 
-                    <div className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
+                    <div data-tutorial="add-post" className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
                       <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
                       <div className="flex flex-col gap-3">
                         <div className="flex flex-col sm:flex-row gap-2">
@@ -2374,7 +2746,7 @@
                 </div>
                 )}
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                <div data-tutorial="calendar" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   
                   {isSelectionMode && (
                       <div className="bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-400 p-4 rounded-xl mb-6 shadow-md transition-all">
@@ -2407,7 +2779,7 @@
                       </div>
                   )}
 
-                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
+                  <div data-tutorial="calendar-controls" className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
                     
                     <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full md:w-auto justify-between md:justify-start">
                         <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">⬅️</button>
@@ -2418,7 +2790,7 @@
                     </div>
 
                     {isAdmin && (
-                        <div className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
+                        <div data-tutorial="calendar-actions" className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
                             {/* BOTÃO DE RESGATE DEFINITIVO */}
                             <button onClick={rescueUpliGeral} className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-sm" title="Restaurar UPLI Geral">
                                 🚑 Restaurar
@@ -2445,7 +2817,7 @@
                   </div>
 
                   {isCentral && (
-                      <div className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
+                      <div data-tutorial="status-filters" className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
                           <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
                           <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
                           <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
