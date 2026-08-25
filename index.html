@@ -192,6 +192,8 @@
 
           const [darkMode, setDarkMode] = useState(false);
           const [showTutorial, setShowTutorial] = useState(false);
+          const [showTutorialMenu, setShowTutorialMenu] = useState(false);
+          const [tutorialTopic, setTutorialTopic] = useState('general');
           const [tutorialStep, setTutorialStep] = useState(0);
           const [tutorialTargetRect, setTutorialTargetRect] = useState(null);
           const [tutorialCheckedUserId, setTutorialCheckedUserId] = useState('');
@@ -1827,6 +1829,91 @@
           };
 
           const getTutorialSteps = () => {
+              if (tutorialTopic === 'image') {
+                  return [
+                      {
+                          target: '[data-tutorial="calendar-controls"]',
+                          icon: '\uD83D\uDCC5',
+                          title: '1. Escolha o calendário',
+                          text: 'Antes de exportar, abra a empresa correta e use as setas para escolher o mês que será salvo.',
+                          tips: ['Confirme o nome da empresa à direita.', 'Confira também o mês e o ano no centro.']
+                      },
+                      {
+                          target: '[data-tutorial="calendar"]',
+                          icon: '\uD83D\uDD0E',
+                          title: '2. Revise o conteúdo',
+                          text: 'Verifique títulos, datas, cores e status antes de gerar o arquivo. A exportação usa exatamente os dados exibidos neste calendário.',
+                          tips: ['Clique em um post para corrigir detalhes.', 'No UPLI Geral, ajuste os filtros para Tudo antes de revisar.']
+                      },
+                      {
+                          target: '[data-tutorial="image-exports"]',
+                          icon: '\uD83D\uDDBC\uFE0F',
+                          title: '3. Exportar como PNG',
+                          text: 'O botão PNG gera uma imagem 4K do calendário completo, ideal para enviar no WhatsApp, publicar ou abrir em programas de edição.',
+                          tips: ['O download começa automaticamente.', 'A imagem inclui legenda de empresas/categorias e status.']
+                      },
+                      {
+                          target: '[data-tutorial="image-exports"]',
+                          icon: '\uD83D\uDCC4',
+                          title: '4. Exportar como PDF HD',
+                          text: 'O botão PDF HD cria um documento em alta qualidade, mais indicado para apresentação, impressão ou arquivamento.',
+                          tips: ['Aguarde a geração terminar antes de clicar novamente.', 'O nome do arquivo inclui empresa, mês e ano.']
+                      }
+                  ];
+              }
+
+              if (tutorialTopic === 'trello') {
+                  return [
+                      {
+                          target: '[data-tutorial="calendar-controls"]',
+                          icon: '\uD83D\uDCC5',
+                          title: '1. Escolha empresa e mês',
+                          text: 'Abra o calendário que será enviado e confirme o mês. O Trello receberá os posts dessa visualização.',
+                          tips: ['No UPLI Geral você pode distribuir os posts entre quadros diferentes.', 'Nos calendários individuais, o quadro escolhido vale para todos.']
+                      },
+                      {
+                          target: '[data-tutorial="calendar-actions"]',
+                          icon: '\u2705',
+                          title: '2. Mês inteiro ou posts específicos',
+                          text: 'Clique diretamente em Trello para exportar o mês inteiro. Para enviar somente alguns posts, clique em Selecionar, marque os conteúdos e depois clique em Trello.',
+                          tips: ['O contador mostra quantos posts serão enviados.', 'Você pode selecionar por empresa ou categoria usando os atalhos.']
+                      },
+                      {
+                          target: '[data-tutorial="calendar-actions"]',
+                          icon: '\uD83D\uDD10',
+                          title: '3. Conecte sua conta',
+                          text: 'Na primeira exportação, clique em Conectar com Trello e autorize o calendário. Depois escolha o quadro padrão e a coluna padrão.',
+                          tips: ['A autorização abre em uma janela oficial do Trello.', 'O acesso fica salvo somente neste navegador por até 30 dias.']
+                      },
+                      {
+                          target: '[data-tutorial="calendar-actions"]',
+                          icon: '\uD83D\uDCCB',
+                          title: '4. Defina o destino de cada post',
+                          text: selectedCompany === UPLI_GERAL_ID
+                              ? 'No UPLI Geral, cada post pode escolher individualmente o quadro e depois uma coluna pertencente àquele quadro.'
+                              : 'Escolha a coluna de destino de cada post. Todos serão enviados ao quadro selecionado no topo.',
+                          tips: selectedCompany === UPLI_GERAL_ID
+                              ? ['Use o quadro padrão para preencher todos rapidamente.', 'Ao trocar o quadro de um post, as colunas correspondentes são carregadas automaticamente.']
+                              : ['Use a coluna padrão para preencher todos rapidamente.', 'Você ainda pode alterar a coluna de um post individualmente.']
+                      },
+                      {
+                          target: '[data-tutorial="calendar-actions"]',
+                          icon: '\u2714',
+                          title: '5. Conclusão e operação',
+                          text: 'Marque cada cartão como Concluído ou Não concluído. Depois escolha se deseja somente adicionar, substituir tudo ou selecionar cartões antigos para apagar.',
+                          tips: ['Somente adicionar é a opção mais segura.', 'Excluir cartões é permanente e exige confirmação.', 'No UPLI Geral, exclusões afetam somente o quadro padrão.']
+                      },
+                      {
+                          target: '[data-tutorial="calendar-actions"]',
+                          icon: '\uD83D\uDE80',
+                          title: '6. Execute a exportação',
+                          text: 'Revise todas as escolhas e clique em Executar no Trello. A barra de progresso informará cada cartão criado e qualquer erro encontrado.',
+                          tips: ['Os novos cartões são criados antes de qualquer exclusão.', 'Se uma criação falhar, os cartões novos daquela tentativa são desfeitos.'],
+                          action: 'open-trello'
+                      }
+                  ];
+              }
+
               const steps = [
                   {
                       target: '[data-tutorial="header"]',
@@ -1898,14 +1985,17 @@
               return steps;
           };
 
-          const startTutorial = () => {
+          const startTutorial = (topic = 'general') => {
+              setTutorialTopic(topic);
               setTutorialStep(0);
               setTutorialTargetRect(null);
+              setShowTutorialMenu(false);
               setShowTutorial(true);
           };
 
           const finishTutorial = () => {
               setShowTutorial(false);
+              setShowTutorialMenu(false);
               setTutorialTargetRect(null);
               if (user?.uid) {
                   try { localStorage.setItem(`upli_tutorial_seen_v1_${user.uid}`, 'true'); } catch (error) {}
@@ -1918,7 +2008,7 @@
               let tutorialSeen = false;
               try { tutorialSeen = localStorage.getItem(`upli_tutorial_seen_v1_${user.uid}`) === 'true'; } catch (error) {}
               if (!tutorialSeen) {
-                  const timer = setTimeout(() => startTutorial(), 700);
+                  const timer = setTimeout(() => setShowTutorialMenu(true), 700);
                   return () => clearTimeout(timer);
               }
           }, [loadingAuth, user?.uid]);
@@ -1974,7 +2064,10 @@
                   if (event.key === 'ArrowLeft' && tutorialStep > 0) setTutorialStep(previous => previous - 1);
                   if (event.key === 'ArrowRight') {
                       if (tutorialStep < steps.length - 1) setTutorialStep(previous => previous + 1);
-                      else finishTutorial();
+                      else if (steps[tutorialStep]?.action === 'open-trello') {
+                          finishTutorial();
+                          openTrelloIntegration();
+                      } else finishTutorial();
                   }
               };
               window.addEventListener('keydown', handleTutorialKey);
@@ -2020,6 +2113,47 @@
 
           return (
             <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+              {showTutorialMenu && (
+                  <div className="fixed inset-0 bg-slate-950 bg-opacity-80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" style={{ zIndex: 210 }}>
+                      <section role="dialog" aria-modal="true" aria-label="Central de tutoriais" className="bg-white dark:bg-gray-800 text-gray-800 dark:text-white rounded-2xl shadow-2xl border-2 border-sky-400 max-w-3xl w-full p-5 md:p-7 relative">
+                          <button onClick={finishTutorial} className="absolute top-4 right-4 w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-red-100 hover:text-red-600 font-black" aria-label="Fechar central de tutoriais">×</button>
+                          <div className="pr-10">
+                              <p className="text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest">Central de ajuda</p>
+                              <h2 className="text-2xl md:text-3xl font-black mt-1">O que você quer aprender?</h2>
+                              <p className="text-sm text-gray-500 dark:text-gray-300 mt-2">Escolha um tutorial. O site destacará cada botão e explicará o processo passo a passo.</p>
+                          </div>
+
+                          <div className="grid md:grid-cols-3 gap-3 mt-6">
+                              <button onClick={() => startTutorial('general')} className="text-left p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-900 transition group">
+                                  <span className="w-11 h-11 rounded-xl bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-2xl">★</span>
+                                  <strong className="block mt-3 text-lg group-hover:text-blue-600">Visão geral</strong>
+                                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">Empresas, categorias, criação de posts, calendário, filtros e ações.</span>
+                              </button>
+
+                              <button onClick={() => startTutorial('image')} className="text-left p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-gray-900 transition group">
+                                  <span className="w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-950 flex items-center justify-center text-2xl">▣</span>
+                                  <strong className="block mt-3 text-lg group-hover:text-purple-600">Imagem e PDF</strong>
+                                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">Como revisar e exportar corretamente em PNG 4K ou PDF HD.</span>
+                              </button>
+
+                              {isAdmin ? (
+                                  <button onClick={() => startTutorial('trello')} className="text-left p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-sky-500 hover:bg-sky-50 dark:hover:bg-gray-900 transition group">
+                                      <span className="w-11 h-11 rounded-xl bg-sky-100 dark:bg-sky-950 flex items-center justify-center text-2xl">✓</span>
+                                      <strong className="block mt-3 text-lg group-hover:text-sky-600">Exportar para Trello</strong>
+                                      <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">Seleção, conexão, quadros, colunas, conclusão e operações.</span>
+                                  </button>
+                              ) : (
+                                  <div className="p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 opacity-60">
+                                      <span className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">{'\uD83D\uDD12'}</span>
+                                      <strong className="block mt-3 text-lg">Exportar para Trello</strong>
+                                      <span className="block text-xs text-gray-500 mt-1">Disponível para administradores.</span>
+                                  </div>
+                              )}
+                          </div>
+                      </section>
+                  </div>
+              )}
+
               {showTutorial && activeTutorialStep && (
                   <>
                       <div className="fixed inset-0" style={{ zIndex: 190 }} aria-hidden="true"></div>
@@ -2067,6 +2201,16 @@
                                   <button onClick={finishTutorial} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-red-100 hover:text-red-600 font-black flex-shrink-0" aria-label="Fechar tutorial">×</button>
                               </div>
                               <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mt-3">{activeTutorialStep.text}</p>
+                              {Array.isArray(activeTutorialStep.tips) && activeTutorialStep.tips.length > 0 && (
+                                  <ul className="mt-3 space-y-1.5 bg-sky-50 dark:bg-gray-900 border border-sky-100 dark:border-gray-700 rounded-xl p-3">
+                                      {activeTutorialStep.tips.map((tip, index) => (
+                                          <li key={index} className="text-xs text-gray-600 dark:text-gray-300 flex gap-2">
+                                              <span className="text-sky-600 font-black">✓</span>
+                                              <span>{tip}</span>
+                                          </li>
+                                      ))}
+                                  </ul>
+                              )}
                               <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 mt-5">
                                   <button onClick={finishTutorial} className="text-xs font-black text-gray-500 hover:text-red-600 px-2 py-2">Pular tutorial</button>
                                   <div className="flex gap-2">
@@ -2080,11 +2224,18 @@
                                       <button
                                           onClick={() => {
                                               if (tutorialStep < activeTutorialSteps.length - 1) setTutorialStep(previous => previous + 1);
-                                              else finishTutorial();
+                                              else if (activeTutorialStep.action === 'open-trello') {
+                                                  finishTutorial();
+                                                  openTrelloIntegration();
+                                              } else finishTutorial();
                                           }}
                                           className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-sm shadow-md"
                                       >
-                                          {tutorialStep < activeTutorialSteps.length - 1 ? 'Próximo →' : 'Concluir ✓'}
+                                          {tutorialStep < activeTutorialSteps.length - 1
+                                              ? 'Próximo →'
+                                              : activeTutorialStep.action === 'open-trello'
+                                                  ? 'Abrir Trello agora →'
+                                                  : 'Concluir ✓'}
                                       </button>
                                   </div>
                               </div>
@@ -2550,7 +2701,7 @@
                     
                     <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-start md:justify-end">
 
-                      <button onClick={startTutorial} className="w-full md:w-auto bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-sky-200 dark:hover:bg-sky-900 transition flex items-center justify-center gap-2" title="Abrir tutorial interativo">
+                      <button onClick={() => setShowTutorialMenu(true)} className="w-full md:w-auto bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-sky-200 dark:hover:bg-sky-900 transition flex items-center justify-center gap-2" title="Abrir central de tutoriais">
                           ❓ Tutorial
                       </button>
 
@@ -2576,7 +2727,7 @@
                           </div>
                       </div>
 
-                      <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+                      <div data-tutorial="image-exports" className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
                           <button onClick={exportAsImage} className="flex-1 md:flex-none justify-center bg-purple-600 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center gap-1 shadow-sm"><ImageIcon /> PNG</button>
                           <button onClick={exportAsPDF} className="flex-1 md:flex-none justify-center bg-purple-800 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center gap-1 shadow-sm"><PDFIcon /> PDF HD</button>
                           <button onClick={handleLogout} className="hidden md:flex bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition items-center gap-1 shadow-sm"><LogOut /> Sair</button>
