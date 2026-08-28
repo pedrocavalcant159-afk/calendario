@@ -81,6 +81,9 @@
         }
         const auth = firebase.auth();
         const db = firebase.firestore();
+        const reminderFirebaseApp = firebase.apps.find(app => app.name === 'ReminderPublic') ||
+            firebase.initializeApp(firebaseConfig, 'ReminderPublic');
+        const reminderPublicDb = reminderFirebaseApp.firestore();
 
         const { useState, useEffect } = React;
         
@@ -164,6 +167,341 @@
             }
         };
 
+        const eventIdMatches = (storedId, requestedId) => {
+            const stored = String(storedId || '');
+            const requested = String(requestedId || '');
+            return stored === requested || stored === `${requested}_clone` || `${stored}_clone` === requested;
+        };
+
+        const PostStatusUpdate = () => {
+          const params = new URLSearchParams(window.location.search);
+          const companyId = params.get('updateCompany') || '';
+          const eventId = params.get('updateEvent') || '';
+          const [user, setUser] = useState(null);
+          const [loadingAuth, setLoadingAuth] = useState(true);
+          const [email, setEmail] = useState('');
+          const [password, setPassword] = useState('');
+          const [loginError, setLoginError] = useState('');
+          const [eventData, setEventData] = useState(null);
+          const [companyName, setCompanyName] = useState('');
+          const [pipeline, setPipeline] = useState(DEFAULT_STATUS_PIPELINE);
+          const [selectedStatus, setSelectedStatus] = useState('');
+          const [updateNote, setUpdateNote] = useState('');
+          const [loadingPost, setLoadingPost] = useState(false);
+          const [saving, setSaving] = useState(false);
+          const [error, setError] = useState('');
+          const [success, setSuccess] = useState(false);
+
+          useEffect(() => auth.onAuthStateChanged(currentUser => {
+              setUser(currentUser);
+              setLoadingAuth(false);
+          }), []);
+
+          useEffect(() => {
+              if (!user || !companyId || !eventId) return;
+              let cancelled = false;
+              const loadPost = async () => {
+                  setLoadingPost(true);
+                  setError('');
+                  try {
+                      const [companyDoc, rolesDoc, centralDoc, teamDoc] = await Promise.all([
+                          db.collection('companies').doc(companyId).get(),
+                          db.collection('system').doc('roles').get(),
+                          db.collection('companies').doc(UPLI_GERAL_ID).get(),
+                          db.collection('system').doc('team').get()
+                      ]);
+                      if (!companyDoc.exists) throw new Error('Este calendário não existe mais.');
+                      const company = companyDoc.data() || {};
+                      const found = (company.events || []).find(item => eventIdMatches(item.id, eventId));
+                      if (!found) throw new Error('Este post foi removido ou o link não é mais válido.');
+
+                      const emailKey = String(user.email || '').toLowerCase();
+                      const roles = rolesDoc.exists ? (rolesDoc.data() || {}) : {};
+                      const role = (roles.userRoles || {})[emailKey];
+                      const assignedCompany = (roles.userCompanies || {})[emailKey];
+                      const team = teamDoc.exists ? (teamDoc.data() || {}) : {};
+                      const responsibleMember = (team.members || []).find(member => member.id === found.responsibleId);
+                      const responsibleEmail = String(
+                          responsibleMember?.email || found.responsibleEmail || found.responsible || ''
+                      ).trim().toLowerCase();
+                      const allowed = emailKey === MEU_EMAIL_MASTER || role === 'master' || role === 'admin' ||
+                          assignedCompany === companyId || responsibleEmail === emailKey;
+                      if (!allowed) throw new Error('Sua conta não tem permissão para atualizar este post.');
+
+                      if (cancelled) return;
+                      const central = centralDoc.exists ? (centralDoc.data() || {}) : {};
+                      setPipeline({ ...DEFAULT_STATUS_PIPELINE, ...(central.statusPipeline || {}) });
+                      setCompanyName(company.name || 'Calendário UPLI');
+                      setEventData(found);
+                      setSelectedStatus(found.status || 'criacao');
+                  } catch (loadError) {
+                      if (!cancelled) setError(loadError.message || 'Não foi possível carregar o post.');
+                  } finally {
+                      if (!cancelled) setLoadingPost(false);
+                  }
+              };
+              loadPost();
+              return () => { cancelled = true; };
+          }, [user, companyId, eventId]);
+
+          const handleLogin = async (submitEvent) => {
+              submitEvent.preventDefault();
+              setLoginError('');
+              try {
+                  await auth.signInWithEmailAndPassword(email.trim(), password);
+              } catch (loginFailure) {
+                  setLoginError('Não foi possível entrar. Confira o e-mail e a senha.');
+              }
+          };
+
+          const submitStatusUpdate = async (submitEvent) => {
+              submitEvent.preventDefault();
+              if (!selectedStatus || !eventData || !user) return;
+              setSaving(true);
+              setError('');
+              try {
+                  const sourceRef = db.collection('companies').doc(companyId);
+                  const centralRef = db.collection('companies').doc(UPLI_GERAL_ID);
+                  const updatedAt = new Date().toISOString();
+                  const historyEntry = {
+                      from: eventData.status || null,
+                      to: selectedStatus,
+                      note: updateNote.trim(),
+                      updatedAt,
+                      updatedBy: user.displayName || user.email || 'Usuário',
+                      updatedByEmail: user.email || '',
+                      source: 'whatsapp-reminder-link'
+                  };
+
+                  await db.runTransaction(async transaction => {
+                      const sourceDoc = await transaction.get(sourceRef);
+                      if (!sourceDoc.exists) throw new Error('O calendário foi removido.');
+                      const sourceData = sourceDoc.data() || {};
+                      const sourceEvents = [...(sourceData.events || [])];
+                      const sourceIndex = sourceEvents.findIndex(item => eventIdMatches(item.id, eventId));
+                      if (sourceIndex === -1) throw new Error('O post foi removido antes da atualização.');
+
+                      let centralDoc = null;
+                      if (companyId !== UPLI_GERAL_ID) centralDoc = await transaction.get(centralRef);
+
+                      const current = sourceEvents[sourceIndex];
+                      const currentHistoryEntry = { ...historyEntry, from: current.status || null };
+                      sourceEvents[sourceIndex] = {
+                          ...current,
+                          status: selectedStatus,
+                          statusUpdateNote: updateNote.trim(),
+                          statusHistory: [...(current.statusHistory || []), currentHistoryEntry].slice(-20),
+                          updatedAt,
+                          updatedBy: historyEntry.updatedBy,
+                          updatedByEmail: historyEntry.updatedByEmail
+                      };
+                      transaction.update(sourceRef, { events: sourceEvents });
+
+                      if (centralDoc && centralDoc.exists) {
+                          const centralData = centralDoc.data() || {};
+                          const centralEvents = [...(centralData.events || [])];
+                          const centralIndex = centralEvents.findIndex(item => eventIdMatches(item.id, eventId));
+                          if (centralIndex !== -1) {
+                              centralEvents[centralIndex] = {
+                                  ...centralEvents[centralIndex],
+                                  status: selectedStatus,
+                                  statusUpdateNote: updateNote.trim(),
+                                  statusHistory: [...(centralEvents[centralIndex].statusHistory || []), currentHistoryEntry].slice(-20),
+                                  updatedAt,
+                                  updatedBy: historyEntry.updatedBy,
+                                  updatedByEmail: historyEntry.updatedByEmail
+                              };
+                              transaction.update(centralRef, { events: centralEvents });
+                          }
+                      }
+                  });
+                  setEventData(current => ({ ...current, status: selectedStatus, statusUpdateNote: updateNote.trim(), updatedAt }));
+                  setSuccess(true);
+              } catch (saveError) {
+                  setError(saveError.message || 'Não foi possível atualizar o andamento.');
+              } finally {
+                  setSaving(false);
+              }
+          };
+
+          if (!companyId || !eventId) {
+              return <main className="min-h-screen flex items-center justify-center p-5"><section className="w-full max-w-lg bg-white border border-gray-300 rounded-lg p-6 shadow-lg"><h1 className="text-xl font-bold">Link inválido</h1><p className="mt-2 text-gray-600">O endereço do post está incompleto.</p></section></main>;
+          }
+          if (loadingAuth) return <main className="min-h-screen grid place-items-center text-gray-600">Carregando...</main>;
+          if (!user) {
+              return (
+                  <main className="min-h-screen flex items-center justify-center p-5">
+                      <form onSubmit={handleLogin} className="w-full max-w-md bg-white border border-gray-300 rounded-lg p-6 shadow-lg">
+                          <p className="text-sm font-bold text-emerald-700">CALENDÁRIO UPLI</p>
+                          <h1 className="text-2xl font-bold mt-1">Atualizar andamento</h1>
+                          <p className="text-gray-600 mt-2">Entre com sua conta do calendário para responder ao lembrete.</p>
+                          <label className="block text-sm font-bold mt-5">E-mail</label>
+                          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 w-full border-2 border-gray-300 rounded-md px-3 py-3" autoComplete="username" />
+                          <label className="block text-sm font-bold mt-4">Senha</label>
+                          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 w-full border-2 border-gray-300 rounded-md px-3 py-3" autoComplete="current-password" />
+                          {loginError && <p className="mt-3 text-sm font-bold text-red-700">{loginError}</p>}
+                          <button type="submit" className="mt-5 w-full bg-emerald-700 text-white rounded-md px-4 py-3 font-bold">Entrar e continuar</button>
+                      </form>
+                  </main>
+              );
+          }
+          return (
+              <main className="min-h-screen bg-gray-100 p-4 sm:p-8">
+                  <section className="mx-auto w-full max-w-xl bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+                      <header className="bg-gray-900 text-white p-5">
+                          <p className="text-xs font-bold text-emerald-400">CALENDÁRIO UPLI</p>
+                          <h1 className="text-xl font-bold mt-1">Atualizar andamento do post</h1>
+                      </header>
+                      <div className="p-5">
+                          {loadingPost && <p className="text-gray-600">Carregando post...</p>}
+                          {error && <p className="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 font-semibold">{error}</p>}
+                          {success && <div className="border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-md p-4"><strong>Andamento atualizado.</strong><p className="text-sm mt-1">O novo status já aparece no calendário.</p></div>}
+                          {eventData && !success && (
+                              <form onSubmit={submitStatusUpdate}>
+                                  <div className="border-b border-gray-200 pb-4 mb-5">
+                                      <h2 className="text-lg font-bold break-words">{eventData.text || 'Post sem título'}</h2>
+                                      <p className="text-sm text-gray-600 mt-1">{companyName} · {String(eventData.day).padStart(2, '0')}/{String(Number(eventData.month) + 1).padStart(2, '0')}/{eventData.year}</p>
+                                      <p className="text-sm text-gray-600 mt-1">Responsável: {eventData.responsible || 'Não definido'}</p>
+                                  </div>
+                                  <fieldset>
+                                      <legend className="font-bold mb-3">Como está o andamento?</legend>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                          {Object.entries(pipeline).map(([key, value]) => (
+                                              <label key={key} className={`flex items-center gap-3 border-2 rounded-md p-3 cursor-pointer ${selectedStatus === key ? 'border-gray-900 bg-gray-50' : 'border-gray-200'}`}>
+                                                  <input type="radio" name="status" value={key} checked={selectedStatus === key} onChange={() => setSelectedStatus(key)} />
+                                                  <span className="w-3 h-3 rounded-sm shrink-0" style={{backgroundColor: value.bg}}></span>
+                                                  <span className="font-semibold">{value.label}</span>
+                                              </label>
+                                          ))}
+                                      </div>
+                                  </fieldset>
+                                  <label className="block font-bold mt-5">Observação <span className="font-normal text-gray-500">(opcional)</span></label>
+                                  <textarea value={updateNote} onChange={e => setUpdateNote(e.target.value)} rows="3" maxLength="500" className="mt-2 w-full border-2 border-gray-300 rounded-md px-3 py-3" placeholder="Ex.: material enviado para aprovação"></textarea>
+                                  <button type="submit" disabled={saving} className="mt-5 w-full bg-emerald-700 disabled:bg-gray-400 text-white rounded-md px-4 py-3 font-bold">{saving ? 'Atualizando...' : 'Confirmar andamento'}</button>
+                              </form>
+                          )}
+                          <div className="mt-5 pt-4 border-t border-gray-200 flex items-center justify-between gap-3 text-xs text-gray-500">
+                              <span className="break-all">{user.email}</span>
+                              <button type="button" onClick={() => auth.signOut()} className="font-bold text-gray-700">Sair</button>
+                          </div>
+                      </div>
+                  </section>
+              </main>
+          );
+        };
+
+        const PublicReminderUpdate = () => {
+          const token = new URLSearchParams(window.location.search).get('reminder') || '';
+          const [requestData, setRequestData] = useState(null);
+          const [selectedStatus, setSelectedStatus] = useState('');
+          const [updateNote, setUpdateNote] = useState('');
+          const [loading, setLoading] = useState(true);
+          const [saving, setSaving] = useState(false);
+          const [error, setError] = useState('');
+          const [success, setSuccess] = useState('');
+
+          useEffect(() => {
+              let cancelled = false;
+              const loadRequest = async () => {
+                  if (!/^[A-Za-z0-9_-]{40,80}$/.test(token)) {
+                      setError('Este link de atualização é inválido.');
+                      setLoading(false);
+                      return;
+                  }
+                  try {
+                      const snapshot = await reminderPublicDb.collection('reminderRequests').doc(token).get();
+                      if (!snapshot.exists) throw new Error('Este link não existe ou já foi removido.');
+                      const data = snapshot.data() || {};
+                      const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : null;
+                      if (data.processed === true) {
+                          setSuccess('Esta resposta já foi processada e o calendário foi atualizado.');
+                      } else if (data.responseVersion > 0) {
+                          setSuccess('Resposta recebida. O calendário será atualizado automaticamente.');
+                      } else if (data.active !== true || !expiresAt || expiresAt.getTime() <= Date.now()) {
+                          throw new Error('Este link expirou. Peça um novo lembrete à equipe UPLI.');
+                      } else if (!Array.isArray(data.statusOptions) || !data.statusOptions.length) {
+                          throw new Error('Este formulário está sem opções de andamento.');
+                      } else {
+                          setRequestData(data);
+                          const validCurrent = data.statusOptions.some(option => option.key === data.currentStatus);
+                          setSelectedStatus(validCurrent ? data.currentStatus : data.statusOptions[0].key);
+                      }
+                  } catch (loadError) {
+                      if (!cancelled) setError(loadError.message || 'Não foi possível abrir este formulário.');
+                  } finally {
+                      if (!cancelled) setLoading(false);
+                  }
+              };
+              loadRequest();
+              return () => { cancelled = true; };
+          }, [token]);
+
+          const submitResponse = async submitEvent => {
+              submitEvent.preventDefault();
+              if (!requestData || !selectedStatus || saving) return;
+              setSaving(true);
+              setError('');
+              try {
+                  await reminderPublicDb.collection('reminderRequests').doc(token).update({
+                      responseStatus: selectedStatus,
+                      responseNote: updateNote.trim(),
+                      respondedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                      responseVersion: 1
+                  });
+                  setRequestData(null);
+                  setSuccess('Resposta recebida. O calendário será atualizado automaticamente.');
+              } catch (saveError) {
+                  setError(
+                      saveError?.code === 'permission-denied'
+                          ? 'Este link expirou ou já recebeu uma resposta.'
+                          : 'Não foi possível enviar agora. Verifique sua internet e tente novamente.'
+                  );
+              } finally {
+                  setSaving(false);
+              }
+          };
+
+          return (
+              <main className="min-h-screen bg-gray-100 p-4 sm:p-8">
+                  <section className="mx-auto w-full max-w-xl bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+                      <header className="bg-gray-900 text-white p-5">
+                          <p className="text-xs font-bold text-emerald-400">CALENDÁRIO UPLI</p>
+                          <h1 className="text-xl font-bold mt-1">Atualizar andamento</h1>
+                      </header>
+                      <div className="p-5">
+                          {loading && <p className="text-gray-600">Carregando demanda...</p>}
+                          {error && <p className="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 font-semibold">{error}</p>}
+                          {success && <div className="border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-md p-4"><strong>{success}</strong></div>}
+                          {requestData && !success && (
+                              <form onSubmit={submitResponse}>
+                                  <div className="border-b border-gray-200 pb-4 mb-5">
+                                      <p className="text-sm font-bold text-emerald-700">{requestData.responsibleName}</p>
+                                      <h2 className="text-lg font-bold break-words mt-1">{requestData.title || 'Post sem título'}</h2>
+                                      <p className="text-sm text-gray-600 mt-1">{requestData.companyName} · {requestData.dueDateLabel}</p>
+                                  </div>
+                                  <fieldset>
+                                      <legend className="font-bold mb-3">Como está o andamento?</legend>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                          {requestData.statusOptions.map(option => (
+                                              <label key={option.key} className={'flex items-center gap-3 border-2 rounded-md p-3 cursor-pointer ' + (selectedStatus === option.key ? 'border-gray-900 bg-gray-50' : 'border-gray-200')}>
+                                                  <input type="radio" name="status" value={option.key} checked={selectedStatus === option.key} onChange={() => setSelectedStatus(option.key)} />
+                                                  <span className="w-3 h-3 rounded-sm shrink-0" style={{backgroundColor: option.color || '#64748B'}}></span>
+                                                  <span className="font-semibold">{option.label}</span>
+                                              </label>
+                                          ))}
+                                      </div>
+                                  </fieldset>
+                                  <label className="block font-bold mt-5">Observação <span className="font-normal text-gray-500">(opcional)</span></label>
+                                  <textarea value={updateNote} onChange={event => setUpdateNote(event.target.value)} rows="3" maxLength="500" className="mt-2 w-full border-2 border-gray-300 rounded-md px-3 py-3" placeholder="Ex.: material enviado para aprovação"></textarea>
+                                  <button type="submit" disabled={saving} className="mt-5 w-full bg-emerald-700 disabled:bg-gray-400 text-white rounded-md px-4 py-3 font-bold">{saving ? 'Enviando...' : 'Confirmar andamento'}</button>
+                              </form>
+                          )}
+                      </div>
+                  </section>
+              </main>
+          );
+        };
+
         const CalendarCreator = () => {
           const [user, setUser] = useState(null);
           const [email, setEmail] = useState('');
@@ -179,6 +517,10 @@
           const [globalRoles, setGlobalRoles] = useState({});
           const [globalUserCompanies, setGlobalUserCompanies] = useState({});
           const [showRolesModal, setShowRolesModal] = useState(false);
+          const [teamMembers, setTeamMembers] = useState([]);
+          const [showTeamModal, setShowTeamModal] = useState(false);
+          const [editingTeamMemberId, setEditingTeamMemberId] = useState(null);
+          const [teamMemberForm, setTeamMemberForm] = useState({ name: '', email: '', phone: '' });
           
           const [newAccEmail, setNewAccEmail] = useState('');
           const [newAccPassword, setNewAccPassword] = useState('');
@@ -236,6 +578,89 @@
           }, []);
 
           const isAdmin = userRole === 'master' || userRole === 'admin';
+          const activeTeamMembers = teamMembers
+              .filter(member => member.active !== false)
+              .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+          const normalizeTeamPhone = (value) => {
+              let digits = String(value || '').replace(/\D/g, '');
+              if (digits.length === 10 || digits.length === 11) digits = '55' + digits;
+              return digits;
+          };
+
+          const resetTeamMemberForm = () => {
+              setEditingTeamMemberId(null);
+              setTeamMemberForm({ name: '', email: '', phone: '' });
+          };
+
+          const saveTeamMember = async () => {
+              if (!isAdmin) return;
+              const name = teamMemberForm.name.trim();
+              const email = teamMemberForm.email.trim().toLowerCase();
+              const phone = normalizeTeamPhone(teamMemberForm.phone);
+              if (!name) return alert('Informe o nome do membro.');
+              if (phone.length < 12 || phone.length > 15) return alert('Informe um WhatsApp válido com DDD.');
+              const now = new Date().toISOString();
+              const memberId = editingTeamMemberId || (crypto.randomUUID ? crypto.randomUUID() : 'member_' + Date.now());
+              const previous = teamMembers.find(member => member.id === memberId) || {};
+              const member = {
+                  ...previous,
+                  id: memberId,
+                  name,
+                  email,
+                  phone,
+                  active: true,
+                  createdAt: previous.createdAt || now,
+                  updatedAt: now,
+                  updatedBy: user?.email || currentUserName
+              };
+              const updatedMembers = editingTeamMemberId
+                  ? teamMembers.map(item => item.id === memberId ? member : item)
+                  : [...teamMembers, member];
+              await db.collection('system').doc('team').set({ members: updatedMembers, updatedAt: now }, { merge: true });
+              resetTeamMemberForm();
+          };
+
+          const editTeamMember = (member) => {
+              setEditingTeamMemberId(member.id);
+              setTeamMemberForm({ name: member.name || '', email: member.email || '', phone: member.phone || '' });
+          };
+
+          const removeTeamMember = async (member) => {
+              if (!isAdmin) return;
+              const assignedCount = companies.reduce(
+                  (total, company) => total + (company.events || []).filter(event => event.responsibleId === member.id).length,
+                  0
+              );
+              const detail = assignedCount ? ' Existem ' + assignedCount + ' post(s) atribuídos; eles ficarão sem lembrete individual até receberem outro responsável.' : '';
+              if (!confirm('Remover ' + member.name + ' da equipe?' + detail)) return;
+              const updatedMembers = teamMembers.filter(item => item.id !== member.id);
+              await db.collection('system').doc('team').set({
+                  members: updatedMembers,
+                  updatedAt: new Date().toISOString()
+              }, { merge: true });
+              if (editingTeamMemberId === member.id) resetTeamMemberForm();
+          };
+
+          const responsibleFormValue = (form) =>
+              form.responsibleId || (form.responsible ? '__legacy__' : '');
+
+          const assignResponsible = (form, setter, memberId) => {
+              if (!memberId) {
+                  setter({ ...form, responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+                  return;
+              }
+              if (memberId === '__legacy__') return;
+              const member = teamMembers.find(item => item.id === memberId);
+              if (!member) return;
+              setter({
+                  ...form,
+                  responsibleId: member.id,
+                  responsible: member.name,
+                  responsiblePhone: member.phone,
+                  responsibleEmail: member.email || ''
+              });
+          };
 
           const handleCreateAccount = async () => {
               if (!newAccEmail || !newAccPassword) return alert("Preencha email e senha!");
@@ -341,7 +766,7 @@
           const [colorOptions, setColorOptions] = useState([]);
           const [statusPipeline, setStatusPipeline] = useState(DEFAULT_STATUS_PIPELINE);
           
-          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
+          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           const [sendToUpliGeral, setSendToUpliGeral] = useState(true); 
           
@@ -350,7 +775,7 @@
           const [editColorValue, setEditColorValue] = useState('');
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '' });
+          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
@@ -365,6 +790,7 @@
           const [editCompanyColor, setEditCompanyColor] = useState('');
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
+          const [calendarAutomationStatuses, setCalendarAutomationStatuses] = useState({});
 
           const [isSelectionMode, setIsSelectionMode] = useState(false);
           const [selectedEvents, setSelectedEvents] = useState([]); 
@@ -382,6 +808,7 @@
           const [trelloLists, setTrelloLists] = useState([]);
           const [trelloCards, setTrelloCards] = useState([]);
           const [trelloMode, setTrelloMode] = useState('add');
+          const [trelloSingleEventKey, setTrelloSingleEventKey] = useState('');
           const [trelloEventSelection, setTrelloEventSelection] = useState([]);
           const [trelloEventBoards, setTrelloEventBoards] = useState({});
           const [trelloEventLists, setTrelloEventLists] = useState({});
@@ -466,6 +893,24 @@
           }, [user, userRole, globalUserCompanies]);
 
           useEffect(() => {
+              if (!user) return;
+              const unsubscribe = db.collection('system').doc('automation').onSnapshot(doc => {
+                  const data = doc.exists ? (doc.data() || {}) : {};
+                  setCalendarAutomationStatuses(data.calendarStatuses || {});
+              });
+              return () => unsubscribe();
+          }, [user]);
+
+          useEffect(() => {
+              if (!user) return;
+              const unsubscribe = db.collection('system').doc('team').onSnapshot(doc => {
+                  const data = doc.exists ? (doc.data() || {}) : {};
+                  setTeamMembers(Array.isArray(data.members) ? data.members : []);
+              });
+              return () => unsubscribe();
+          }, [user]);
+
+          useEffect(() => {
               if (selectedCompany) {
                   const comp = companies.find(c => c.id === selectedCompany);
                   if (comp) {
@@ -516,6 +961,50 @@
 
           const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
           const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
+
+          const getCalendarAutomationKey = (companyId = selectedCompany, targetYear = year, targetMonth = month) =>
+              `${companyId}__${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+          const getPublicFormBaseUrl = () => {
+              if (!/^https?:$/.test(window.location.protocol)) return '';
+              const url = new URL(window.location.href);
+              url.search = '';
+              url.hash = '';
+              return url.toString();
+          };
+          const currentCalendarAutomationKey = getCalendarAutomationKey();
+          const currentCalendarAutomation = calendarAutomationStatuses[currentCalendarAutomationKey] || null;
+          const isCurrentCalendarCompleted = currentCalendarAutomation?.ready === true;
+
+          const completeCurrentCalendar = async () => {
+              if (!selectedCompany || !isAdmin) return;
+              const companyName = companies.find(company => company.id === selectedCompany)?.name || 'Calendário';
+              if (!confirm(`Confirmar que ${companyName} de ${months[month]} ${year} está concluído e liberar a automação?`)) return;
+              const ref = db.collection('system').doc('automation');
+              const entry = {
+                  ready: true,
+                  companyId: selectedCompany,
+                  companyName,
+                  year,
+                  month,
+                  completedAt: new Date().toISOString(),
+                  completedBy: currentUserName,
+                  completedByEmail: user?.email || ''
+              };
+              const formBaseUrl = getPublicFormBaseUrl();
+              await ref.set({ calendarStatuses: {}, ...(formBaseUrl ? { formBaseUrl } : {}) }, { merge: true });
+              await ref.update(new firebase.firestore.FieldPath('calendarStatuses', currentCalendarAutomationKey), entry);
+          };
+
+          const reopenCurrentCalendar = async () => {
+              if (!selectedCompany || !isAdmin) return;
+              const companyName = companies.find(company => company.id === selectedCompany)?.name || 'Calendário';
+              if (!confirm(`Reabrir ${companyName} de ${months[month]} ${year}? A automação ficará pausada para este calendário.`)) return;
+              const ref = db.collection('system').doc('automation');
+              await ref.update(
+                  new firebase.firestore.FieldPath('calendarStatuses', currentCalendarAutomationKey),
+                  firebase.firestore.FieldValue.delete()
+              );
+          };
 
           // BOTÃO DE EMERGÊNCIA (RECONSTRÓI O UPLI GERAL NO NOVO COFRE)
           const rescueUpliGeral = () => {
@@ -667,7 +1156,7 @@
                     db.collection('companies').doc(UPLI_GERAL_ID).set({ events: [...upliGeral.events, clonedEvent] }, { merge: true });
                 }
             }
-            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '', imageUrl: '' });
+            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           };
 
           const removeEvent = (index) => {
@@ -702,13 +1191,17 @@
             }
 
             setEditEventForm({
-                day: event.day || '', text: textToEdit, color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || ''
+                day: event.day || '', text: textToEdit, color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || '',
+                responsibleId: event.responsibleId || '', responsible: event.responsible || '', responsiblePhone: event.responsiblePhone || '', responsibleEmail: event.responsibleEmail || ''
             });
           };
 
           const addToGoogleCalendar = () => {
               const title = encodeURIComponent(editEventForm.text || 'Post UPLI');
               let notesText = editEventForm.notes || '';
+              if (editEventForm.responsible) {
+                  notesText += `${notesText ? '\n\n' : ''}Responsável: ${editEventForm.responsible}`;
+              }
               if (editEventForm.imageUrl) {
                   notesText += `\n\nLink da Arte: ${editEventForm.imageUrl}`;
               }
@@ -739,6 +1232,8 @@
             const updatedEvt = {
                 ...events[editingEventIndex],
                 day: dayNum, text: editEventForm.text, color: editEventForm.color, notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
+                responsibleId: editEventForm.responsibleId || '', responsible: editEventForm.responsible.trim(),
+                responsiblePhone: editEventForm.responsiblePhone || '', responsibleEmail: editEventForm.responsibleEmail || '',
                 updatedBy: currentUserName, updatedAt: new Date().toISOString()
             };
 
@@ -767,7 +1262,17 @@
                             if (catName && !newText.toLowerCase().startsWith(`${catName.toLowerCase()}:`)) {
                                 newText = `${catName}: ${newText}`;
                             }
-                            upliEvents[linkedIdx] = { ...upliEvents[linkedIdx], day: updatedEvt.day, text: newText, notes: updatedEvt.notes, imageUrl: updatedEvt.imageUrl };
+                            upliEvents[linkedIdx] = {
+                                ...upliEvents[linkedIdx],
+                                day: updatedEvt.day,
+                                text: newText,
+                                notes: updatedEvt.notes,
+                                imageUrl: updatedEvt.imageUrl,
+                                responsibleId: updatedEvt.responsibleId,
+                                responsible: updatedEvt.responsible,
+                                responsiblePhone: updatedEvt.responsiblePhone,
+                                responsibleEmail: updatedEvt.responsibleEmail
+                            };
                             db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
                         }
                     }
@@ -841,6 +1346,9 @@
           const currentViewEvents = safeEvents
               .map((e, index) => ({ ...e, _origIdx: index, _key: e.id || `legacy_${index}` }))
               .filter(e => e.month === month && e.year === year);
+          const trelloExportEvents = trelloSingleEventKey
+              ? currentViewEvents.filter(event => event._key === trelloSingleEventKey)
+              : currentViewEvents;
           
           const getFilteredEvents = () => {
               if (calendarFilter === 'ALL') return currentViewEvents;
@@ -884,7 +1392,7 @@
               const comp = companies.find(c => c.id === selectedCompany);
               if (!comp) return;
 
-              let textContent = `Empresa ; Categoria ; Dia ; Título ; Status ; Anotações\n`;
+              let textContent = `Empresa ; Categoria ; Dia ; Título ; Status ; Anotações ; Responsável\n`;
               const eventsToExport = currentViewEvents.filter(e => selectedEvents.includes(e._key));
 
               eventsToExport.forEach(e => {
@@ -892,6 +1400,7 @@
                   const catName = cat ? cat.label : 'Sem Categoria';
                   const statusName = e.status && statusPipeline[e.status] ? statusPipeline[e.status].label : '';
                   const cleanNotes = e.notes ? e.notes.replace(/\n/g, ' ') : '';
+                  const cleanResponsible = e.responsible ? e.responsible.replace(/[;\n]/g, ' ').trim() : '';
                   
                   let rawTitle = e.text;
                   const catPrefix = catName.toLowerCase() + ':';
@@ -899,7 +1408,7 @@
                       rawTitle = rawTitle.substring(catPrefix.length).trim();
                   }
                   
-                  textContent += `${comp.name} ; ${catName} ; ${e.day} ; ${rawTitle} ; ${statusName} ; ${cleanNotes}\n`;
+                  textContent += `${comp.name} ; ${catName} ; ${e.day} ; ${rawTitle} ; ${statusName} ; ${cleanNotes} ; ${cleanResponsible}\n`;
               });
 
               const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
@@ -1080,12 +1589,20 @@
               setTrelloSuccess('');
           };
 
-          const openTrelloIntegration = () => {
-              const initialSelection = selectedEvents.length > 0
-                  ? currentViewEvents.filter(event => selectedEvents.includes(event._key)).map(event => event._key)
-                  : currentViewEvents.map(event => event._key);
+          const openTrelloIntegration = (requestedEventKeys = null) => {
+              const explicitSelection = Array.isArray(requestedEventKeys)
+                  ? currentViewEvents
+                      .filter(event => requestedEventKeys.includes(event._key))
+                      .map(event => event._key)
+                  : null;
+              const initialSelection = explicitSelection || (
+                  selectedEvents.length > 0
+                      ? currentViewEvents.filter(event => selectedEvents.includes(event._key)).map(event => event._key)
+                      : currentViewEvents.map(event => event._key)
+              );
               const defaultList = trelloDefaultListId || trelloLists[0]?.id || '';
 
+              setTrelloSingleEventKey(explicitSelection?.length === 1 ? explicitSelection[0] : '');
               setTrelloEventSelection(initialSelection);
               setTrelloEventBoards(Object.fromEntries(initialSelection.map(eventKey => [eventKey, trelloBoardId])));
               setTrelloEventLists(Object.fromEntries(initialSelection.map(eventKey => [eventKey, defaultList])));
@@ -1100,9 +1617,17 @@
               setShowTrelloModal(true);
           };
 
+          const openSingleEventInTrello = (eventIndex) => {
+              const event = currentViewEvents.find(item => item._origIdx === eventIndex);
+              if (!event) return alert('Não foi possível localizar esta demanda no mês atual.');
+              setEditingEventIndex(null);
+              openTrelloIntegration([event._key]);
+          };
+
           const closeTrelloIntegration = () => {
               if (trelloBusy) return;
               setShowTrelloModal(false);
+              setTrelloSingleEventKey('');
               setTrelloDeleteConfirmation('');
               setTrelloError('');
               setTrelloSuccess('');
@@ -1220,6 +1745,7 @@
                   `Empresa: ${company?.name || 'Não informada'}`,
                   category?.label ? `Categoria: ${category.label}` : '',
                   statusLabel ? `Status: ${statusLabel}` : '',
+                  event.responsible ? `Responsável: ${event.responsible}` : '',
                   event.notes ? `\nAnotações:\n${event.notes}` : '',
                   event.imageUrl ? `\nLink da arte: ${event.imageUrl}` : '',
                   event.id ? `\nID de origem: ${event.id}` : ''
@@ -1239,7 +1765,7 @@
               setTrelloError('');
               setTrelloSuccess('');
 
-              const eventsToCreate = currentViewEvents.filter(event => trelloEventSelection.includes(event._key));
+              const eventsToCreate = trelloExportEvents.filter(event => trelloEventSelection.includes(event._key));
               if (!trelloMember) return setTrelloError('Conecte sua conta do Trello primeiro.');
               if (!trelloBoardId) return setTrelloError('Escolha um quadro do Trello.');
               if (eventsToCreate.length === 0) return setTrelloError('Selecione pelo menos um post para adicionar.');
@@ -1254,18 +1780,20 @@
                   return setTrelloError('Escolha um quadro e uma coluna válidos para todos os posts selecionados.');
               }
 
-              if (trelloMode === 'replace' && trelloDeleteConfirmation.trim().toUpperCase() !== 'APAGAR TUDO') {
+              if (!trelloSingleEventKey && trelloMode === 'replace' && trelloDeleteConfirmation.trim().toUpperCase() !== 'APAGAR TUDO') {
                   return setTrelloError('Digite APAGAR TUDO para confirmar a exclusão permanente.');
               }
 
-              if (trelloMode === 'selective' && trelloDeleteSelection.length > 0) {
+              if (!trelloSingleEventKey && trelloMode === 'selective' && trelloDeleteSelection.length > 0) {
                   const confirmed = window.confirm(
                       `Os ${trelloDeleteSelection.length} cartão(ões) selecionados serão excluídos permanentemente. Deseja continuar?`
                   );
                   if (!confirmed) return;
               }
 
-              const cardsToDelete = trelloMode === 'replace'
+              const cardsToDelete = trelloSingleEventKey
+                  ? []
+                  : trelloMode === 'replace'
                   ? [...trelloCards]
                   : trelloMode === 'selective'
                       ? trelloCards.filter(card => trelloDeleteSelection.includes(card.id))
@@ -1395,6 +1923,7 @@
                     let title = parts[3].trim();
                     const statusStr = parts[4] ? parts[4].trim().toLowerCase() : '';
                     const notes = parts[5] ? parts[5].trim() : '';
+                    const responsible = parts[6] ? parts[6].trim() : '';
 
                     if (isNaN(dayNum) || !title) return;
 
@@ -1471,6 +2000,7 @@
                         text: finalTitle, 
                         color: category.id,
                         notes: notes,
+                        responsible: responsible,
                         status: exactStatus,
                         createdBy: `Importação TXT por: ${currentUserName}`,
                         createdAt: new Date().toISOString()
@@ -1584,6 +2114,7 @@
                     if (!isCentral && status && statusPipeline[status]) {
                         displayText += ` [${statusPipeline[status].label}]`;
                     }
+                    if (event.responsible) displayText += ` [Resp: ${event.responsible}]`;
                     
                     let textWidthArea = colWidth - 20;
                     if (isCentral) textWidthArea -= 24; 
@@ -1684,6 +2215,7 @@
                   if (!isCentral && status && statusPipeline[status]) {
                       displayText += ` [${statusPipeline[status].label}]`;
                   }
+                  if (event.responsible) displayText += ` [Resp: ${event.responsible}]`;
                   
                   let textWidthArea = eventW - 20;
                   if (isCentral) textWidthArea -= 24; 
@@ -2305,7 +2837,7 @@
                       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[96vh] overflow-y-auto">
                           <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-5 flex justify-between gap-4">
                               <div>
-                                  <h3 className="font-black text-2xl text-sky-700 dark:text-sky-400 flex gap-2"><TrelloIcon /> Exportar para o Trello</h3>
+                                  <h3 className="font-black text-2xl text-sky-700 dark:text-sky-400 flex gap-2"><TrelloIcon /> {trelloSingleEventKey ? 'Exportar demanda para o Trello' : 'Exportar para o Trello'}</h3>
                                   <p className="text-sm text-gray-500 mt-1">{months[month]} de {year} · {companies.find(c => c.id === selectedCompany)?.name}</p>
                               </div>
                               <button onClick={closeTrelloIntegration} disabled={trelloBusy} className="bg-gray-200 dark:bg-gray-700 w-9 h-9 rounded-full font-black disabled:opacity-50">X</button>
@@ -2347,6 +2879,7 @@
                                               </select>
                                           </label>
                                       </section>
+                                      {!trelloSingleEventKey && (
                                       <section>
                                           <h4 className="font-black mb-2">3. Escolha a operação</h4>
                                           {isCentral && <p className="text-xs text-gray-500 mb-2">Nas opções com exclusão, os cartões apagados pertencem somente ao quadro padrão selecionado acima.</p>}
@@ -2362,13 +2895,14 @@
                                               ))}
                                           </div>
                                       </section>
+                                      )}
 
                                       <section>
                                           <div className="flex justify-between gap-2 mb-2">
-                                              <div><h4 className="font-black">{isCentral ? '4. Posts, quadros, colunas e conclusão' : '4. Posts, listas e conclusão'}</h4><p className="text-xs text-gray-500">{trelloEventSelection.length} de {currentViewEvents.length} selecionados</p></div>
-                                              <div className="flex gap-3 text-xs font-black">
+                                              <div><h4 className="font-black">{trelloSingleEventKey ? 'Demanda, destino e conclusão' : isCentral ? '4. Posts, quadros, colunas e conclusão' : '4. Posts, listas e conclusão'}</h4><p className="text-xs text-gray-500">{trelloEventSelection.length} de {trelloExportEvents.length} selecionados</p></div>
+                                              <div className={trelloSingleEventKey ? 'hidden' : 'flex gap-3 text-xs font-black'}>
                                                   <button onClick={() => {
-                                                      const keys = currentViewEvents.map(event => event._key);
+                                                      const keys = trelloExportEvents.map(event => event._key);
                                                       setTrelloEventSelection(keys);
                                                       if (isCentral) {
                                                           setTrelloEventBoards(previous => {
@@ -2402,8 +2936,8 @@
                                               </div>
                                           </div>
                                           <div className="border-2 dark:border-gray-700 rounded-xl max-h-72 overflow-y-auto divide-y dark:divide-gray-700">
-                                              {!currentViewEvents.length && <p className="p-5 text-center text-sm text-gray-500">Este mês não possui posts.</p>}
-                                              {currentViewEvents.map(event => {
+                                              {!trelloExportEvents.length && <p className="p-5 text-center text-sm text-gray-500">Nenhuma demanda disponível.</p>}
+                                              {trelloExportEvents.map(event => {
                                                   const category = safeColorOptions.find(item => item.id === event.color);
                                                   const checked = trelloEventSelection.includes(event._key);
                                                   const eventBoardId = isCentral ? (trelloEventBoards[event._key] || trelloBoardId) : trelloBoardId;
@@ -2411,8 +2945,8 @@
                                                   return (
                                                       <div key={event._key} className={`grid ${isCentral ? 'md:grid-cols-[minmax(0,1fr)_190px_190px_160px]' : 'md:grid-cols-[minmax(0,1fr)_220px_170px]'} gap-2 p-3 ${checked ? '' : 'opacity-50 bg-gray-100 dark:bg-gray-900'}`}>
                                                           <label className="flex gap-3 min-w-0 cursor-pointer">
-                                                              <input type="checkbox" checked={checked} onChange={() => toggleTrelloEvent(event._key)} className="w-5 h-5 flex-shrink-0" />
-                                                              <span><strong className="block text-sm break-words">Dia {event.day} · {getCleanDisplayText(event.text, isCentral, category?.label)}</strong><span className="text-xs text-gray-500">{category?.label || 'Sem categoria'}</span></span>
+                                                              <input type="checkbox" checked={checked} onChange={() => toggleTrelloEvent(event._key)} disabled={Boolean(trelloSingleEventKey)} className="w-5 h-5 flex-shrink-0 disabled:cursor-default" />
+                                                              <span><strong className="block text-sm break-words">Dia {event.day} · {getCleanDisplayText(event.text, isCentral, category?.label)}</strong><span className="text-xs text-gray-500">{category?.label || 'Sem categoria'}{event.responsible ? ` · Resp: ${event.responsible}` : ''}</span></span>
                                                           </label>
                                                           {isCentral && (
                                                               <select value={eventBoardId} onChange={e => changeTrelloEventBoard(event._key, e.target.value)} disabled={!checked || trelloBusy} className="border dark:border-gray-600 p-2 rounded-lg text-sm font-bold dark:bg-gray-700 disabled:opacity-50">
@@ -2433,7 +2967,7 @@
                                               })}
                                           </div>
                                       </section>
-                                      {trelloMode === 'selective' && (
+                                      {!trelloSingleEventKey && trelloMode === 'selective' && (
                                           <section className="border-2 border-amber-300 dark:border-amber-900 rounded-xl p-4 bg-amber-50 dark:bg-gray-900">
                                               <div className="flex justify-between gap-2 mb-2">
                                                   <div><h4 className="font-black">5. Cartões antigos a apagar</h4><p className="text-xs text-gray-500">{trelloDeleteSelection.length} de {trelloCards.length} selecionados</p></div>
@@ -2454,7 +2988,7 @@
                                           </section>
                                       )}
 
-                                      {trelloMode === 'replace' && (
+                                      {!trelloSingleEventKey && trelloMode === 'replace' && (
                                           <section className="border-2 border-red-400 bg-red-50 dark:bg-gray-900 rounded-xl p-4">
                                               <h4 className="font-black text-red-800 dark:text-red-300">5. Exclusão permanente</h4>
                                               <p className="text-sm text-red-700 dark:text-red-400">Os {trelloCards.length} cartões atuais, inclusive arquivados, serão excluídos. Digite <strong>APAGAR TUDO</strong>.</p>
@@ -2469,7 +3003,7 @@
 
                               {trelloMember && (
                                   <div className="border-t dark:border-gray-700 pt-4 flex flex-col md:flex-row justify-between gap-3">
-                                      <p className="text-xs text-gray-500">Os novos cartões são criados antes de qualquer exclusão.</p>
+                                      <p className="text-xs text-gray-500">{trelloSingleEventKey ? 'Somente esta demanda será adicionada.' : 'Os novos cartões são criados antes de qualquer exclusão.'}</p>
                                       <button onClick={executeTrelloExport} disabled={trelloBusy || !trelloLists.length || !trelloEventSelection.length} className="bg-sky-600 text-white px-6 py-3 rounded-xl font-black disabled:opacity-40">
                                           {trelloBusy ? 'Processando...' : `Executar no Trello (${trelloEventSelection.length})`}
                                       </button>
@@ -2545,6 +3079,14 @@
                                       </div>
                                   </div>
                                   <div>
+                                      <label className="block text-xs font-bold text-gray-500 mb-1">Responsável</label>
+                                      <select value={responsibleFormValue(editEventForm)} onChange={e => assignResponsible(editEventForm, setEditEventForm, e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white">
+                                          <option value="">Sem responsável</option>
+                                          {editEventForm.responsible && !editEventForm.responsibleId && <option value="__legacy__">{editEventForm.responsible} (não cadastrado)</option>}
+                                          {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · +{member.phone}</option>)}
+                                      </select>
+                                  </div>
+                                  <div>
                                       <label className="block text-xs font-bold text-gray-500 mb-1">Anotações / Roteiro</label>
                                       <textarea value={editEventForm.notes} onChange={e=>setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg h-24 outline-none resize-none dark:bg-gray-700 dark:text-white" placeholder="Escreva aqui..."></textarea>
                                   </div>
@@ -2563,6 +3105,7 @@
                               <div className="space-y-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
                                   <p className="text-sm"><strong className="text-gray-500">Dia:</strong> {editEventForm.day}</p>
                                   <p className="text-lg font-black"><strong className="text-gray-500 text-sm font-bold">Título:</strong> {editEventForm.text}</p>
+                                  <p className="text-sm"><strong className="text-gray-500">Responsável:</strong> {editEventForm.responsible || 'Não definido'}</p>
                                   <p className="text-sm"><strong className="text-gray-500 block mb-1">Anotações:</strong> <span className="whitespace-pre-wrap block bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">{editEventForm.notes || 'Nenhuma anotação.'}</span></p>
                                   {editEventForm.imageUrl && <a href={editEventForm.imageUrl} target="_blank" className="text-blue-600 dark:text-blue-400 font-bold underline text-sm mt-2 inline-block">🔗 Acessar Link da Arte</a>}
                               </div>
@@ -2571,6 +3114,11 @@
                           <button onClick={addToGoogleCalendar} className="mt-4 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-blue-300 dark:border-gray-600 font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition shadow-sm text-sm">
                               📅 Salvar no Meu Google Agenda
                           </button>
+                          {isAdmin && (
+                              <button onClick={() => openSingleEventInTrello(editingEventIndex)} className="mt-2 w-full bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-sky-300 dark:border-gray-600 font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition shadow-sm text-sm">
+                                  <TrelloIcon /> Exportar esta demanda para o Trello
+                              </button>
+                          )}
 
                           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                               <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wide">Status da Etapa</label>
@@ -2729,6 +3277,52 @@
                   </div>
               )}
 
+              {showTeamModal && isAdmin && (
+                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100] p-4">
+                      <section role="dialog" aria-modal="true" aria-label="Cadastro da equipe" className="bg-white dark:bg-gray-800 rounded-lg p-5 md:p-6 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                          <div className="flex items-center justify-between gap-3 border-b dark:border-gray-700 pb-3">
+                              <div>
+                                  <h3 className="text-xl font-black text-gray-800 dark:text-white">Equipe</h3>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Membros disponíveis para atribuição e lembretes individuais.</p>
+                              </div>
+                              <button onClick={() => { setShowTeamModal(false); resetTeamMemberForm(); }} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 font-black" aria-label="Fechar cadastro da equipe">×</button>
+                          </div>
+
+                          <div className="grid md:grid-cols-3 gap-3 py-5 border-b dark:border-gray-700">
+                              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">Nome
+                                  <input type="text" value={teamMemberForm.name} onChange={e => setTeamMemberForm({...teamMemberForm, name: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="Nome completo" />
+                              </label>
+                              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">WhatsApp
+                                  <input type="tel" inputMode="tel" value={teamMemberForm.phone} onChange={e => setTeamMemberForm({...teamMemberForm, phone: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="27999999999" />
+                              </label>
+                              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">E-mail da conta
+                                  <input type="email" value={teamMemberForm.email} onChange={e => setTeamMemberForm({...teamMemberForm, email: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="Opcional" />
+                              </label>
+                              <div className="md:col-span-3 flex justify-end gap-2">
+                                  {editingTeamMemberId && <button onClick={resetTeamMemberForm} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white rounded-md px-4 py-2 text-sm font-bold">Cancelar</button>}
+                                  <button onClick={saveTeamMember} className="bg-blue-700 text-white rounded-md px-5 py-2 text-sm font-bold hover:bg-blue-800">{editingTeamMemberId ? 'Salvar alterações' : 'Adicionar membro'}</button>
+                              </div>
+                          </div>
+
+                          <div className="pt-4 space-y-2">
+                              {activeTeamMembers.length === 0 && <p className="text-sm text-gray-500 py-5 text-center">Nenhum membro cadastrado.</p>}
+                              {activeTeamMembers.map(member => (
+                                  <article key={member.id} className="border border-gray-200 dark:border-gray-700 rounded-md p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                          <strong className="block text-gray-900 dark:text-white break-words">{member.name}</strong>
+                                          <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">+{member.phone}{member.email ? ' · ' + member.email : ''}</span>
+                                      </div>
+                                      <div className="flex gap-2 shrink-0">
+                                          <button onClick={() => editTeamMember(member)} className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-md px-3 py-2 text-sm font-bold flex items-center gap-1"><Edit2 /> Editar</button>
+                                          <button onClick={() => removeTeamMember(member)} className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-md px-3 py-2 text-sm font-bold flex items-center gap-1"><Trash2 /> Remover</button>
+                                      </div>
+                                  </article>
+                              ))}
+                          </div>
+                      </section>
+                  </div>
+              )}
+
               <div className="max-w-7xl mx-auto space-y-6">
                 
                 <div data-tutorial="header" className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
@@ -2762,6 +3356,12 @@
                       {userRole === 'master' && (
                           <button onClick={() => setShowRolesModal(true)} className="w-full md:w-auto bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-yellow-500 transition flex items-center justify-center gap-2">
                               <KeyIcon /> Acessos
+                          </button>
+                      )}
+
+                      {isAdmin && (
+                          <button onClick={() => setShowTeamModal(true)} className="w-full md:w-auto bg-blue-700 text-white font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-blue-800 transition flex items-center justify-center gap-2">
+                              👥 Equipe
                           </button>
                       )}
 
@@ -2920,6 +3520,13 @@
                             <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
                             <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                         </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">RESPONSÁVEL PELO POST</label>
+                            <select value={responsibleFormValue(newEvent)} onChange={e => assignResponsible(newEvent, setNewEvent, e.target.value)} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none">
+                                <option value="">Sem responsável</option>
+                                {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · +{member.phone}</option>)}
+                            </select>
+                        </div>
                         
                         <textarea placeholder="Anotações / Roteiro..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none text-sm h-12 resize-none"></textarea>
                         
@@ -3008,6 +3615,20 @@
                             <button onClick={openTrelloIntegration} className="bg-sky-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-sky-700 transition flex items-center justify-center gap-2 shadow-sm" title="Exportar o mês para o Trello">
                                 <TrelloIcon /> Trello
                             </button>
+
+                            {isCurrentCalendarCompleted ? (
+                                <button onClick={reopenCurrentCalendar} className="bg-amber-500 text-black rounded-lg px-4 py-2 text-sm font-bold hover:bg-amber-600 transition flex items-center justify-center gap-2 shadow-sm" title="Pausar a automação e reabrir este calendário">
+                                    ↶ Reabrir mês
+                                </button>
+                            ) : (
+                                <button onClick={completeCurrentCalendar} className="bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-800 transition flex items-center justify-center gap-2 shadow-sm" title="Liberar a automação para este calendário e mês">
+                                    ✓ Calendário concluído
+                                </button>
+                            )}
+
+                            <a href="automation/runtime/status.html" target="_blank" className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-emerald-800 transition flex items-center justify-center gap-2 shadow-sm" title="Verificar a automação semanal do WhatsApp">
+                                ⚙ Automação
+                            </a>
                             
                             <button onClick={handleSelectionToggle} className={`${isSelectionMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm`} title="Selecionar posts">
                                 <MultiSelectIcon /> {isSelectionMode ? `Cancelar Seleção` : 'Selecionar'}
@@ -3019,6 +3640,17 @@
                         {companies.find(c => c.id === selectedCompany)?.name}
                         {companies.find(c => c.id === selectedCompany)?.isPrivate ? ' 🔒' : ''}
                     </h3>
+                  </div>
+
+                  <div className={`mb-6 border-2 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 ${isCurrentCalendarCompleted ? 'border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100' : 'border-amber-300 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100'}`}>
+                      <strong className="text-sm">
+                          {isCurrentCalendarCompleted ? 'Automação liberada para este calendário' : 'Automação pausada para este calendário'}
+                      </strong>
+                      <span className="text-xs font-medium">
+                          {isCurrentCalendarCompleted
+                              ? `Concluído por ${currentCalendarAutomation.completedBy || 'usuário'} em ${formatDateStr(currentCalendarAutomation.completedAt)}`
+                              : `Aguardando “Calendário concluído” para ${months[month]} ${year}`}
+                      </span>
                   </div>
 
                   {isCentral && (
@@ -3121,6 +3753,12 @@
                                                 {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
                                             </span>
 
+                                            {event.responsible && (
+                                                <span className="mt-1 text-[9px] font-semibold leading-tight break-words opacity-90" title={`Responsável: ${event.responsible}`}>
+                                                    Resp: {event.responsible}
+                                                </span>
+                                            )}
+
                                             {!isCentral && status && statusPipeline[status] && (
                                                 <div className="mt-2 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
                                                     {statusPipeline[status].label}
@@ -3220,6 +3858,11 @@
                                         <span className="text-base block w-full whitespace-normal break-words leading-snug">
                                             {getCleanDisplayText(event.text, isCentral, color.label)}
                                         </span>
+                                        {event.responsible && (
+                                            <div className="mt-2 px-2 py-1 rounded text-xs font-semibold bg-black bg-opacity-15 w-fit max-w-full break-words">
+                                                Responsável: {event.responsible}
+                                            </div>
+                                        )}
                                         {event.notes && !isCentral && (
                                             <div className="mt-3 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
                                                 <p className="whitespace-pre-wrap">{event.notes}</p>
@@ -3276,7 +3919,14 @@
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<ErrorBoundary><CalendarCreator /></ErrorBoundary>);
+        const linkParams = new URLSearchParams(window.location.search);
+        const isPublicReminderLink = linkParams.has('reminder');
+        const isStatusUpdateLink = linkParams.has('updateCompany') && linkParams.has('updateEvent');
+        root.render(
+            <ErrorBoundary>
+                {isPublicReminderLink ? <PublicReminderUpdate /> : (isStatusUpdateLink ? <PostStatusUpdate /> : <CalendarCreator />)}
+            </ErrorBoundary>
+        );
     </script>
 </body>
 </html>
