@@ -123,8 +123,11 @@
             'aprovacao': { label: 'Aprovação', bg: '#06B6D4', text: '#FFFFFF' }, 
             'aprovado': { label: 'Aprovado', bg: '#84CC16', text: '#FFFFFF' }, 
             'atrasado': { label: 'Atrasado', bg: '#EF4444', text: '#FFFFFF' }, 
+            'concluido': { label: 'Concluído', bg: '#16A34A', text: '#FFFFFF' },
             'publicado': { label: 'Publicado', bg: '#10B981', text: '#FFFFFF' } 
         };
+
+        const isTerminalEventStatus = status => ['concluido', 'publicado'].includes(String(status || '').trim().toLowerCase());
 
         const stringToColor = (str) => {
             let hash = 0;
@@ -1008,7 +1011,7 @@
               return lastSeen && Date.now() - lastSeen.getTime() < 10 * 60 * 1000;
           });
           const automationLeaderName = automationCluster.leaderMachineName || 'Aguardando heartbeat';
-          const manualReminderEvents = currentMonthEvents.filter(event => event.id && event.status !== 'publicado');
+          const manualReminderEvents = currentMonthEvents.filter(event => event.id && !isTerminalEventStatus(event.status));
           const selectedManualReminderEvent = manualReminderEvents.find(event => String(event.id) === manualReminderEventId) || null;
           const findManualReminderMember = event => {
               if (!event) return null;
@@ -1871,6 +1874,40 @@
               };
           };
 
+          const persistTrelloLink = async (event, card, boardId) => {
+              if (!event?.id || !card?.id) return;
+              const centralId = UPLI_GERAL_ID;
+              const sourceCompanyId = selectedCompany === centralId
+                  ? (event.sourceCompanyId || centralId)
+                  : selectedCompany;
+              const companyIds = [...new Set([selectedCompany, centralId, sourceCompanyId].filter(Boolean))];
+              const canonicalId = value => String(value || '').replace(/_clone$/, '');
+              const link = {
+                  cardId: String(card.id),
+                  boardId: String(boardId || ''),
+                  url: String(card.url || ''),
+                  linkedAt: new Date().toISOString()
+              };
+
+              await Promise.all(companyIds.map(async companyId => {
+                  const ref = db.collection('companies').doc(companyId);
+                  await db.runTransaction(async transaction => {
+                      const snapshot = await transaction.get(ref);
+                      if (!snapshot.exists) return;
+                      const currentEvents = [...(snapshot.data().events || [])];
+                      let changed = false;
+                      const nextEvents = currentEvents.map(item => {
+                          const sameDemand = canonicalId(item.id) === canonicalId(event.id);
+                          const sameSource = companyId !== centralId || !item.sourceCompanyId || item.sourceCompanyId === sourceCompanyId;
+                          if (!sameDemand || !sameSource) return item;
+                          changed = true;
+                          return { ...item, trello: link };
+                      });
+                      if (changed) transaction.update(ref, { events: nextEvents });
+                  });
+              }));
+          };
+
           const executeTrelloExport = async () => {
               setTrelloError('');
               setTrelloSuccess('');
@@ -1926,7 +1963,10 @@
                                   trelloEventCompleted[event._key]
                               )
                           });
-                          if (createdCard?.id) createdCards.push(createdCard);
+                          if (!createdCard?.id) throw new Error('O Trello não retornou o identificador do cartão criado.');
+                          createdCards.push(createdCard);
+                          const boardId = isCentral ? trelloEventBoards[event._key] : trelloBoardId;
+                          await persistTrelloLink(event, createdCard, boardId);
                       } catch (creationError) {
                           for (const createdCard of createdCards) {
                               try {
