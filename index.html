@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -80,95 +79,11 @@
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
-=======
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Calendário de Conteúdo - UPLI</title>
-    
-    <script>
-        window.addEventListener('error', function(event) {
-            document.body.innerHTML = '<div style="background:#ffebee; padding:30px; margin:20px; border:3px solid #f44336; border-radius:12px; font-family:sans-serif; color:#b71c1c; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">' +
-                '<h2 style="margin-top:0; font-size: 28px;">🚨 O Código Quebrou (Erro Crítico)!</h2>' +
-                '<p style="font-size: 16px;"><strong>O que deu errado:</strong> ' + event.message + '</p>' +
-                '<p style="font-size: 16px;"><strong>Linha:</strong> ' + event.lineno + ' | <strong>Coluna:</strong> ' + event.colno + '</p>' +
-                '<p style="margin-top: 10px; font-weight: bold;">Detalhes Técnicos (Envie para o chat):</p>' +
-                '<pre style="background:#fff; padding:15px; border:1px solid #ffcdd2; overflow:auto; border-radius: 8px; font-size: 14px;">' + (event.error && event.error.stack ? event.error.stack : 'Sem detalhes extras.') + '</pre>' +
-                '</div>';
-        });
-    </script>
-
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://api.trello.com/1/client.js?key=d45dbd1071fecc178231b48b73a58e12"></script>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/index.min.js"></script>
-    <script>
-        window.onload = function() {
-            if (typeof MobileDragDrop !== 'undefined') {
-                MobileDragDrop.polyfill({ holdToDrag: 300 });
-            }
-        }
-    </script>
-    <style>
-        [draggable="true"] { touch-action: none; }
-    </style>
-    
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-</head>
-<body class="bg-gray-100 transition-colors duration-300">
-    <div id="root"></div>
-    
-    <script type="text/babel">
-        class ErrorBoundary extends React.Component {
-            constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
-            static getDerivedStateFromError(error) { return { hasError: true, errorMsg: error.toString() }; }
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="min-h-screen flex items-center justify-center bg-red-50 p-8">
-                            <div className="bg-white p-8 rounded-xl shadow-xl border-2 border-red-500 max-w-2xl w-full">
-                                <h2 className="text-2xl font-black text-red-600 mb-4">Oops! Erro na Interface.</h2>
-                                <pre className="bg-gray-100 p-4 rounded text-sm text-red-800 overflow-auto">{this.state.errorMsg}</pre>
-                                <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-2 rounded font-bold">Recarregar Página</button>
-                            </div>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-
-        const firebaseConfig = {
-          apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
-          authDomain: "calendario-upli.firebaseapp.com",
-          projectId: "calendario-upli",
-          messagingSenderId: "849051732172",
-          appId: "1:849051732172:web:14735da6c16d19bcf71a69",
-          measurementId: "G-6YXY6KY98T"
-        };
-
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
->>>>>>> 73f36d9 (Primeiro commit)
         const auth = firebase.auth();
         const db = firebase.firestore();
         const reminderFirebaseApp = firebase.apps.find(app => app.name === 'ReminderPublic') ||
             firebase.initializeApp(firebaseConfig, 'ReminderPublic');
         const reminderPublicDb = reminderFirebaseApp.firestore();
-<<<<<<< HEAD
 
         const { useState, useEffect } = React;
         
@@ -225,69 +140,10 @@
         const handleHexChange = (value, setter) => {
             let val = value.replace(/[^a-fA-F0-9#]/g, ''); 
             if (!val.startsWith('#')) val = '#' + val.replace(/#/g, ''); 
-=======
-
-        const { useState, useEffect } = React;
-        
-        const Download = () => <span>⬇️</span>;
-        const Upload = () => <span>📥</span>;
-        const Trash2 = () => <span>🗑️</span>;
-        const CalendarDays = () => <span>📅</span>;
-        const Edit2 = () => <span>✏️</span>;
-        const LogOut = () => <span>🚪</span>;
-        const DatabaseIcon = () => <span>☁️</span>;
-        const MessageSquare = () => <span className="text-[10px]">💬</span>;
-        const FilterIcon = () => <span>🔍</span>;
-        const ImageIcon = () => <span>🖼️</span>;
-        const PDFIcon = () => <span>📄</span>;
-        const KeyIcon = () => <span>🔑</span>;
-        const CheckIcon = () => <span>✓</span>;
-        const MultiSelectIcon = () => <span>✅</span>;
-        const TrelloIcon = () => <span title={'Trello'}>📋</span>;
-        
-        const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
-        
-        // 🔥 A GRANDE SACADA: Mudamos o ID do banco de dados para despistar o bug.
-        const UPLI_GERAL_ID = "upli_geral_v2";
-
-        const STANDARD_CATEGORIES = [
-            { id: 'cat_reels', label: 'Reels', color: '#E1306C' },
-            { id: 'cat_fotos', label: 'Fotos', color: '#1DA1F2' },
-            { id: 'cat_stories', label: 'Stories', color: '#F56040' },
-            { id: 'cat_design', label: 'Design', color: '#405DE6' },
-            { id: 'cat_evento', label: 'Evento', color: '#FFDC80' }
-        ];
-
-        const DEFAULT_STATUS_PIPELINE = {
-            'criacao': { label: 'Criação', bg: '#3B82F6', text: '#FFFFFF' }, 
-            'gravacao': { label: 'Gravação', bg: '#8B5CF6', text: '#FFFFFF' }, 
-            'producao': { label: 'Produção', bg: '#F59E0B', text: '#FFFFFF' }, 
-            'aprovacao': { label: 'Aprovação', bg: '#06B6D4', text: '#FFFFFF' }, 
-            'aprovado': { label: 'Aprovado', bg: '#84CC16', text: '#FFFFFF' }, 
-            'atrasado': { label: 'Atrasado', bg: '#EF4444', text: '#FFFFFF' }, 
-            'publicado': { label: 'Publicado', bg: '#10B981', text: '#FFFFFF' } 
-        };
-
-        const stringToColor = (str) => {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            let color = '#';
-            for (let i = 0; i < 3; i++) {
-                const value = (hash >> (i * 8)) & 0xFF;
-                color += ('00' + value.toString(16)).substr(-2);
-            }
-            return color;
-        };
-
-        const handleHexChange = (value, setter) => {
-            let val = value.replace(/[^a-fA-F0-9#]/g, ''); 
-            if (!val.startsWith('#')) val = '#' + val.replace(/#/g, ''); 
->>>>>>> 73f36d9 (Primeiro commit)
             setter(val.substring(0, 7));
         };
 
         const getCleanDisplayText = (text, isCentral, compLabel) => {
-<<<<<<< HEAD
             let cleanText = text || '';
             if (isCentral) {
                 if (compLabel) {
@@ -309,29 +165,6 @@
                 }
                 return cleanText;
             }
-=======
-            let cleanText = text || '';
-            if (isCentral) {
-                if (compLabel) {
-                    const prefix1 = compLabel.toLowerCase() + ':';
-                    const prefix2 = compLabel.toLowerCase() + ' :';
-                    if (cleanText.toLowerCase().startsWith(prefix1)) {
-                        cleanText = cleanText.substring(prefix1.length).trim();
-                    } else if (cleanText.toLowerCase().startsWith(prefix2)) {
-                        cleanText = cleanText.substring(prefix2.length).trim();
-                    }
-                }
-                return cleanText;
-            } else {
-                if (compLabel) {
-                    const catPrefix = compLabel.toLowerCase() + ':';
-                    if (!cleanText.toLowerCase().startsWith(catPrefix)) {
-                        cleanText = `${compLabel}: ${cleanText}`;
-                    }
-                }
-                return cleanText;
-            }
->>>>>>> 73f36d9 (Primeiro commit)
         };
 
         const eventIdMatches = (storedId, requestedId) => {
@@ -670,7 +503,6 @@
         };
 
         const CalendarCreator = () => {
-<<<<<<< HEAD
           const [user, setUser] = useState(null);
           const [email, setEmail] = useState('');
           const [password, setPassword] = useState('');
@@ -682,19 +514,6 @@
           const [newDisplayName, setNewDisplayName] = useState('');
           
           const [userRole, setUserRole] = useState('cliente'); 
-=======
-          const [user, setUser] = useState(null);
-          const [email, setEmail] = useState('');
-          const [password, setPassword] = useState('');
-          const [loadingAuth, setLoadingAuth] = useState(true);
-          const [isResetMode, setIsResetMode] = useState(false); 
-          
-          const [currentUserName, setCurrentUserName] = useState('');
-          const [showProfileModal, setShowProfileModal] = useState(false);
-          const [newDisplayName, setNewDisplayName] = useState('');
-          
-          const [userRole, setUserRole] = useState('cliente'); 
->>>>>>> 73f36d9 (Primeiro commit)
           const [globalRoles, setGlobalRoles] = useState({});
           const [globalUserCompanies, setGlobalUserCompanies] = useState({});
           const [showRolesModal, setShowRolesModal] = useState(false);
@@ -702,7 +521,6 @@
           const [showTeamModal, setShowTeamModal] = useState(false);
           const [editingTeamMemberId, setEditingTeamMemberId] = useState(null);
           const [teamMemberForm, setTeamMemberForm] = useState({ name: '', email: '', phone: '' });
-<<<<<<< HEAD
           
           const [newAccEmail, setNewAccEmail] = useState('');
           const [newAccPassword, setNewAccPassword] = useState('');
@@ -714,19 +532,6 @@
           const [roleSelectInput, setRoleSelectInput] = useState('admin');
           const [roleCompanyInput, setRoleCompanyInput] = useState('');
 
-=======
-          
-          const [newAccEmail, setNewAccEmail] = useState('');
-          const [newAccPassword, setNewAccPassword] = useState('');
-          const [newAccRole, setNewAccRole] = useState('admin');
-          const [newAccCompany, setNewAccCompany] = useState('');
-          const [creatingAcc, setCreatingAcc] = useState(false);
-
-          const [roleEmailInput, setRoleEmailInput] = useState('');
-          const [roleSelectInput, setRoleSelectInput] = useState('admin');
-          const [roleCompanyInput, setRoleCompanyInput] = useState('');
-
->>>>>>> 73f36d9 (Primeiro commit)
           const [darkMode, setDarkMode] = useState(false);
           const [showTutorial, setShowTutorial] = useState(false);
           const [showTutorialMenu, setShowTutorialMenu] = useState(false);
@@ -734,7 +539,6 @@
           const [tutorialStep, setTutorialStep] = useState(0);
           const [tutorialTargetRect, setTutorialTargetRect] = useState(null);
           const [tutorialCheckedUserId, setTutorialCheckedUserId] = useState('');
-<<<<<<< HEAD
 
           useEffect(() => {
              try {
@@ -773,46 +577,6 @@
              return () => unsubscribe();
           }, []);
 
-=======
-
-          useEffect(() => {
-             try {
-                 const savedTheme = localStorage.getItem('theme');
-                 if (savedTheme === 'dark') { setDarkMode(true); document.documentElement.classList.add('dark'); }
-             } catch(e) {}
-
-             const unsubscribe = auth.onAuthStateChanged(u => {
-                 if (u) {
-                     setUser(u);
-                     setCurrentUserName(u.displayName || u.email);
-
-                     db.collection('system').doc('roles').onSnapshot(doc => {
-                         if (doc.exists) {
-                             const rolesData = doc.data().userRoles || {};
-                             const companiesData = doc.data().userCompanies || {}; 
-                             setGlobalRoles(rolesData);
-                             setGlobalUserCompanies(companiesData); 
-                             
-                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) setUserRole('master'); 
-                             else if (rolesData[u.email.toLowerCase()] === 'master') setUserRole('master'); 
-                             else if (rolesData[u.email.toLowerCase()] === 'admin') setUserRole('admin'); 
-                             else setUserRole('cliente'); 
-                         } else {
-                             if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
-                                 db.collection('system').doc('roles').set({ userRoles: {}, userCompanies: {} });
-                                 setUserRole('master');
-                             } else setUserRole('cliente');
-                         }
-                         setLoadingAuth(false);
-                     });
-                 } else {
-                     setUser(null); setLoadingAuth(false);
-                 }
-             });
-             return () => unsubscribe();
-          }, []);
-
->>>>>>> 73f36d9 (Primeiro commit)
           const isAdmin = userRole === 'master' || userRole === 'admin';
           const activeTeamMembers = teamMembers
               .filter(member => member.active !== false)
@@ -897,7 +661,6 @@
                   responsibleEmail: member.email || ''
               });
           };
-<<<<<<< HEAD
 
           const handleCreateAccount = async () => {
               if (!newAccEmail || !newAccPassword) return alert("Preencha email e senha!");
@@ -1035,145 +798,6 @@
           const [showImportModal, setShowImportModal] = useState(false);
           const [importTargetCompany, setImportTargetCompany] = useState('');
           const [importFile, setImportFile] = useState(null);
-=======
-
-          const handleCreateAccount = async () => {
-              if (!newAccEmail || !newAccPassword) return alert("Preencha email e senha!");
-              if (newAccPassword.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
-              if (newAccRole === 'cliente' && !newAccCompany) return alert("Selecione a qual empresa esse cliente pertence!");
-              
-              setCreatingAcc(true);
-              try {
-                  let secondaryApp = firebase.apps.find(app => app.name === 'Secondary') || firebase.initializeApp(firebaseConfig, 'Secondary');
-                  await secondaryApp.auth().createUserWithEmailAndPassword(newAccEmail.trim().toLowerCase(), newAccPassword);
-                  await secondaryApp.auth().signOut();
-                  
-                  const emailToSave = newAccEmail.trim().toLowerCase();
-                  const updatedRoles = { ...globalRoles, [emailToSave]: newAccRole };
-                  const updatedCompanies = { ...globalUserCompanies };
-                  
-                  if (newAccRole === 'cliente') {
-                      updatedCompanies[emailToSave] = newAccCompany;
-                  }
-
-                  await db.collection('system').doc('roles').set({ 
-                      userRoles: updatedRoles,
-                      userCompanies: updatedCompanies
-                  }, { merge: true });
-                  
-                  alert(`Conta ${emailToSave} criada com acesso de ${newAccRole.toUpperCase()}!`);
-                  setNewAccEmail(''); setNewAccPassword(''); setNewAccCompany('');
-              } catch (error) { alert("Erro ao criar: " + error.message); }
-              setCreatingAcc(false);
-          };
-
-          const handleSaveRole = () => {
-              if(!roleEmailInput) return;
-              if(roleSelectInput === 'cliente' && !roleCompanyInput) return alert("Selecione a empresa do cliente!");
-
-              const emailToSave = roleEmailInput.toLowerCase().trim();
-              const updatedRoles = { ...globalRoles, [emailToSave]: roleSelectInput };
-              const updatedCompanies = { ...globalUserCompanies };
-              
-              if (roleSelectInput === 'cliente') {
-                  updatedCompanies[emailToSave] = roleCompanyInput;
-              } else {
-                  delete updatedCompanies[emailToSave];
-              }
-
-              db.collection('system').doc('roles').set({ 
-                  userRoles: updatedRoles,
-                  userCompanies: updatedCompanies
-              }, { merge: true }).then(() => { 
-                  setRoleEmailInput(''); 
-                  setRoleCompanyInput('');
-                  alert(`Permissão atualizada!`); 
-              });
-          };
-
-          const handleChangeClientCompany = (emailToUpdate, newCompanyId) => {
-              const updatedCompanies = { ...globalUserCompanies };
-              
-              if (newCompanyId) {
-                  updatedCompanies[emailToUpdate] = newCompanyId;
-              } else {
-                  delete updatedCompanies[emailToUpdate];
-              }
-
-              db.collection('system').doc('roles').set({ 
-                  userCompanies: updatedCompanies
-              }, { merge: true });
-          };
-
-          const handleRemoveRole = (emailToRemove) => {
-              if(emailToRemove === MEU_EMAIL_MASTER) return alert("O Mestre Original não pode ser removido!");
-              if(confirm(`Tem certeza que deseja remover ou alterar os acessos de ${emailToRemove}?`)) {
-                  const updatedRoles = { ...globalRoles };
-                  const updatedCompanies = { ...globalUserCompanies };
-                  
-                  delete updatedRoles[emailToRemove];
-                  delete updatedCompanies[emailToRemove];
-                  
-                  db.collection('system').doc('roles').set({ 
-                      userRoles: updatedRoles,
-                      userCompanies: updatedCompanies
-                  }, { merge: true });
-              }
-          };
-
-          const toggleDarkMode = () => {
-              const newMode = !darkMode; setDarkMode(newMode);
-              try {
-                  if (newMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); } 
-                  else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
-              } catch(e) {}
-          };
-
-          const handleLogin = (e) => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => alert("Erro ao entrar. Verifique credenciais.")); };
-          const handleLogout = () => auth.signOut();
-          const handleUpdateProfile = () => { if(user) user.updateProfile({ displayName: newDisplayName }).then(() => { setCurrentUserName(newDisplayName); setShowProfileModal(false); }); };
-          const handleResetPasswordLogged = () => { if(user) auth.sendPasswordResetEmail(user.email).then(() => { alert("E-mail de redefinição enviado."); setShowProfileModal(false); }); };
-          const handleForgotPasswordSubmit = (e) => { e.preventDefault(); auth.sendPasswordResetEmail(email).then(() => { alert("Link enviado."); setIsResetMode(false); }); };
-
-          const [year, setYear] = useState(new Date().getFullYear());
-          const [month, setMonth] = useState(new Date().getMonth()); 
-          const [events, setEvents] = useState([]);
-          const [colorOptions, setColorOptions] = useState([]);
-          const [statusPipeline, setStatusPipeline] = useState(DEFAULT_STATUS_PIPELINE);
-          
-          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
-          const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
-          const [sendToUpliGeral, setSendToUpliGeral] = useState(true); 
-          
-          const [editingColor, setEditingColor] = useState(null);
-          const [editLabel, setEditLabel] = useState('');
-          const [editColorValue, setEditColorValue] = useState('');
-
-          const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
-          
-          const [eventStatuses, setEventStatuses] = useState({});
-          const [companies, setCompanies] = useState([]);
-          const [selectedCompany, setSelectedCompany] = useState(null);
-          
-          const [newCompanyName, setNewCompanyName] = useState('');
-          const [newCompanyColor, setNewCompanyColor] = useState(() => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
-          const [newCompanyIsPrivate, setNewCompanyIsPrivate] = useState(false); 
-          
-          const [editingCompany, setEditingCompany] = useState(null);
-          const [editCompanyName, setEditCompanyName] = useState('');
-          const [editCompanyColor, setEditCompanyColor] = useState('');
-          
-          const [calendarFilter, setCalendarFilter] = useState('ALL'); 
-          const [calendarAutomationStatuses, setCalendarAutomationStatuses] = useState({});
-
-          const [isSelectionMode, setIsSelectionMode] = useState(false);
-          const [selectedEvents, setSelectedEvents] = useState([]); 
-          
-          const [showImportModal, setShowImportModal] = useState(false);
-          const [importTargetCompany, setImportTargetCompany] = useState('');
-          const [importFile, setImportFile] = useState(null);
->>>>>>> 73f36d9 (Primeiro commit)
           const [importToCentral, setImportToCentral] = useState(true); 
           const [importing, setImporting] = useState(false);
 
@@ -1198,7 +822,6 @@
           const [trelloProgress, setTrelloProgress] = useState('');
           const [trelloError, setTrelloError] = useState('');
           const [trelloSuccess, setTrelloSuccess] = useState('');
-<<<<<<< HEAD
 
           useEffect(() => {
             if (!user) return;
@@ -1266,75 +889,6 @@
                 });
 
             });
-=======
-
-          useEffect(() => {
-            if (!user) return;
-            const unsubscribe = db.collection('companies').onSnapshot(snapshot => {
-                let fetchedCompanies = [];
-                let hasUpliGeral = false;
-                
-                snapshot.forEach(doc => {
-                    // 🔥 IGNORAMOS TOTALMENTE O CALENDÁRIO BUGADO ANTIGO
-                    if (doc.id === "upli_geral_master") return; 
-
-                    const data = doc.data() || {};
-
-                    // --- TRAVA DE PRIVACIDADE ABSOLUTA ---
-                    if (data.isPrivate && user.email.toLowerCase() !== MEU_EMAIL_MASTER) {
-                        return; // Esconde das outras contas
-                    }
-                    // -------------------------------------
-
-                    if (doc.id === UPLI_GERAL_ID) {
-                        hasUpliGeral = true;
-                        if (data.statusPipeline) {
-                            setStatusPipeline({ ...DEFAULT_STATUS_PIPELINE, ...data.statusPipeline });
-                        }
-                    }
-
-                    if (userRole === 'cliente') {
-                        const myCompanyId = globalUserCompanies[user.email.toLowerCase()];
-                        if (doc.id !== myCompanyId) {
-                            return; 
-                        }
-                    }
-
-                    let safeCategories = Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : [...STANDARD_CATEGORIES];
-
-                    fetchedCompanies.push({ 
-                        id: doc.id, 
-                        name: data.name || 'Empresa', 
-                        color: data.color || stringToColor(data.name || 'Empresa'), 
-                        events: Array.isArray(data.events) ? data.events : [],
-                        categories: safeCategories,
-                        isPrivate: data.isPrivate 
-                    });
-                });
-
-                // SE O NOVO COFRE V2 NÃO EXISTIR, NÓS O CRIAMOS SEGURO
-                if (!hasUpliGeral && (userRole === 'master' || userRole === 'admin') && snapshot.docs.length > 0) {
-                    db.collection('companies').doc(UPLI_GERAL_ID).set({
-                        name: 'UPLI Geral', categories: STANDARD_CATEGORIES, statusPipeline: DEFAULT_STATUS_PIPELINE
-                    }, { merge: true });
-                }
-
-                fetchedCompanies.sort((a,b) => {
-                    if(a.id === UPLI_GERAL_ID) return -1;
-                    if(b.id === UPLI_GERAL_ID) return 1;
-                    return String(a.name).localeCompare(String(b.name));
-                });
-                
-                setCompanies(fetchedCompanies);
-
-                setSelectedCompany(prev => {
-                    if (!prev && fetchedCompanies.length > 0) return fetchedCompanies[0].id;
-                    if (prev && !fetchedCompanies.find(c => c.id === prev) && fetchedCompanies.length > 0) return fetchedCompanies[0].id;
-                    return prev;
-                });
-
-            });
->>>>>>> 73f36d9 (Primeiro commit)
             return () => unsubscribe();
           }, [user, userRole, globalUserCompanies]);
 
@@ -1355,7 +909,6 @@
               });
               return () => unsubscribe();
           }, [user]);
-<<<<<<< HEAD
 
           useEffect(() => {
               if (selectedCompany) {
@@ -1406,58 +959,6 @@
               return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit'});
           };
 
-=======
-
-          useEffect(() => {
-              if (selectedCompany) {
-                  const comp = companies.find(c => c.id === selectedCompany);
-                  if (comp) {
-                      setEvents(Array.isArray(comp.events) ? comp.events : []);
-                      setEventStatuses(comp.statuses || {});
-                      setCalendarFilter('ALL'); 
-                      setIsSelectionMode(false);
-                      setSelectedEvents([]);
-
-                      if (selectedCompany === UPLI_GERAL_ID) {
-                          let dynamicCats = [...STANDARD_CATEGORIES];
-                          companies.forEach(c => {
-                              if (c.id !== UPLI_GERAL_ID) {
-                                  dynamicCats.push({ id: c.id, label: c.name, color: c.color });
-                              }
-                          });
-                          setColorOptions(dynamicCats);
-                      } else {
-                          setColorOptions(comp.categories);
-                      }
-                  }
-              }
-          }, [selectedCompany, companies]);
-
-          const saveToCloud = (updates) => {
-              if (!selectedCompany) return;
-              db.collection('companies').doc(selectedCompany).set(updates, { merge: true });
-          };
-
-          const updateStatusColor = (key, newColor) => {
-              const updated = {
-                  ...statusPipeline,
-                  [key]: { ...statusPipeline[key], bg: newColor, text: getTextColor(newColor) }
-              };
-              setStatusPipeline(updated);
-              db.collection('companies').doc(UPLI_GERAL_ID).set({ statusPipeline: updated }, { merge: true });
-          };
-
-          const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
-          const fullWeekDays = ['DOMINGO', 'SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO'];
-          const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-          const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
-
-          const formatDateStr = (isoString) => {
-              if(!isoString) return '';
-              return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit'});
-          };
-
->>>>>>> 73f36d9 (Primeiro commit)
           const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
           const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
 
@@ -1504,7 +1005,6 @@
                   firebase.firestore.FieldValue.delete()
               );
           };
-<<<<<<< HEAD
 
           // BOTÃO DE EMERGÊNCIA (RECONSTRÓI O UPLI GERAL NO NOVO COFRE)
           const rescueUpliGeral = () => {
@@ -1690,215 +1190,20 @@
                  }
             }
 
-=======
-
-          // BOTÃO DE EMERGÊNCIA (RECONSTRÓI O UPLI GERAL NO NOVO COFRE)
-          const rescueUpliGeral = () => {
-              if (!confirm("🚑 RECUPERAÇÃO DE EMERGÊNCIA: Isso vai copiar todos os posts originais das suas empresas e reconstruir o UPLI Geral definitivamente. Continuar?")) return;
-              
-              let allClones = [];
-              companies.forEach(comp => {
-                  if (comp.id === UPLI_GERAL_ID || comp.id === "upli_geral_master") return;
-                  
-                  const compEvents = comp.events || [];
-                  compEvents.forEach(evt => {
-                      const cat = comp.categories.find(c => c.id === evt.color);
-                      const catName = cat ? cat.label : '';
-                      const isEvento = evt.color === 'cat_evento' || catName.toLowerCase().includes('evento');
-                      
-                      if (!isEvento) {
-                          let formattedText = evt.text;
-                          if (catName && !formattedText.toLowerCase().startsWith(`${catName.toLowerCase()}:`)) {
-                              formattedText = `${catName}: ${formattedText}`;
-                          }
-
-                          allClones.push({
-                              ...evt,
-                              id: evt.id + "_clone",
-                              text: formattedText,
-                              sourceCompanyId: comp.id,
-                              color: comp.id
-                          });
-                      }
-                  });
-              });
-              
-              db.collection('companies').doc(UPLI_GERAL_ID).set({
-                  name: 'UPLI Geral',
-                  categories: STANDARD_CATEGORIES,
-                  statusPipeline: DEFAULT_STATUS_PIPELINE,
-                  events: allClones
-              }, { merge: true }).then(() => {
-                  alert("✅ Tudo restaurado e blindado! O Calendário UPLI Geral foi reconstruído com sucesso em um cofre novo.");
-              }).catch(err => {
-                  alert("Erro ao restaurar: " + err.message);
-              });
-          };
-
-          const toggleEventStatus = (originalIndex, newStatus) => {
-              if (!isAdmin) return;
-              const updatedEvents = [...events];
-              const evt = updatedEvents[originalIndex];
-              
-              if (evt.status === newStatus) evt.status = null;
-              else evt.status = newStatus;
-              
-              evt.updatedBy = currentUserName;
-              evt.updatedAt = new Date().toISOString();
-              saveToCloud({ events: updatedEvents });
-
-              if (selectedCompany !== UPLI_GERAL_ID) {
-                  const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
-                  if (upliGeral) {
-                      const upliEvents = [...upliGeral.events];
-                      const linkedIdx = upliEvents.findIndex(e => e.id === evt.id || e.id === evt.id + "_clone");
-                      if (linkedIdx !== -1) {
-                          upliEvents[linkedIdx].status = evt.status;
-                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
-                      }
-                  }
-              }
-          };
-
-          const getEventStatus = (eventIndex) => { return events[eventIndex]?.status || null; };
-
-          const addCompany = () => {
-            if (newCompanyName.trim()) {
-              const id = Date.now().toString();
-              db.collection('companies').doc(id).set({ 
-                  name: newCompanyName.trim(), 
-                  color: newCompanyColor, 
-                  events: [], 
-                  categories: STANDARD_CATEGORIES, 
-                  statuses: {},
-                  isPrivate: newCompanyIsPrivate,
-                  ownerEmail: newCompanyIsPrivate ? MEU_EMAIL_MASTER : null 
-              });
-              setNewCompanyName('');
-              setNewCompanyColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
-              setNewCompanyIsPrivate(false); 
-            }
-          };
-
-          const removeCompany = (companyId) => {
-            if (confirm('ATENÇÃO: Apagar a empresa e TODOS os eventos?')) {
-              db.collection('companies').doc(companyId).delete();
-            }
-          };
-
-          const startEditCompany = (company) => { 
-              setEditingCompany(company.id); 
-              setEditCompanyName(company.name); 
-              setEditCompanyColor(company.color || stringToColor(company.name));
-          };
-          const saveEditCompany = () => {
-            if(!editCompanyName.trim()) return;
-            db.collection('companies').doc(editingCompany).update({ 
-                name: editCompanyName.trim(),
-                color: editCompanyColor 
-            });
-            setEditingCompany(null); 
-            setEditCompanyName('');
-            setEditCompanyColor('');
-          };
-          const cancelEditCompany = () => { setEditingCompany(null); setEditCompanyName(''); setEditCompanyColor(''); };
-
-          const getTextColor = (bgColor) => {
-            if (!bgColor) return '#000000';
-            const hex = bgColor.replace('#', '');
-            if (hex.length < 6) return '#000000';
-            const r = parseInt(hex.substr(0, 2), 16); const g = parseInt(hex.substr(2, 2), 16); const b = parseInt(hex.substr(4, 2), 16);
-            return ((r * 299 + g * 587 + b * 114) / 1000) > 155 ? '#000000' : '#ffffff';
-          };
-
-          const addEvent = () => {
-            const dayNum = parseInt(newEvent.day);
-            const daysInCurrentMonth = getDaysInMonth(year, month);
-            if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha os campos obrigatórios!');
-            if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
-            
-            const eventId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-            const eventToAdd = { 
-                ...newEvent, 
-                id: eventId,
-                status: null, 
-                day: dayNum, month: month, year: year,
-                createdBy: currentUserName,
-                createdAt: new Date().toISOString()
-            };
-
-            const updatedEvents = [...events, eventToAdd];
-            saveToCloud({ events: updatedEvents });
-
-            const selectedCat = colorOptions.find(c => c.id === newEvent.color);
-            const catName = selectedCat ? selectedCat.label : '';
-            const isEvento = newEvent.color === 'cat_evento' || catName.toLowerCase().includes('evento');
-
-            if (selectedCompany !== UPLI_GERAL_ID && sendToUpliGeral && !isEvento) {
-                const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
-                if (upliGeral) {
-                    const formattedText = catName ? `${catName}: ${eventToAdd.text}` : eventToAdd.text;
-                    const clonedEvent = { ...eventToAdd, text: formattedText, sourceCompanyId: selectedCompany, color: selectedCompany };
-                    db.collection('companies').doc(UPLI_GERAL_ID).set({ events: [...upliGeral.events, clonedEvent] }, { merge: true });
-                }
-            }
-            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
-          };
-
-          const removeEvent = (index) => {
-              if (confirm("Tem certeza que quer apagar esse post?")) {
-                  const evToRemove = events[index];
-                  const updatedEvents = events.filter((_, i) => i !== index);
-                  saveToCloud({ events: updatedEvents });
-                  setEditingEventIndex(null); 
-                  
-                  if (selectedCompany !== UPLI_GERAL_ID) {
-                      const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
-                      if (upliGeral) {
-                          const upliEvents = upliGeral.events.filter(e => e.id !== evToRemove.id && e.id !== evToRemove.id + "_clone");
-                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
-                      }
-                  }
-              }
-          };
-
-          const startEditEvent = (event, originalIndex) => {
-            setEditingEventIndex(originalIndex);
-            
-            let textToEdit = event.text || '';
-            if (selectedCompany !== UPLI_GERAL_ID) {
-                 const cat = colorOptions.find(c => c.id === event.color);
-                 if (cat) {
-                     const catPrefix = cat.label.toLowerCase() + ':';
-                     if (textToEdit.toLowerCase().startsWith(catPrefix)) {
-                         textToEdit = textToEdit.substring(catPrefix.length).trim();
-                     }
-                 }
-            }
-
->>>>>>> 73f36d9 (Primeiro commit)
             setEditEventForm({
                 day: event.day || '', text: textToEdit, color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || '',
                 responsibleId: event.responsibleId || '', responsible: event.responsible || '', responsiblePhone: event.responsiblePhone || '', responsibleEmail: event.responsibleEmail || ''
             });
-<<<<<<< HEAD
           };
 
           const addToGoogleCalendar = () => {
               const title = encodeURIComponent(editEventForm.text || 'Post UPLI');
-=======
-          };
-
-          const addToGoogleCalendar = () => {
-              const title = encodeURIComponent(editEventForm.text || 'Post UPLI');
->>>>>>> 73f36d9 (Primeiro commit)
               let notesText = editEventForm.notes || '';
               if (editEventForm.responsible) {
                   notesText += `${notesText ? '\n\n' : ''}Responsável: ${editEventForm.responsible}`;
               }
               if (editEventForm.imageUrl) {
                   notesText += `\n\nLink da Arte: ${editEventForm.imageUrl}`;
-<<<<<<< HEAD
               }
               const details = encodeURIComponent(notesText);
               
@@ -1924,33 +1229,6 @@
             if (!editEventForm.day || !editEventForm.text || !editEventForm.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
 
-=======
-              }
-              const details = encodeURIComponent(notesText);
-              
-              const dayNum = parseInt(editEventForm.day || 1);
-              const startDate = new Date(year, month, dayNum);
-              const endDate = new Date(year, month, dayNum + 1); 
-              
-              const formatGCalDate = (d) => {
-                  return d.getFullYear().toString() + 
-                         (d.getMonth() + 1).toString().padStart(2, '0') + 
-                         d.getDate().toString().padStart(2, '0');
-              };
-              
-              const dates = `${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`;
-              const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${dates}`;
-              
-              window.open(url, '_blank');
-          };
-
-          const saveEditEvent = () => {
-            const dayNum = parseInt(editEventForm.day);
-            const daysInCurrentMonth = getDaysInMonth(year, month);
-            if (!editEventForm.day || !editEventForm.text || !editEventForm.color) return alert('Preencha os campos obrigatórios!');
-            if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
-
->>>>>>> 73f36d9 (Primeiro commit)
             const updatedEvt = {
                 ...events[editingEventIndex],
                 day: dayNum, text: editEventForm.text, color: editEventForm.color, notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
@@ -1958,7 +1236,6 @@
                 responsiblePhone: editEventForm.responsiblePhone || '', responsibleEmail: editEventForm.responsibleEmail || '',
                 updatedBy: currentUserName, updatedAt: new Date().toISOString()
             };
-<<<<<<< HEAD
 
             const updatedEvents = [...events];
             updatedEvents[editingEventIndex] = updatedEvt;
@@ -1985,34 +1262,6 @@
                             if (catName && !newText.toLowerCase().startsWith(`${catName.toLowerCase()}:`)) {
                                 newText = `${catName}: ${newText}`;
                             }
-=======
-
-            const updatedEvents = [...events];
-            updatedEvents[editingEventIndex] = updatedEvt;
-            saveToCloud({ events: updatedEvents });
-
-            if (selectedCompany !== UPLI_GERAL_ID) {
-                const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
-                if (upliGeral) {
-                    const upliEvents = [...upliGeral.events];
-                    const linkedIdx = upliEvents.findIndex(e => e.id === updatedEvt.id || e.id === updatedEvt.id + "_clone");
-                    
-                    const selectedCat = colorOptions.find(c => c.id === editEventForm.color);
-                    const catName = selectedCat ? selectedCat.label : '';
-                    const isEvento = editEventForm.color === 'cat_evento' || catName.toLowerCase().includes('evento');
-
-                    if (isEvento) {
-                        if (linkedIdx !== -1) {
-                            upliEvents.splice(linkedIdx, 1);
-                            db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
-                        }
-                    } else {
-                        if (linkedIdx !== -1) {
-                            let newText = updatedEvt.text;
-                            if (catName && !newText.toLowerCase().startsWith(`${catName.toLowerCase()}:`)) {
-                                newText = `${catName}: ${newText}`;
-                            }
->>>>>>> 73f36d9 (Primeiro commit)
                             upliEvents[linkedIdx] = {
                                 ...upliEvents[linkedIdx],
                                 day: updatedEvt.day,
@@ -2024,7 +1273,6 @@
                                 responsiblePhone: updatedEvt.responsiblePhone,
                                 responsibleEmail: updatedEvt.responsibleEmail
                             };
-<<<<<<< HEAD
                             db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
                         }
                     }
@@ -2097,85 +1345,10 @@
 
           const currentViewEvents = safeEvents
               .map((e, index) => ({ ...e, _origIdx: index, _key: e.id || `legacy_${index}` }))
-=======
-                            db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
-                        }
-                    }
-                }
-            }
-            setEditingEventIndex(null);
-          };
-
-          const cancelEditEvent = () => setEditingEventIndex(null);
-
-          const onDragStart = (e, originalIndex) => { 
-              if (isSelectionMode) { e.preventDefault(); return; } 
-              e.dataTransfer.setData("eventIndex", originalIndex); 
-          };
-          const onDragOver = (e) => { if (!isSelectionMode) e.preventDefault(); };
-
-          const onDrop = (e, targetDay) => {
-              if (isSelectionMode) return;
-              e.preventDefault();
-              if(!isAdmin) return; 
-              const originalIndex = e.dataTransfer.getData("eventIndex");
-              if(originalIndex === null || originalIndex === '') return;
-              
-              const updatedEvents = [...events];
-              updatedEvents[originalIndex].day = targetDay;
-              updatedEvents[originalIndex].updatedBy = currentUserName;
-              updatedEvents[originalIndex].updatedAt = new Date().toISOString();
-              saveToCloud({ events: updatedEvents });
-
-              if (selectedCompany !== UPLI_GERAL_ID) {
-                  const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
-                  if (upliGeral) {
-                      const upliEvents = [...upliGeral.events];
-                      const linkedIdx = upliEvents.findIndex(evt => evt.id === updatedEvents[originalIndex].id || evt.id === updatedEvents[originalIndex].id + "_clone");
-                      if (linkedIdx !== -1) {
-                          upliEvents[linkedIdx].day = targetDay;
-                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
-                      }
-                  }
-              }
-          };
-
-          const addCategory = () => {
-            if (newCategory.label.trim()) {
-              const updatedCats = [...colorOptions, { id: Date.now().toString(), label: newCategory.label, color: newCategory.color }];
-              saveToCloud({ categories: updatedCats });
-              setNewCategory({ label: '', color: '#3b82f6' });
-            }
-          };
-          const removeCategory = (id) => {
-            const updatedCats = colorOptions.filter(c => c.id !== id);
-            const updatedEvts = events.filter(e => e.color !== id);
-            saveToCloud({ categories: updatedCats, events: updatedEvts });
-          };
-          const startEditCategory = (category) => {
-            setEditingColor(category.id);
-            setEditLabel(category.label || '');
-            setEditColorValue(category.color || '#000000');
-          };
-          const saveEditCategory = () => {
-            if(!editLabel.trim()) return;
-            const updatedCats = colorOptions.map(c => c.id === editingColor ? { ...c, label: editLabel, color: editColorValue } : c);
-            saveToCloud({ categories: updatedCats });
-            setEditingColor(null);
-          };
-          const cancelEditCategory = () => { setEditingColor(null); setEditLabel(''); setEditColorValue(''); };
-
-          const safeEvents = Array.isArray(events) ? events : [];
-          const safeColorOptions = Array.isArray(colorOptions) ? colorOptions : [];
-
-          const currentViewEvents = safeEvents
-              .map((e, index) => ({ ...e, _origIdx: index, _key: e.id || `legacy_${index}` }))
->>>>>>> 73f36d9 (Primeiro commit)
               .filter(e => e.month === month && e.year === year);
           const trelloExportEvents = trelloSingleEventKey
               ? currentViewEvents.filter(event => event._key === trelloSingleEventKey)
               : currentViewEvents;
-<<<<<<< HEAD
           
           const getFilteredEvents = () => {
               if (calendarFilter === 'ALL') return currentViewEvents;
@@ -2247,79 +1420,6 @@
               URL.revokeObjectURL(url);
 
               setIsSelectionMode(false);
-=======
-          
-          const getFilteredEvents = () => {
-              if (calendarFilter === 'ALL') return currentViewEvents;
-              if (statusPipeline[calendarFilter]) {
-                  return currentViewEvents.filter(e => getEventStatus(e._origIdx) === calendarFilter);
-              }
-              return currentViewEvents.filter(e => e.color === calendarFilter);
-          };
-
-          const filteredViewEvents = getFilteredEvents();
-          const getCalendarEventsForDay = (day) => filteredViewEvents.filter(e => e.day === day);
-
-          const handleSelectionToggle = () => {
-              setIsSelectionMode(!isSelectionMode);
-              setSelectedEvents([]);
-          };
-
-          const toggleEventSelection = (eventKey) => {
-              if (selectedEvents.includes(eventKey)) setSelectedEvents(selectedEvents.filter(key => key !== eventKey));
-              else setSelectedEvents([...selectedEvents, eventKey]);
-          };
-
-          const toggleCategorySelection = (categoryId) => {
-              const catEvents = currentViewEvents.filter(e => e.color === categoryId);
-              const eventKeys = catEvents.map(e => e._key);
-              if (eventKeys.length === 0) return;
-
-              const allSelected = eventKeys.every(key => selectedEvents.includes(key));
-              if (allSelected) {
-                  setSelectedEvents(prev => prev.filter(key => !eventKeys.includes(key)));
-              } else {
-                  setSelectedEvents(prev => {
-                      const newSelected = [...prev];
-                      eventKeys.forEach(key => { if (!newSelected.includes(key)) newSelected.push(key); });
-                      return newSelected;
-                  });
-              }
-          };
-
-          const exportSelectedToTXT = () => {
-              const comp = companies.find(c => c.id === selectedCompany);
-              if (!comp) return;
-
-              let textContent = `Empresa ; Categoria ; Dia ; Título ; Status ; Anotações ; Responsável\n`;
-              const eventsToExport = currentViewEvents.filter(e => selectedEvents.includes(e._key));
-
-              eventsToExport.forEach(e => {
-                  const cat = safeColorOptions.find(c => c.id === e.color);
-                  const catName = cat ? cat.label : 'Sem Categoria';
-                  const statusName = e.status && statusPipeline[e.status] ? statusPipeline[e.status].label : '';
-                  const cleanNotes = e.notes ? e.notes.replace(/\n/g, ' ') : '';
-                  const cleanResponsible = e.responsible ? e.responsible.replace(/[;\n]/g, ' ').trim() : '';
-                  
-                  let rawTitle = e.text;
-                  const catPrefix = catName.toLowerCase() + ':';
-                  if (rawTitle.toLowerCase().startsWith(catPrefix)) {
-                      rawTitle = rawTitle.substring(catPrefix.length).trim();
-                  }
-                  
-                  textContent += `${comp.name} ; ${catName} ; ${e.day} ; ${rawTitle} ; ${statusName} ; ${cleanNotes} ; ${cleanResponsible}\n`;
-              });
-
-              const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = `Export_${comp.name}_${selectedEvents.length}_posts.txt`;
-              link.click();
-              URL.revokeObjectURL(url);
-
-              setIsSelectionMode(false);
->>>>>>> 73f36d9 (Primeiro commit)
               setSelectedEvents([]);
           };
 
@@ -2756,7 +1856,6 @@
           };
 
           const deleteSelectedEvents = () => {
-<<<<<<< HEAD
               if (selectedEvents.length === 0) return alert("Selecione pelo menos um post.");
               if (confirm(`⚠️ Tem certeza que deseja apagar ${selectedEvents.length} post(s) de vez?`)) {
                   
@@ -3012,268 +2111,10 @@
                         }
                     }
 
-=======
-              if (selectedEvents.length === 0) return alert("Selecione pelo menos um post.");
-              if (confirm(`⚠️ Tem certeza que deseja apagar ${selectedEvents.length} post(s) de vez?`)) {
-                  
-                  const eventsToRemove = currentViewEvents.filter(e => selectedEvents.includes(e._key));
-                  const keysToRemove = eventsToRemove.map(e => e._key);
-                  
-                  const updatedEvents = safeEvents.filter((e, idx) => {
-                      const key = e.id || `legacy_${idx}`;
-                      return !keysToRemove.includes(key);
-                  });
-                  
-                  saveToCloud({ events: updatedEvents });
-
-                  if (selectedCompany !== UPLI_GERAL_ID) {
-                      const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
-                      if (upliGeral) {
-                          const upliEvents = upliGeral.events.filter(e => !eventsToRemove.some(rem => e.id === rem.id || e.id === rem.id + "_clone"));
-                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
-                      }
-                  }
-
-                  setIsSelectionMode(false);
-                  setSelectedEvents([]);
-              }
-          };
-
-          const processImport = async () => {
-            if (!importFile) return alert("Por favor, selecione um arquivo TXT primeiro.");
-            if (!importTargetCompany) return alert("Por favor, selecione a empresa de destino.");
-
-            setImporting(true);
-            try {
-                const text = await importFile.text();
-                const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-                
-                const snapshot = await db.collection('companies').get();
-                let allCompanies = {};
-                snapshot.forEach(doc => { allCompanies[doc.id] = { id: doc.id, ...doc.data() }; });
-
-                let upliGeral = allCompanies[UPLI_GERAL_ID];
-                if (!upliGeral) {
-                    upliGeral = { id: UPLI_GERAL_ID, name: 'UPLI Geral', events: [], categories: STANDARD_CATEGORIES, statuses: {} };
-                    allCompanies[UPLI_GERAL_ID] = upliGeral;
-                }
-
-                let compData = allCompanies[importTargetCompany];
-                if (!compData) throw new Error("Empresa de destino não encontrada.");
-
-                let updatesNeeded = {};
-                updatesNeeded[importTargetCompany] = compData; 
-
-                let importedCount = 0;
-                
-                const normCat = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/s$/, '').trim();
-
-                lines.forEach(line => {
-                    if(line.toLowerCase().startsWith('empresa')) return; 
-
-                    const parts = line.split(';');
-                    if (parts.length < 4) return;
-
-                    const compNameTXT = parts[0] ? parts[0].trim() : ''; 
-                    let catName = parts[1].trim();
-                    const dayNum = parseInt(parts[2].trim());
-                    let title = parts[3].trim();
-                    const statusStr = parts[4] ? parts[4].trim().toLowerCase() : '';
-                    const notes = parts[5] ? parts[5].trim() : '';
-                    const responsible = parts[6] ? parts[6].trim() : '';
-
-                    if (isNaN(dayNum) || !title) return;
-
-                    let cleanTitle = title;
-                    const destCompPrefix1 = compData.name.toLowerCase() + ':';
-                    const destCompPrefix2 = compData.name.toLowerCase() + ' :';
-                    const txtCompPrefix1 = compNameTXT.toLowerCase() + ':';
-                    const txtCompPrefix2 = compNameTXT.toLowerCase() + ' :';
-                    
-                    if (cleanTitle.toLowerCase().startsWith(destCompPrefix1)) {
-                        cleanTitle = cleanTitle.substring(destCompPrefix1.length).trim();
-                    } else if (cleanTitle.toLowerCase().startsWith(destCompPrefix2)) {
-                        cleanTitle = cleanTitle.substring(destCompPrefix2.length).trim();
-                    } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix1)) {
-                        cleanTitle = cleanTitle.substring(txtCompPrefix1.length).trim();
-                    } else if (compNameTXT && cleanTitle.toLowerCase().startsWith(txtCompPrefix2)) {
-                        cleanTitle = cleanTitle.substring(txtCompPrefix2.length).trim();
-                    }
-
-                    if (catName.toLowerCase() === compData.name.toLowerCase() || catName.toLowerCase() === compNameTXT.toLowerCase() || catName.toLowerCase() === 'upli geral') {
-                        catName = ""; 
-                    }
-
-                    let finalCatName = catName;
-                    let finalTitle = cleanTitle;
-                    
-                    const colonIndex = cleanTitle.indexOf(':');
-                    if (colonIndex !== -1 && colonIndex < 30) {
-                        const possibleCat = cleanTitle.substring(0, colonIndex).trim();
-                        const possibleTitle = cleanTitle.substring(colonIndex + 1).trim();
-                        
-                        const isKnownCat = compData.categories.some(c => normCat(c.label) === normCat(possibleCat)) || 
-                                           STANDARD_CATEGORIES.some(c => normCat(c.label) === normCat(possibleCat));
-                        
-                        if (isKnownCat) {
-                            finalCatName = possibleCat;
-                            finalTitle = possibleTitle;
-                        } else {
-                            let mappedCat = possibleCat;
-                            if (normCat(mappedCat) === 'foto') mappedCat = 'Fotos';
-                            if (normCat(mappedCat) === 'story') mappedCat = 'Stories';
-                            if (normCat(mappedCat) === 'reel') mappedCat = 'Reels';
-                            
-                            if (STANDARD_CATEGORIES.some(c => normCat(c.label) === normCat(mappedCat))) {
-                                finalCatName = mappedCat;
-                                finalTitle = possibleTitle;
-                            }
-                        }
-                    }
-
-                    if (!finalCatName) finalCatName = "Geral";
-
-                    let category = compData.categories.find(c => normCat(c.label) === normCat(finalCatName));
-                    if (!category) {
-                        category = { id: 'cat_' + Date.now() + Math.random().toString(36).substr(2, 3), label: finalCatName, color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0') };
-                        compData.categories.push(category);
-                    }
-
-                    let exactStatus = null;
-                    if(statusStr.includes('criação') || statusStr.includes('criacao')) exactStatus = 'criacao';
-                    else if(statusStr.includes('gravação') || statusStr.includes('gravacao')) exactStatus = 'gravacao';
-                    else if(statusStr.includes('produção') || statusStr.includes('producao')) exactStatus = 'producao';
-                    else if(statusStr.includes('aprovado')) exactStatus = 'aprovado';
-                    else if(statusStr.includes('aprovação') || statusStr.includes('aprovacao')) exactStatus = 'aprovacao';
-                    else if(statusStr.includes('atrasado')) exactStatus = 'atrasado';
-                    else if(statusStr.includes('publicado') || statusStr.includes('feito') || statusStr.includes('concluid')) exactStatus = 'publicado';
-
-                    const eventId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-                    const newEvent = {
-                        id: eventId,
-                        day: dayNum,
-                        month: month,
-                        year: year,
-                        text: finalTitle, 
-                        color: category.id,
-                        notes: notes,
-                        responsible: responsible,
-                        status: exactStatus,
-                        createdBy: `Importação TXT por: ${currentUserName}`,
-                        createdAt: new Date().toISOString()
-                    };
-
-                    compData.events.push(newEvent);
-                    importedCount++;
-
-                    const isEvento = category.id === 'cat_evento' || finalCatName.toLowerCase().includes('evento');
-                    
-                    if (importTargetCompany !== UPLI_GERAL_ID && !isEvento && importToCentral) {
-                        const clonedEvent = {
-                            ...newEvent,
-                            id: eventId + "_clone",
-                            text: `${finalCatName}: ${finalTitle}`,
-                            sourceCompanyId: importTargetCompany,
-                            color: importTargetCompany 
-                        };
-                        upliGeral.events.push(clonedEvent);
-                        updatesNeeded[UPLI_GERAL_ID] = upliGeral;
-                    }
-                });
-
-                if (importedCount === 0) {
-                    alert("Nenhum evento válido encontrado no arquivo TXT.");
-                    setImporting(false);
-                    return;
-                }
-
-                const batch = db.batch();
-                Object.values(updatesNeeded).forEach(comp => {
-                    const ref = db.collection('companies').doc(comp.id);
-                    batch.set(ref, {
-                        name: comp.name,
-                        events: comp.events,
-                        categories: comp.categories,
-                        statuses: comp.statuses || {}
-                    }, { merge: true });
-                });
-
-                await batch.commit();
-                alert(`✅ ${importedCount} posts importados com sucesso!`);
-                setShowImportModal(false);
-                setImportFile(null);
-                setImportTargetCompany('');
-
-            } catch (error) {
-                alert("Erro ao importar: " + error.message);
-            }
-            setImporting(false);
-          };
-
-          const getLegendItems = () => {
-            const uniqueColors = [...new Set(currentViewEvents.map(e => e.color))];
-            return safeColorOptions.filter(c => uniqueColors.includes(c.id));
-          };
-
-          const getWeeks = () => {
-            const weeks = []; let currentWeek = new Array(7).fill(null);
-            const daysInMonth = getDaysInMonth(year, month);
-            let currentDayOfWeek = getFirstDayOfMonth(year, month);
-            for (let day = 1; day <= daysInMonth; day++) {
-              currentWeek[currentDayOfWeek] = day; currentDayOfWeek++;
-              if (currentDayOfWeek === 7) { weeks.push(currentWeek); currentWeek = new Array(7).fill(null); currentDayOfWeek = 0; }
-            }
-            if (currentDayOfWeek > 0) weeks.push(currentWeek);
-            return weeks;
-          };
-
-          const getLines = (ctx, text, maxWidth) => {
-            if (!text) return [];
-            const words = text.split(' '); const lines = []; let currentLine = words[0];
-            for (let i = 1; i < words.length; i++) {
-                const word = words[i];
-                if (ctx.measureText(currentLine + " " + word).width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
-            }
-            lines.push(currentLine); return lines;
-          };
-
-          const drawCalendarToCanvas = () => {
-            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-            const weeks = getWeeks(); const canvasWidth = 1920; const padding = 60; const contentWidth = canvasWidth - (padding * 2); const colWidth = contentWidth / 7; const eventSpacing = 10;
-            ctx.font = 'bold 14px Arial'; let totalHeight = padding + 100 + 80; 
-            
-            const isCentral = selectedCompany === UPLI_GERAL_ID;
-            const lineHeight = 18;
-            const paddingY = 12;
-
-            const pdfLinks = [];
-
-            weeks.forEach(week => {
-              totalHeight += 50;  let maxWeekHeightCalc = 0;
-              week.forEach(day => {
-                if (day) {
-                  const dayEvents = getCalendarEventsForDay(day); let colHeight = 0;
-                  dayEvents.forEach(event => {
-                    const colorObj = safeColorOptions.find(c => c.id === event.color);
-                    let displayText = getCleanDisplayText(event.text, isCentral, colorObj?.label);
-                    const status = getEventStatus(event._origIdx);
-                    
-                    if (!isCentral) {
-                        const catLabel = colorObj ? colorObj.label : '';
-                        if (catLabel) {
-                            const catPrefix = catLabel.toLowerCase() + ':';
-                            if (!displayText.toLowerCase().startsWith(catPrefix)) {
-                                displayText = `${catLabel}: ${displayText}`;
-                            }
-                        }
-                    }
-
->>>>>>> 73f36d9 (Primeiro commit)
                     if (!isCentral && status && statusPipeline[status]) {
                         displayText += ` [${statusPipeline[status].label}]`;
                     }
                     if (event.responsible) displayText += ` [Resp: ${event.responsible}]`;
-<<<<<<< HEAD
                     
                     let textWidthArea = colWidth - 20;
                     if (isCentral) textWidthArea -= 24; 
@@ -3371,110 +2212,10 @@
                       }
                   }
 
-=======
-                    
-                    let textWidthArea = colWidth - 20;
-                    if (isCentral) textWidthArea -= 24; 
-
-                    const lines = getLines(ctx, displayText, textWidthArea); 
-                    const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
-                    colHeight += dynamicHeight + eventSpacing;
-                  });
-                  maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
-                }
-              });
-              totalHeight += maxWeekHeightCalc + 30; 
-            });
-            
-            const legendItems = getLegendItems();
-            if (legendItems.length > 0) { 
-                totalHeight += 40; 
-                const itemsPerRow = 6; 
-                const legendRows = Math.ceil(legendItems.length / itemsPerRow); 
-                totalHeight += legendRows * 50 + padding; 
-            } else { 
-                totalHeight += padding; 
-            }
-            
-            if (isCentral) {
-                totalHeight += 40;
-                const statusRows = Math.ceil(Object.keys(statusPipeline).length / 7);
-                totalHeight += statusRows * 50 + padding + 60; 
-            }
-            
-            const finalHeight = Math.max(1080, totalHeight); 
-            const scale = 4; 
-            canvas.width = canvasWidth * scale; 
-            canvas.height = finalHeight * scale;
-            ctx.scale(scale, scale); 
-            ctx.textRendering = 'optimizeLegibility'; 
-            ctx.imageSmoothingEnabled = true; 
-            ctx.imageSmoothingQuality = 'high';
-            
-            ctx.fillStyle = '#ffffff'; 
-            ctx.fillRect(0, 0, canvasWidth, finalHeight);
-            
-            let currentY = padding; 
-            const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
-            ctx.fillStyle = '#000000'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-            ctx.fillText(`${months[month]} ${year} ${companyName ? `| ${companyName.toUpperCase()}` : ''}`, padding, currentY + 40);
-            
-            currentY += 100; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            fullWeekDays.forEach((day, i) => {
-              const x = padding + (i * colWidth); const pillMargin = 10;
-              ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25); ctx.fill();
-              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 25);
-            });
-            
-            currentY += 80;
-            weeks.forEach(week => {
-              ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(padding, currentY, contentWidth, 36, 18); ctx.fill();
-              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-              week.forEach((day, i) => { if (day) ctx.fillText(day.toString(), padding + (i * colWidth) + 25, currentY + 18); });
-              
-              currentY += 50; let maxWeekHeight = 0;
-              
-              week.forEach((day, i) => {
-                if (!day) return;
-                
-                const dayEvents = getCalendarEventsForDay(day); let eventY = currentY; const x = padding + (i * colWidth); const eventMargin = 10; const eventW = colWidth - (eventMargin * 2);
-                
-                dayEvents.forEach(event => {
-                  const color = safeColorOptions.find(c => c.id === event.color); if (!color) return;
-                  const status = getEventStatus(event._origIdx); 
-                  
-                  let finalBgColor = color.color;
-                  let finalTextColor = getTextColor(color.color);
-
-                  if (isCentral) {
-                      if (status && statusPipeline[status]) {
-                          finalBgColor = statusPipeline[status].bg;
-                          finalTextColor = statusPipeline[status].text;
-                      } else {
-                          finalBgColor = '#E5E7EB'; 
-                          finalTextColor = '#374151';
-                      }
-                  }
-                  
-                  ctx.font = 'bold 14px Arial'; 
-                  let displayText = getCleanDisplayText(event.text, isCentral, color.label);
-                  
-                  if (!isCentral) {
-                      const catLabel = color.label;
-                      if (catLabel) {
-                          const catPrefix = catLabel.toLowerCase() + ':';
-                          if (!displayText.toLowerCase().startsWith(catPrefix)) {
-                              displayText = `${catLabel}: ${displayText}`;
-                          }
-                      }
-                  }
-
->>>>>>> 73f36d9 (Primeiro commit)
                   if (!isCentral && status && statusPipeline[status]) {
                       displayText += ` [${statusPipeline[status].label}]`;
                   }
                   if (event.responsible) displayText += ` [Resp: ${event.responsible}]`;
-<<<<<<< HEAD
                   
                   let textWidthArea = eventW - 20;
                   if (isCentral) textWidthArea -= 24; 
@@ -3616,149 +2357,6 @@
                   pdf.save(`calendario-${companyName}-${months[month]}-${year}-4K.pdf`); 
               } catch (error) { 
                   alert('Erro ao exportar PDF: ' + error.message); 
-=======
-                  
-                  let textWidthArea = eventW - 20;
-                  if (isCentral) textWidthArea -= 24; 
-
-                  const lines = getLines(ctx, displayText, textWidthArea); 
-                  const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
-                  
-                  if (event.imageUrl) {
-                      let urlFormated = event.imageUrl.trim();
-                      if (!urlFormated.match(/^https?:\/\//i)) {
-                          urlFormated = 'https://' + urlFormated;
-                      }
-                      pdfLinks.push({ x: x + eventMargin, y: eventY, w: eventW, h: dynamicHeight, url: urlFormated });
-                  }
-
-                  ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 16); ctx.fill();
-
-                  ctx.textBaseline = 'top';
-                  if (isCentral) {
-                      ctx.fillStyle = color.color;
-                      ctx.beginPath();
-                      ctx.arc(x + eventMargin + 18, eventY + (dynamicHeight / 2), 8, 0, 2 * Math.PI);
-                      ctx.fill();
-                      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                      ctx.lineWidth = 2;
-                      ctx.stroke();
-
-                      ctx.fillStyle = finalTextColor;
-                      ctx.textAlign = 'left';
-                      let textY = eventY + paddingY;
-                      lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += lineHeight; });
-                  } else {
-                      ctx.fillStyle = finalTextColor;
-                      ctx.textAlign = 'center';
-                      let textY = eventY + paddingY; 
-                      lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += lineHeight; });
-                  }
-                  
-                  eventY += dynamicHeight + eventSpacing;
-                });
-                maxWeekHeight = Math.max(maxWeekHeight, eventY - currentY);
-              });
-              currentY += maxWeekHeight + 30; 
-            });
-
-            if (legendItems.length > 0) {
-              currentY += 40; 
-              ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-              ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY);
-              currentY += 30; 
-              
-              const itemsPerRow = 6; 
-              const gap = 15;
-              const itemWidth = (contentWidth - ((itemsPerRow - 1) * gap)) / itemsPerRow;
-              
-              legendItems.forEach((item, idx) => {
-                const col = idx % itemsPerRow;
-                const row = Math.floor(idx / itemsPerRow);
-                const itemX = padding + (col * (itemWidth + gap)); 
-                const itemY = currentY + (row * 50);
-                
-                ctx.fillStyle = item.color || '#000000'; ctx.beginPath(); ctx.roundRect(itemX, itemY, itemWidth, 36, 18); ctx.fill();
-                ctx.fillStyle = getTextColor(item.color); ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                let label = item.label || ''; while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
-                ctx.fillText(label, itemX + (itemWidth / 2), itemY + 18);
-              });
-              currentY += (Math.ceil(legendItems.length / itemsPerRow) * 50) + 20;
-            }
-
-            if (isCentral) {
-                currentY += 30;
-                ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-                ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY);
-                currentY += 30;
-                
-                const statusItemsPerRow = 7; 
-                const gapStatus = 15;
-                const statusItemWidth = (contentWidth - ((statusItemsPerRow - 1) * gapStatus)) / statusItemsPerRow;
-                
-                Object.entries(statusPipeline).forEach(([key, val], idx) => {
-                    const col = idx % statusItemsPerRow;
-                    const row = Math.floor(idx / statusItemsPerRow);
-                    const itemX = padding + (col * (statusItemWidth + gapStatus)); 
-                    const itemY = currentY + (row * 50);
-                    
-                    ctx.fillStyle = val.bg; ctx.beginPath(); ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8); ctx.fill();
-                    ctx.fillStyle = val.text; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                    let label = val.label || ''; while (ctx.measureText(label).width > statusItemWidth - 10 && label.length > 3) label = label.slice(0, -4) + '...';
-                    ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 18);
-                });
-            }
-
-            return { canvas, finalHeight, pdfLinks };
-          };
-
-          const exportAsImage = async () => { 
-              try { 
-                  const { canvas } = drawCalendarToCanvas(); 
-                  canvas.toBlob((blob) => { 
-                      const url = URL.createObjectURL(blob); 
-                      const link = document.createElement('a'); 
-                      link.href = url; 
-                      const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa'; 
-                      link.download = `calendario-${companyName}-${months[month]}-${year}-4K.png`; 
-                      link.click(); 
-                      URL.revokeObjectURL(url); 
-                  }, 'image/png'); 
-              } catch (error) { 
-                  alert('Erro ao exportar imagem.'); 
-              } 
-          };
-          
-          const exportAsPDF = async () => {
-              try { 
-                  if (!window.jspdf) { 
-                      const scriptPDF = document.createElement('script'); 
-                      scriptPDF.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; 
-                      document.head.appendChild(scriptPDF); 
-                      await new Promise((resolve) => scriptPDF.onload = resolve); 
-                  } 
-                  
-                  const { canvas, finalHeight, pdfLinks } = drawCalendarToCanvas(); 
-                  const imgData = canvas.toDataURL('image/png'); 
-                  
-                  const pdf = new window.jspdf.jsPDF({ 
-                      orientation: finalHeight > 1920 ? 'portrait' : 'landscape', 
-                      unit: 'px', 
-                      format: [1920, finalHeight], 
-                      compress: false 
-                  }); 
-                  
-                  pdf.addImage(imgData, 'PNG', 0, 0, 1920, finalHeight); 
-                  
-                  pdfLinks.forEach(link => {
-                      pdf.link(link.x, link.y, link.w, link.h, { url: link.url });
-                  });
-
-                  const companyName = companies.find(c => c.id === selectedCompany)?.name || 'empresa'; 
-                  pdf.save(`calendario-${companyName}-${months[month]}-${year}-4K.pdf`); 
-              } catch (error) { 
-                  alert('Erro ao exportar PDF: ' + error.message); 
->>>>>>> 73f36d9 (Primeiro commit)
               } 
           };
 
@@ -4009,7 +2607,6 @@
           }, [showTutorial, tutorialStep, userRole, selectedCompany]);
 
           if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 font-bold text-gray-500">Carregando Nuvem...</div>;
-<<<<<<< HEAD
 
           if (!user) {
               return (
@@ -4040,38 +2637,6 @@
           }
 
           const daysInMonth = getDaysInMonth(year, month);
-=======
-
-          if (!user) {
-              return (
-                  <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
-                      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full relative overflow-hidden">
-                          <div className="text-center mb-8">
-                              <span className="text-5xl">{isResetMode ? '🔐' : '📅'}</span>
-                              <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">{isResetMode ? 'Recuperar Senha' : 'Calendário UPLI'}</h2>
-                              <p className="text-gray-500 text-sm mt-1">{isResetMode ? 'Digite seu e-mail para receber o link' : 'Faça login para acessar a nuvem'}</p>
-                          </div>
-                          {isResetMode ? (
-                              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
-                                  <input type="email" placeholder="Seu e-mail cadastrado" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
-                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENVIAR LINK</button>
-                                  <div className="text-center mt-4 pt-2 border-t"><button type="button" onClick={() => setIsResetMode(false)} className="text-sm text-gray-500 hover:text-gray-800 font-bold transition">← Voltar</button></div>
-                              </form>
-                          ) : (
-                              <form onSubmit={handleLogin} className="space-y-4">
-                                  <input type="email" placeholder="E-mail de acesso" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
-                                  <input type="password" placeholder="Senha" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={password} onChange={e=>setPassword(e.target.value)} required />
-                                  <div className="flex justify-end"><button type="button" onClick={() => setIsResetMode(true)} className="text-sm text-blue-600 hover:text-blue-800 font-bold transition mt-1">Esqueceu a senha?</button></div>
-                                  <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENTRAR</button>
-                              </form>
-                          )}
-                      </div>
-                  </div>
-              );
-          }
-
-          const daysInMonth = getDaysInMonth(year, month);
->>>>>>> 73f36d9 (Primeiro commit)
           const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
           const weeks = getWeeks();
           const isCentral = selectedCompany === UPLI_GERAL_ID;
@@ -4448,7 +3013,6 @@
                       </div>
                   </div>
               )}
-<<<<<<< HEAD
               
               {showImportModal && (
                   <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
@@ -4512,71 +3076,6 @@
                                       <div className="flex-1">
                                           <label className="block text-xs font-bold text-gray-500 mb-1">Título</label>
                                           <input type="text" value={editEventForm.text} onChange={e=>setEditEventForm({...editEventForm, text: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white" />
-=======
-              
-              {showImportModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full relative">
-                          <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportTargetCompany(''); }} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-50 hover:text-white transition">X</button>
-                          <h3 className="font-black text-xl mb-4 text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Upload/> Importar Posts</h3>
-                          
-                          <div className="space-y-4">
-                              <div>
-                                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Para qual empresa deseja importar?</label>
-                                  <select value={importTargetCompany} onChange={e => setImportTargetCompany(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
-                                      <option value="">Selecione uma empresa...</option>
-                                      {companies.filter(c => c.id !== UPLI_GERAL_ID).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                  </select>
-                              </div>
-                              
-                              <div>
-                                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Selecione o arquivo (.txt)</label>
-                                  <input type="file" accept=".txt" onChange={e => setImportFile(e.target.files[0])} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg text-sm dark:bg-gray-700 dark:text-white cursor-pointer" />
-                              </div>
-                              
-                              <div>
-                                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer bg-indigo-50 dark:bg-indigo-900 p-2 rounded-lg border border-indigo-100 dark:border-indigo-600">
-                                      <input type="checkbox" checked={importToCentral} onChange={e => setImportToCentral(e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                                      Enviar cópia para o Calendário Central (UPLI Geral)
-                                  </label>
-                              </div>
-
-                              <button onClick={processImport} disabled={importing || !importFile || !importTargetCompany} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-indigo-700 transition disabled:opacity-50 mt-4">
-                                  {importing ? 'Importando...' : 'Confirmar Importação'}
-                              </button>
-                          </div>
-                      </div>
-                  </div>
-              )}
-
-              {editingEventIndex !== null && !isSelectionMode && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative max-h-[95vh] overflow-y-auto">
-                          <button onClick={() => setEditingEventIndex(null)} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
-                          <h3 className="font-black text-xl mb-3 text-gray-800 dark:text-white flex items-center gap-2"><Edit2/> Detalhes do Post</h3>
-                          
-                          <div className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex flex-col gap-1 shadow-sm">
-                              <p className="text-xs text-indigo-900 dark:text-indigo-200">
-                                  <strong className="font-black">Criado por:</strong> {events[editingEventIndex]?.createdBy || 'Desconhecido'}
-                              </p>
-                              {events[editingEventIndex]?.createdAt && (
-                                  <p className="text-[10px] text-indigo-700 dark:text-indigo-400 font-medium">
-                                      <strong>Data da Criação:</strong> {formatDateStr(events[editingEventIndex].createdAt)}
-                                  </p>
-                              )}
-                          </div>
-
-                          {isAdmin ? (
-                              <div className="space-y-4">
-                                  <div className="flex gap-2">
-                                      <div className="w-24">
-                                          <label className="block text-xs font-bold text-gray-500 mb-1">Dia</label>
-                                          <input type="number" value={editEventForm.day} onChange={e=>setEditEventForm({...editEventForm, day: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none font-bold text-center dark:bg-gray-700 dark:text-white" />
-                                      </div>
-                                      <div className="flex-1">
-                                          <label className="block text-xs font-bold text-gray-500 mb-1">Título</label>
-                                          <input type="text" value={editEventForm.text} onChange={e=>setEditEventForm({...editEventForm, text: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white" />
->>>>>>> 73f36d9 (Primeiro commit)
                                       </div>
                                   </div>
                                   <div>
@@ -4589,7 +3088,6 @@
                                   </div>
                                   <div>
                                       <label className="block text-xs font-bold text-gray-500 mb-1">Anotações / Roteiro</label>
-<<<<<<< HEAD
                                       <textarea value={editEventForm.notes} onChange={e=>setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg h-24 outline-none resize-none dark:bg-gray-700 dark:text-white" placeholder="Escreva aqui..."></textarea>
                                   </div>
                                   <div>
@@ -4605,38 +3103,14 @@
                               </div>
                           ) : (
                               <div className="space-y-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-=======
-                                      <textarea value={editEventForm.notes} onChange={e=>setEditEventForm({...editEventForm, notes: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg h-24 outline-none resize-none dark:bg-gray-700 dark:text-white" placeholder="Escreva aqui..."></textarea>
-                                  </div>
-                                  <div>
-                                      <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center gap-1">🔗 Link da Arte</label>
-                                      <input type="url" value={editEventForm.imageUrl} onChange={e=>setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg text-sm outline-none dark:bg-gray-700 dark:text-white" placeholder="https://..."/>
-                                  </div>
-                                  <div>
-                                      <label className="block text-xs font-bold text-gray-500 mb-1">Categoria</label>
-                                      <select value={editEventForm.color} onChange={e=>setEditEventForm({...editEventForm, color: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
-                                          {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                      </select>
-                                  </div>
-                              </div>
-                          ) : (
-                              <div className="space-y-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
->>>>>>> 73f36d9 (Primeiro commit)
                                   <p className="text-sm"><strong className="text-gray-500">Dia:</strong> {editEventForm.day}</p>
                                   <p className="text-lg font-black"><strong className="text-gray-500 text-sm font-bold">Título:</strong> {editEventForm.text}</p>
                                   <p className="text-sm"><strong className="text-gray-500">Responsável:</strong> {editEventForm.responsible || 'Não definido'}</p>
                                   <p className="text-sm"><strong className="text-gray-500 block mb-1">Anotações:</strong> <span className="whitespace-pre-wrap block bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">{editEventForm.notes || 'Nenhuma anotação.'}</span></p>
-<<<<<<< HEAD
                                   {editEventForm.imageUrl && <a href={editEventForm.imageUrl} target="_blank" className="text-blue-600 dark:text-blue-400 font-bold underline text-sm mt-2 inline-block">🔗 Acessar Link da Arte</a>}
                               </div>
                           )}
 
-=======
-                                  {editEventForm.imageUrl && <a href={editEventForm.imageUrl} target="_blank" className="text-blue-600 dark:text-blue-400 font-bold underline text-sm mt-2 inline-block">🔗 Acessar Link da Arte</a>}
-                              </div>
-                          )}
-
->>>>>>> 73f36d9 (Primeiro commit)
                           <button onClick={addToGoogleCalendar} className="mt-4 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-blue-300 dark:border-gray-600 font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition shadow-sm text-sm">
                               📅 Salvar no Meu Google Agenda
                           </button>
@@ -4645,7 +3119,6 @@
                                   <TrelloIcon /> Exportar esta demanda para o Trello
                               </button>
                           )}
-<<<<<<< HEAD
 
                           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                               <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wide">Status da Etapa</label>
@@ -4801,163 +3274,6 @@
 
                           <button onClick={() => setShowRolesModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 rounded-lg hover:bg-gray-300 transition mt-4">Fechar Painel</button>
                       </div>
-=======
-
-                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                              <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-wide">Status da Etapa</label>
-                              <div className="flex flex-wrap justify-center gap-2">
-                                  {Object.entries(statusPipeline).map(([key, val]) => {
-                                      const isActive = getEventStatus(editingEventIndex) === key;
-                                      return (
-                                          <button
-                                              key={key}
-                                              onClick={() => toggleEventStatus(editingEventIndex, key)}
-                                              style={{
-                                                  backgroundColor: isActive ? val.bg : 'transparent',
-                                                  color: isActive ? val.text : (darkMode ? '#D1D5DB' : '#4B5563'),
-                                                  borderColor: val.bg
-                                              }}
-                                              className={`border-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${isActive ? 'shadow-md scale-105' : 'hover:opacity-70'}`}
-                                          >
-                                              {val.label}
-                                          </button>
-                                      )
-                                  })}
-                              </div>
-                          </div>
-                          
-                          {isAdmin && (
-                              <div className="flex gap-2 mt-6">
-                                  <button 
-                                      onClick={() => removeEvent(editingEventIndex)} 
-                                      className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-4 py-3 rounded-lg font-black text-lg shadow-md hover:bg-red-200 dark:hover:bg-red-800 transition flex items-center justify-center gap-2" 
-                                      title="Excluir Post"
-                                  >
-                                      <Trash2 /> Excluir
-                                  </button>
-                                  <button onClick={saveEditEvent} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-black text-lg shadow-md hover:bg-blue-700 transition">
-                                      Salvar Post
-                                  </button>
-                              </div>
-                          )}
-                      </div>
-                  </div>
-              )}
-
-              {showProfileModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4 relative">
-                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
-                          <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
-                              <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
-                              <p className="text-lg font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{userRole === 'master' ? '👑 Master' : userRole === 'admin' ? '🛡️ Administrador' : '🔒 Cliente'}</p>
-                          </div>
-                          <div>
-                              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Nome de Exibição</label>
-                              <input type="text" value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Ex: Stefany..." />
-                          </div>
-                          <div className="pt-4 flex flex-col gap-2">
-                              <button onClick={handleUpdateProfile} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">Salvar Nome</button>
-                              <button onClick={handleResetPasswordLogged} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg hover:bg-yellow-600 transition shadow-sm">Redefinir Senha</button>
-                              <button onClick={() => setShowProfileModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 rounded-lg hover:bg-gray-300 transition mt-2">Fechar</button>
-                          </div>
-                      </div>
-                  </div>
-              )}
-
-              {showRolesModal && userRole === 'master' && (
-                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
-                          <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Painel da Diretoria</h3>
-                          
-                          <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600 shadow-sm">
-                              <h4 className="font-black text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">➕ Criar Nova Conta</h4>
-                              <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                                  <input type="email" value={newAccEmail} onChange={e => setNewAccEmail(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm" placeholder="E-mail" />
-                                  <input type="text" value={newAccPassword} onChange={e => setNewAccPassword(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none text-sm" placeholder="Senha (Min 6)" />
-                              </div>
-                              <select value={newAccRole} onChange={e => setNewAccRole(e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3 text-sm">
-                                  <option value="master">Master (Controle Total)</option>
-                                  <option value="admin">Administrador (Pode editar tudo)</option>
-                                  <option value="cliente">Cliente (Somente visualizar)</option>
-                              </select>
-                              
-                              {newAccRole === 'cliente' && (
-                                  <select value={newAccCompany} onChange={e => setNewAccCompany(e.target.value)} className="w-full border-2 border-blue-300 bg-blue-50 dark:border-blue-600 dark:bg-gray-800 dark:text-white rounded-lg px-3 py-2 outline-none font-bold mb-3 text-sm">
-                                      <option value="">↳ Selecione a empresa deste cliente...</option>
-                                      {companies.filter(c => c.id !== UPLI_GERAL_ID).map(c => (
-                                          <option key={c.id} value={c.id}>{c.name}</option>
-                                      ))}
-                                  </select>
-                              )}
-
-                              <button onClick={handleCreateAccount} disabled={creatingAcc} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 flex justify-center items-center gap-2">
-                                  {creatingAcc ? 'Sincronizando...' : 'Criar Conta e Liberar Acesso'}
-                              </button>
-                          </div>
-
-                          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border dark:border-gray-700 mt-4 flex flex-col gap-2">
-                              <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-2 text-sm">Alterar cargo de uma conta existente:</h4>
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                  <input type="email" value={roleEmailInput} onChange={e => setRoleEmailInput(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none text-sm" placeholder="E-mail" />
-                                  <select value={roleSelectInput} onChange={e => setRoleSelectInput(e.target.value)} className="border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none font-bold text-sm">
-                                      <option value="master">Master</option>
-                                      <option value="admin">Admin</option>
-                                      <option value="cliente">Cliente</option>
-                                  </select>
-                                  <button onClick={handleSaveRole} className="bg-gray-800 dark:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm hover:bg-gray-900 transition">Salvar</button>
-                              </div>
-                              {roleSelectInput === 'cliente' && (
-                                  <select value={roleCompanyInput} onChange={e => setRoleCompanyInput(e.target.value)} className="w-full border-2 border-blue-300 bg-blue-50 dark:border-blue-600 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1 outline-none font-bold text-sm mt-1">
-                                      <option value="">Qual empresa o cliente vai ver?</option>
-                                      {companies.filter(c => c.id !== UPLI_GERAL_ID).map(c => (
-                                          <option key={c.id} value={c.id}>{c.name}</option>
-                                      ))}
-                                  </select>
-                              )}
-                          </div>
-
-                          <div className="mt-4">
-                              <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos:</h4>
-                              <div className="space-y-2 mt-2">
-                                  {Object.keys(globalRoles).map(email => (
-                                      <div key={email} className="flex flex-col bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border dark:border-gray-700 shadow-sm gap-2">
-                                          <div className="flex justify-between items-center w-full">
-                                              <div className="flex flex-col">
-                                                  <span className="font-bold text-sm dark:text-gray-200">{email}</span>
-                                                  <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'master' ? 'text-yellow-600' : globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>
-                                                      {globalRoles[email] === 'master' ? '👑 Master' : globalRoles[email] === 'admin' ? '🛡️ Admin' : '👤 Cliente'}
-                                                  </span>
-                                              </div>
-                                              {email !== MEU_EMAIL_MASTER && (
-                                                  <button onClick={() => handleRemoveRole(email)} className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 border border-red-100 dark:border-red-900 dark:bg-red-900 px-3 py-2 rounded-lg transition shrink-0">
-                                                      {globalRoles[email] === 'cliente' ? 'Remover' : 'Rebaixar'}
-                                                  </button>
-                                              )}
-                                          </div>
-
-                                          {globalRoles[email] === 'cliente' && (
-                                              <div className="mt-1 pt-2 border-t border-gray-200 dark:border-gray-700 w-full">
-                                                  <select 
-                                                      value={globalUserCompanies[email] || ''} 
-                                                      onChange={(e) => handleChangeClientCompany(email, e.target.value)}
-                                                      className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-white rounded-md px-2 py-1.5 outline-none text-xs font-bold text-gray-700"
-                                                  >
-                                                      <option value="">⚠️ Selecione a empresa liberada...</option>
-                                                      {companies.filter(c => c.id !== UPLI_GERAL_ID && (!c.isPrivate || c.ownerEmail === user?.email?.toLowerCase())).map(c => (
-                                                          <option key={c.id} value={c.id}>{c.name}</option>
-                                                      ))}
-                                                  </select>
-                                              </div>
-                                          )}
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-
-                          <button onClick={() => setShowRolesModal(false)} className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 rounded-lg hover:bg-gray-300 transition mt-4">Fechar Painel</button>
-                      </div>
->>>>>>> 73f36d9 (Primeiro commit)
                   </div>
               )}
 
@@ -5008,7 +3324,6 @@
               )}
 
               <div className="max-w-7xl mx-auto space-y-6">
-<<<<<<< HEAD
                 
                 <div data-tutorial="header" className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -5032,31 +3347,6 @@
                         </div>
                     </div>
                     
-=======
-                
-                <div data-tutorial="header" className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    
-                    <div className="flex items-center w-full justify-between">
-                        <div>
-                          <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800 dark:text-white">
-                            <CalendarDays /> Calendário UPLI
-                          </h1>
-                          <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Nuvem Online</p>
-                        </div>
-                        
-                        <div className="flex md:hidden items-center gap-2">
-                            <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition shadow-sm">
-                                {darkMode ? '☀️' : '🌙'}
-                            </button>
-                            <button onClick={() => setShowProfileModal(true)} className="p-2 rounded-full bg-blue-100 dark:bg-gray-700 text-blue-600 dark:text-blue-300 text-xl transition shadow-sm">
-                                👤
-                            </button>
-                            <button onClick={handleLogout} className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg p-2 transition shadow-sm"><LogOut /></button>
-                        </div>
-                    </div>
-                    
->>>>>>> 73f36d9 (Primeiro commit)
                     <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-start md:justify-end">
 
                       <button onClick={() => setShowTutorialMenu(true)} className="w-full md:w-auto bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-sky-200 dark:hover:bg-sky-900 transition flex items-center justify-center gap-2" title="Abrir central de tutoriais">
@@ -5074,7 +3364,6 @@
                               👥 Equipe
                           </button>
                       )}
-<<<<<<< HEAD
 
                       <div className="hidden md:flex items-center gap-2">
                           <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition hover:scale-110 shadow-sm" title="Alternar Tema">
@@ -5227,160 +3516,6 @@
                     <div data-tutorial="add-post" className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
                       <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
                       <div className="flex flex-col gap-3">
-=======
-
-                      <div className="hidden md:flex items-center gap-2">
-                          <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition hover:scale-110 shadow-sm" title="Alternar Tema">
-                              {darkMode ? '☀️' : '🌙'}
-                          </button>
-                          <div className="flex items-center gap-3 mr-2 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 px-4 py-2 rounded-xl shadow-sm">
-                              <div className="bg-blue-200 dark:bg-gray-600 text-blue-700 dark:text-blue-300 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
-                              <div className="flex flex-col leading-tight">
-                                  <span className="text-sm font-black text-gray-800 dark:text-white">{currentUserName}</span>
-                                  <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'master' ? 'text-yellow-600 dark:text-yellow-400' : userRole === 'admin' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-                                      {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Admin' : 'Cliente'}
-                                  </span>
-                              </div>
-                              <button onClick={() => setShowProfileModal(true)} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition p-1 ml-1"><Edit2/></button>
-                          </div>
-                      </div>
-
-                      <div data-tutorial="image-exports" className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
-                          <button onClick={exportAsImage} className="flex-1 md:flex-none justify-center bg-purple-600 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center gap-1 shadow-sm"><ImageIcon /> PNG</button>
-                          <button onClick={exportAsPDF} className="flex-1 md:flex-none justify-center bg-purple-800 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center gap-1 shadow-sm"><PDFIcon /> PDF HD</button>
-                          <button onClick={handleLogout} className="hidden md:flex bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition items-center gap-1 shadow-sm"><LogOut /> Sair</button>
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-
-                {isAdmin && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div data-tutorial="companies" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                      <div className="flex flex-col gap-2 mb-4">
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
-                                <input type="color" value={newCompanyColor} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Cor da Empresa no Calendário Central" />
-                                <input type="text" value={newCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                            </div>
-                            <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                            <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
-                        </div>
-                        {user.email.toLowerCase() === MEU_EMAIL_MASTER && (
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-300 cursor-pointer w-fit p-1">
-                                <input type="checkbox" checked={newCompanyIsPrivate} onChange={e => setNewCompanyIsPrivate(e.target.checked)} className="w-4 h-4 cursor-pointer accent-gray-800" />
-                                🔒 Criar como Calendário Oculto (Só eu vejo)
-                            </label>
-                        )}
-                      </div>
-                      <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                          {companies.map(company => (
-                                <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
-                                    {editingCompany === company.id ? (
-                                        <div className="flex flex-1 items-center gap-2 mr-2">
-                                            {company.id !== UPLI_GERAL_ID && (
-                                                <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded p-1 bg-white dark:bg-gray-700 shrink-0">
-                                                    <input type="color" value={editCompanyColor} onChange={e=>handleHexChange(e.target.value, setEditCompanyColor)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Alterar Cor da Empresa" />
-                                                    <input type="text" value={editCompanyColor.toUpperCase()} onChange={e=>handleHexChange(e.target.value, setEditCompanyColor)} className="w-14 text-[10px] font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                                                </div>
-                                            )}
-                                            <input type="text" value={editCompanyName} onChange={e=>setEditCompanyName(e.target.value)} className="w-full border-2 border-blue-400 rounded px-2 py-1 text-black font-bold outline-none" />
-                                            <button onClick={saveEditCompany} className="bg-green-500 text-white px-3 py-1 rounded font-bold hover:bg-green-600">✓</button>
-                                            <button onClick={cancelEditCompany} className="bg-gray-400 text-white px-3 py-1 rounded font-bold hover:bg-gray-500">X</button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 font-bold cursor-pointer dark:text-white px-2 py-1 flex items-center gap-2" onClick={() => setSelectedCompany(company.id)}>
-                                            {company.id !== UPLI_GERAL_ID && (
-                                                <div className="w-4 h-4 rounded-full shadow-inner border border-gray-300 dark:border-gray-600" style={{backgroundColor: company.color}}></div>
-                                            )}
-                                            {company.id === UPLI_GERAL_ID ? '👑 ' : ''}{company.name}
-                                            {company.isPrivate && <span title="Calendário Oculto">🔒</span>}
-                                        </div>
-                                    )}
-                                    
-                                    <div className="flex items-center gap-1">
-                                        {company.id !== UPLI_GERAL_ID && (
-                                            <button onClick={() => startEditCompany(company)} className="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition"><Edit2 /></button>
-                                        )}
-                                        {company.id !== UPLI_GERAL_ID && (
-                                            <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 bg-red-100 hover:bg-red-200 p-2 rounded-lg transition ml-1"><Trash2 /></button>
-                                        )}
-                                    </div>
-                                </div>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div data-tutorial="categories" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
-                      <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias do Calendário</h3>
-                      {!isCentral ? (
-                          <>
-                              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                                <input type="text" placeholder="Nova Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                                <div className="flex gap-2">
-                                    <div className="flex items-center gap-1 border-2 border-blue-200 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
-                                        <input type="color" value={newCategory.color} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
-                                        <input type="text" value={newCategory.color.toUpperCase()} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                                    </div>
-                                    <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto hover:bg-blue-700">Adicionar</button>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {safeColorOptions.map(color => {
-                                    if (editingColor === color.id) {
-                                        return (
-                                            <div key={color.id} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-blue-300 dark:border-blue-600 shadow-inner">
-                                                <input type="color" value={editColorValue} onChange={e => handleHexChange(e.target.value, setEditColorValue)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
-                                                <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-24 text-xs font-bold border border-gray-300 dark:border-gray-600 rounded px-2 py-1 outline-none text-black dark:text-white dark:bg-gray-700" />
-                                                <button onClick={saveEditCategory} className="bg-green-500 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-green-600">✓</button>
-                                                <button onClick={cancelEditCategory} className="bg-gray-400 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-gray-500">X</button>
-                                            </div>
-                                        );
-                                    }
-                                    return (
-                                        <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group transition-transform hover:scale-105">
-                                          {color.label}
-                                          <div className="flex items-center ml-1 border-l border-white border-opacity-30 pl-1 gap-1">
-                                              <button onClick={() => startEditCategory(color)} className="opacity-70 hover:opacity-100 font-black text-[10px] drop-shadow-md" title="Editar Nome/Cor">✏️</button>
-                                              <button onClick={() => removeCategory(color.id)} className="opacity-70 hover:opacity-100 font-black text-[12px] drop-shadow-md" title="Apagar">×</button>
-                                          </div>
-                                        </div>
-                                    );
-                                })}
-                              </div>
-                          </>
-                      ) : (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 italic">As categorias do UPLI Geral são geradas automaticamente com base no nome das outras empresas criadas.</p>
-                      )}
-                    </div>
-
-                    {isCentral && (
-                        <div className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-orange-200 dark:border-gray-700">
-                            <h3 className="font-bold text-orange-600 dark:text-orange-400 mb-3 flex items-center gap-2">🚥 Personalizar Cores dos Status</h3>
-                            <div className="flex flex-wrap gap-4">
-                                {Object.entries(statusPipeline).map(([key, val]) => (
-                                    <div key={key} className="flex flex-col gap-1">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">{val.label}</label>
-                                        <div className="flex items-center gap-1 border-2 border-gray-200 dark:border-gray-600 rounded-lg p-1 bg-gray-50 dark:bg-gray-900">
-                                            <input type="color" value={val.bg} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
-                                            <input type="text" value={val.bg.toUpperCase()} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-xs text-gray-400 mt-3 italic">* As cores alteradas aqui refletirão em todos os calendários automaticamente.</p>
-                        </div>
-                    )}
-
-                    <div data-tutorial="add-post" className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
-                      <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
-                      <div className="flex flex-col gap-3">
->>>>>>> 73f36d9 (Primeiro commit)
                         <div className="flex flex-col sm:flex-row gap-2">
                             <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
                             <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
@@ -5394,7 +3529,6 @@
                         </div>
                         
                         <textarea placeholder="Anotações / Roteiro..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none text-sm h-12 resize-none"></textarea>
-<<<<<<< HEAD
                         
                         <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border-2 border-green-200 dark:border-gray-600 flex items-center gap-2">
                             <span className="text-xl">🔗</span>
@@ -5447,65 +3581,10 @@
                               </div>
                               <div className="text-right flex flex-col items-start md:items-end w-full md:w-auto gap-3">
                                   <span className="font-black text-2xl text-indigo-700 dark:text-indigo-300">{selectedEvents.length} selecionados</span>
-=======
-                        
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border-2 border-green-200 dark:border-gray-600 flex items-center gap-2">
-                            <span className="text-xl">🔗</span>
-                            <div className="flex-1">
-                                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400">Link da Imagem / Arte (Opcional)</label>
-                                <input type="url" placeholder="Cole o link do Drive, Canva, etc..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none bg-transparent dark:border-gray-600" />
-                            </div>
-                        </div>
-
-                        {!isCentral && (
-                            <label className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer bg-blue-50 dark:bg-gray-900 p-2 rounded-lg border border-blue-100 dark:border-gray-600">
-                                <input type="checkbox" checked={sendToUpliGeral} onChange={e => setSendToUpliGeral(e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                                Enviar cópia para o Calendário Central (UPLI Geral)
-                            </label>
-                        )}
-
-                        <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                            <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
-                              <option value="">Escolher categoria...</option>
-                              {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
-                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-8 py-2 font-black w-full sm:w-auto shadow-md hover:bg-green-700 transition uppercase tracking-wide">Postar</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                <div data-tutorial="calendar" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  
-                  {isSelectionMode && (
-                      <div className="bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-400 p-4 rounded-xl mb-6 shadow-md transition-all">
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                              <div className="flex-1">
-                                  <h3 className="font-black text-indigo-800 dark:text-indigo-200 flex items-center gap-2">🛠️ MODO DE SELEÇÃO ATIVADO</h3>
-                                  <p className="text-sm text-indigo-600 dark:text-indigo-300">Clique nos posts para selecionar ou use os atalhos por categoria abaixo.</p>
-                                  <div className="flex flex-wrap gap-2 mt-3 items-center">
-                                      {getLegendItems().map(cat => (
-                                          <button 
-                                              key={cat.id} 
-                                              onClick={() => toggleCategorySelection(cat.id)}
-                                              style={{ backgroundColor: cat.color, color: getTextColor(cat.color) }}
-                                              className="px-3 py-1.5 text-[10px] font-black rounded-lg shadow-sm hover:scale-105 transition-transform uppercase"
-                                          >
-                                              + {cat.label}
-                                          </button>
-                                      ))}
-                                  </div>
-                              </div>
-                              <div className="text-right flex flex-col items-start md:items-end w-full md:w-auto gap-3">
-                                  <span className="font-black text-2xl text-indigo-700 dark:text-indigo-300">{selectedEvents.length} selecionados</span>
->>>>>>> 73f36d9 (Primeiro commit)
                                   <div className="flex flex-wrap gap-2 w-full justify-end">
                                       <button onClick={exportSelectedToTXT} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Download/> Exportar TXT</button>
                                       <button onClick={openTrelloIntegration} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-sky-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-sky-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><TrelloIcon/> Trello</button>
                                       <button onClick={deleteSelectedEvents} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Trash2/> Apagar</button>
-<<<<<<< HEAD
                                   </div>
                               </div>
                           </div>
@@ -5529,31 +3608,6 @@
                                 🚑 Restaurar
                             </button>
 
-=======
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-                  )}
-
-                  <div data-tutorial="calendar-controls" className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
-                    
-                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full md:w-auto justify-between md:justify-start">
-                        <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">⬅️</button>
-                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[150px] md:min-w-[200px]">
-                          {months[month]} {year}
-                        </h2>
-                        <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">➡️</button>
-                    </div>
-
-                    {isAdmin && (
-                        <div data-tutorial="calendar-actions" className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
-                            {/* BOTÃO DE RESGATE DEFINITIVO */}
-                            <button onClick={rescueUpliGeral} className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-sm" title="Restaurar UPLI Geral">
-                                🚑 Restaurar
-                            </button>
-
->>>>>>> 73f36d9 (Primeiro commit)
                             <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
                                 <Upload /> Importar
                             </button>
@@ -5577,7 +3631,6 @@
                             </a>
                             
                             <button onClick={handleSelectionToggle} className={`${isSelectionMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm`} title="Selecionar posts">
-<<<<<<< HEAD
                                 <MultiSelectIcon /> {isSelectionMode ? `Cancelar Seleção` : 'Selecionar'}
                             </button>
                         </div>
@@ -5587,17 +3640,6 @@
                         {companies.find(c => c.id === selectedCompany)?.name}
                         {companies.find(c => c.id === selectedCompany)?.isPrivate ? ' 🔒' : ''}
                     </h3>
-=======
-                                <MultiSelectIcon /> {isSelectionMode ? `Cancelar Seleção` : 'Selecionar'}
-                            </button>
-                        </div>
-                    )}
-
-                    <h3 className="text-xl md:text-3xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm whitespace-nowrap w-full md:w-auto text-center">
-                        {companies.find(c => c.id === selectedCompany)?.name}
-                        {companies.find(c => c.id === selectedCompany)?.isPrivate ? ' 🔒' : ''}
-                    </h3>
->>>>>>> 73f36d9 (Primeiro commit)
                   </div>
 
                   <div className={`mb-6 border-2 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 ${isCurrentCalendarCompleted ? 'border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100' : 'border-amber-300 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100'}`}>
@@ -5613,7 +3655,6 @@
 
                   {isCentral && (
                       <div data-tutorial="status-filters" className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
-<<<<<<< HEAD
                           <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
                           <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
                           <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
@@ -5707,101 +3748,6 @@
                                                 <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
                                             )}
                                             
-=======
-                          <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
-                          <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                          <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                          {Object.entries(statusPipeline).map(([key, val]) => (
-                              <button key={key} onClick={() => setCalendarFilter(key)} style={{backgroundColor: calendarFilter === key ? val.bg : 'transparent', color: calendarFilter === key ? val.text : (darkMode ? '#9CA3AF' : '#4B5563'), border: `2px solid ${val.bg}`}} className={`px-3 py-1 text-xs font-bold rounded-lg transition ${calendarFilter === key ? 'shadow-md scale-105' : 'hover:opacity-70'}`}>
-                                  {val.label}
-                              </button>
-                          ))}
-                      </div>
-                  )}
-
-                  <div className="hidden md:block overflow-x-auto pb-4">
-                    <div className="min-w-[800px]">
-                      <div className="grid grid-cols-7 gap-4 mb-4">
-                        {fullWeekDays.map(day => (
-                          <div key={day} className="bg-black dark:bg-gray-700 text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
-                            {day}
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="space-y-4">
-                        {weeks.map((week, wIdx) => (
-                          <div key={wIdx} className="flex flex-col">
-                            <div className="bg-gray-200 dark:bg-gray-700 rounded-t-xl h-10 flex items-center px-4 shadow-sm">
-                              {week.map((day, dIdx) => (
-                                <div key={dIdx} className="flex-1 text-gray-800 dark:text-gray-200 font-black text-sm px-2 text-center border-r border-gray-300 dark:border-gray-600 last:border-0">
-                                  {day || ''}
-                                </div>
-                              ))}
-                            </div>
-                            
-                            <div className="grid grid-cols-7 gap-2 bg-gray-50 dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-xl p-2 min-h-[120px] shadow-sm">
-                              {week.map((day, dIdx) => (
-                                <div 
-                                  key={dIdx} 
-                                  className="flex flex-col gap-2 p-1 min-h-[100px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 relative"
-                                  onDragOver={onDragOver}
-                                  onDrop={(e) => day ? onDrop(e, day) : null}
-                                >
-                                  {day && getCalendarEventsForDay(day).map((event, eIdx) => {
-                                    const color = safeColorOptions.find(c => c.id === event.color);
-                                    if (!color) return null;
-                                    
-                                    const originalIndex = event._origIdx;
-                                    const eventKey = event._key;
-                                    const status = getEventStatus(originalIndex);
-                                    
-                                    let finalBgColor = color.color;
-                                    let finalTextColor = getTextColor(color.color);
-
-                                    if (isCentral) {
-                                        if (status && statusPipeline[status]) {
-                                            finalBgColor = statusPipeline[status].bg;
-                                            finalTextColor = statusPipeline[status].text;
-                                        } else {
-                                            finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
-                                            finalTextColor = darkMode ? '#D1D5DB' : '#374151';
-                                        }
-                                    }
-                                    
-                                    const isSelected = selectedEvents.includes(eventKey);
-
-                                    return (
-                                      <div
-                                        key={eIdx}
-                                        draggable={isAdmin && !isSelectionMode}
-                                        onDragStart={(e) => onDragStart(e, originalIndex)}
-                                        style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                        className={`rounded-2xl p-3 text-[11px] font-bold shadow-md relative group transition-all h-auto flex 
-                                            ${isAdmin ? 'cursor-pointer' : ''} 
-                                            ${isCentral ? 'flex-row items-start gap-2 text-left' : 'flex-col text-center justify-center'}
-                                            ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
-                                            ${isSelectionMode && !isSelected ? 'opacity-50 hover:opacity-100' : 'hover:scale-105'}
-                                        `}
-                                        onClick={() => {
-                                            if(isSelectionMode) toggleEventSelection(eventKey);
-                                            else if(isAdmin) startEditEvent(event, originalIndex);
-                                        }}
-                                      >
-                                        {isSelectionMode && isSelected && (
-                                            <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
-                                        )}
-
-                                        {isCentral && (
-                                            <div className="w-3.5 h-3.5 mt-0.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
-                                        )}
-
-                                        <div className={`flex flex-col ${isCentral ? 'flex-1 overflow-hidden' : 'items-center w-full'}`}>
-                                            {event.imageUrl && !isCentral && (
-                                                <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
-                                            )}
-                                            
->>>>>>> 73f36d9 (Primeiro commit)
                                             <span className="leading-snug whitespace-normal break-words block w-full">
                                                 {getCleanDisplayText(event.text, isCentral, color.label)}
                                                 {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
@@ -5814,7 +3760,6 @@
                                             )}
 
                                             {!isCentral && status && statusPipeline[status] && (
-<<<<<<< HEAD
                                                 <div className="mt-2 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
                                                     {statusPipeline[status].label}
                                                 </div>
@@ -5910,103 +3855,6 @@
                                                 <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm" onClick={e => e.stopPropagation()}>🔗 Ver Arte</a>
                                             </div>
                                         )}
-=======
-                                                <div className="mt-2 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
-                                                    {statusPipeline[status].label}
-                                                </div>
-                                            )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="block md:hidden space-y-4 mt-2">
-                    {daysArray.map(day => {
-                      const dayEvents = getCalendarEventsForDay(day);
-                      const date = new Date(year, month, day);
-                      const dayOfWeek = fullWeekDays[date.getDay()];
-                      
-                      if(calendarFilter !== 'ALL' && dayEvents.length === 0) return null; 
-
-                      return (
-                        <div key={day} 
-                             className={`border-2 rounded-2xl p-4 shadow-sm transition dark:border-gray-700 ${dayEvents.length > 0 ? 'bg-white dark:bg-gray-800 border-gray-300' : 'bg-gray-50 dark:bg-gray-900 border-gray-100'}`}
-                             onDragOver={onDragOver}
-                             onDrop={(e) => day ? onDrop(e, day) : null}
-                        >
-                          <div className="flex items-center gap-3 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
-                            <span className={`w-10 h-10 flex items-center justify-center rounded-full font-black text-lg ${dayEvents.length > 0 ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-                              {day}
-                            </span>
-                            <span className={`font-black text-sm uppercase tracking-wide ${dayEvents.length > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                              {dayOfWeek}
-                            </span>
-                          </div>
-                          
-                          {dayEvents.length > 0 ? (
-                            <div className="flex flex-col gap-3 pl-2">
-                              {dayEvents.map((event, eIdx) => {
-                                const color = safeColorOptions.find(c => c.id === event.color);
-                                if (!color) return null;
-                                
-                                const originalIndex = event._origIdx;
-                                const eventKey = event._key;
-                                const status = getEventStatus(originalIndex);
-                                
-                                let finalBgColor = color.color;
-                                let finalTextColor = getTextColor(color.color);
-
-                                if (isCentral) {
-                                    if (status && statusPipeline[status]) {
-                                        finalBgColor = statusPipeline[status].bg;
-                                        finalTextColor = statusPipeline[status].text;
-                                    } else {
-                                        finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
-                                        finalTextColor = darkMode ? '#D1D5DB' : '#374151';
-                                    }
-                                }
-
-                                const isSelected = selectedEvents.includes(eventKey);
-                                
-                                return (
-                                  <div
-                                    key={eIdx}
-                                    draggable={isAdmin && !isSelectionMode}
-                                    onDragStart={(e) => onDragStart(e, originalIndex)}
-                                    style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex break-words whitespace-normal leading-tight relative cursor-pointer transition-all h-auto
-                                        ${isCentral ? 'flex-row items-start gap-3 text-left' : 'flex-col text-center'}
-                                        ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
-                                        ${isSelectionMode && !isSelected ? 'opacity-50' : ''}
-                                    `}
-                                    onClick={() => {
-                                        if(isSelectionMode) toggleEventSelection(eventKey);
-                                        else if(isAdmin) startEditEvent(event, originalIndex);
-                                    }}
-                                  >
-                                    {isSelectionMode && isSelected && (
-                                        <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
-                                    )}
-
-                                    {isCentral && (
-                                        <div className="w-5 h-5 mt-0.5 rounded-full shadow-inner border border-white border-opacity-50 flex-shrink-0" style={{ backgroundColor: color.color }}></div>
-                                    )}
-
-                                    <div className={`flex flex-col ${isCentral ? 'flex-1' : 'w-full items-center'}`}>
-                                        {event.imageUrl && !isCentral && (
-                                            <div className="mb-2 flex flex-col gap-1 mt-1">
-                                                <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm" onClick={e => e.stopPropagation()}>🔗 Ver Arte</a>
-                                            </div>
-                                        )}
->>>>>>> 73f36d9 (Primeiro commit)
                                         <span className="text-base block w-full whitespace-normal break-words leading-snug">
                                             {getCleanDisplayText(event.text, isCentral, color.label)}
                                         </span>
@@ -6016,7 +3864,6 @@
                                             </div>
                                         )}
                                         {event.notes && !isCentral && (
-<<<<<<< HEAD
                                             <div className="mt-3 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
                                                 <p className="whitespace-pre-wrap">{event.notes}</p>
                                             </div>
@@ -6071,62 +3918,6 @@
           );
         };
 
-=======
-                                            <div className="mt-3 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
-                                                <p className="whitespace-pre-wrap">{event.notes}</p>
-                                            </div>
-                                        )}
-                                        {!isCentral && status && statusPipeline[status] && (
-                                            <div className="mt-3 text-[10px] px-2 py-1 rounded-md inline-block font-black uppercase tracking-wider w-fit shadow-sm" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
-                                                {statusPipeline[status].label}
-                                            </div>
-                                        )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 italic pl-2">Nenhum post agendado ou solte aqui...</p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {getLegendItems().length > 0 && (
-                    <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA DE CATEGORIAS / EMPRESAS</h3>
-                      <div className="flex flex-wrap gap-2 md:gap-3">
-                        {getLegendItems().map(item => (
-                          <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-2 text-xs md:text-sm font-bold shadow-md border border-black border-opacity-10">
-                            {item.label}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {isCentral && (
-                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">STATUS DE PRODUÇÃO</h3>
-                      <div className="flex flex-wrap gap-2 md:gap-3">
-                          {Object.entries(statusPipeline).map(([key, val]) => (
-                              <div key={key} style={{ backgroundColor: val.bg, color: val.text }} className="rounded-md px-4 md:px-6 py-2 text-xs md:text-sm font-black shadow-md uppercase tracking-wider">
-                                  {val.label}
-                              </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                </div>
-              </div>
-            </div>
-          );
-        };
-
->>>>>>> 73f36d9 (Primeiro commit)
         const root = ReactDOM.createRoot(document.getElementById('root'));
         const linkParams = new URLSearchParams(window.location.search);
         const isPublicReminderLink = linkParams.has('reminder');
@@ -6136,12 +3927,6 @@
                 {isPublicReminderLink ? <PublicReminderUpdate /> : (isStatusUpdateLink ? <PostStatusUpdate /> : <CalendarCreator />)}
             </ErrorBoundary>
         );
-<<<<<<< HEAD
     </script>
 </body>
 </html>
-=======
-    </script>
-</body>
-</html>
->>>>>>> 73f36d9 (Primeiro commit)
