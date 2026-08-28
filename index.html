@@ -791,6 +791,19 @@
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
           const [calendarAutomationStatuses, setCalendarAutomationStatuses] = useState({});
+          const [automationSettings, setAutomationSettings] = useState({});
+          const [showAutomationModal, setShowAutomationModal] = useState(false);
+
+          useEffect(() => {
+              const openAutomationPanel = event => {
+                  const link = event.target.closest ? event.target.closest('a') : null;
+                  if (!link || link.getAttribute('href') !== 'automation/runtime/status.html') return;
+                  event.preventDefault();
+                  setShowAutomationModal(true);
+              };
+              document.addEventListener('click', openAutomationPanel);
+              return () => document.removeEventListener('click', openAutomationPanel);
+          }, []);
 
           const [isSelectionMode, setIsSelectionMode] = useState(false);
           const [selectedEvents, setSelectedEvents] = useState([]); 
@@ -897,6 +910,7 @@
               const unsubscribe = db.collection('system').doc('automation').onSnapshot(doc => {
                   const data = doc.exists ? (doc.data() || {}) : {};
                   setCalendarAutomationStatuses(data.calendarStatuses || {});
+                  setAutomationSettings(data);
               });
               return () => unsubscribe();
           }, [user]);
@@ -974,6 +988,9 @@
           const currentCalendarAutomationKey = getCalendarAutomationKey();
           const currentCalendarAutomation = calendarAutomationStatuses[currentCalendarAutomationKey] || null;
           const isCurrentCalendarCompleted = currentCalendarAutomation?.ready === true;
+          const currentMonthEvents = events.filter(event => Number(event.year) === year && Number(event.month) === month);
+          const currentMonthAssignedEvents = currentMonthEvents.filter(event => event.responsibleId || event.responsible);
+          const currentMonthUnassignedEvents = currentMonthEvents.length - currentMonthAssignedEvents.length;
 
           const completeCurrentCalendar = async () => {
               if (!selectedCompany || !isAdmin) return;
@@ -3158,6 +3175,32 @@
                               </div>
                           )}
                       </div>
+                  </div>
+              )}
+
+              {showAutomationModal && (
+                  <div id="automation-status" className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] p-4">
+                      <section role="dialog" aria-modal="true" aria-label="Status da automacao" className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-2xl max-w-xl w-full">
+                          <div className="flex justify-between gap-4 border-b dark:border-gray-700 pb-4">
+                              <div><h3 className="text-xl font-black dark:text-white">Automa&ccedil;&atilde;o</h3><p className="text-sm text-gray-500 mt-1">{months[month]} {year}</p></div>
+                              <button onClick={() => setShowAutomationModal(false)} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 font-black" aria-label="Fechar">&times;</button>
+                          </div>
+                          <div className={`mt-5 border-2 rounded-md p-4 ${isCurrentCalendarCompleted ? 'border-green-300 bg-green-50 text-green-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+                              <strong>{isCurrentCalendarCompleted ? 'Liberada' : 'Pausada'}</strong>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 mt-5 text-center">
+                              <div className="border dark:border-gray-700 rounded-md p-3"><strong className="block text-xl dark:text-white">{currentMonthEvents.length}</strong><span className="text-xs text-gray-500">No m&ecirc;s</span></div>
+                              <div className="border dark:border-gray-700 rounded-md p-3"><strong className="block text-xl text-green-700 dark:text-green-300">{currentMonthAssignedEvents.length}</strong><span className="text-xs text-gray-500">Atribu&iacute;das</span></div>
+                              <div className="border dark:border-gray-700 rounded-md p-3"><strong className="block text-xl text-red-700 dark:text-red-300">{currentMonthUnassignedEvents}</strong><span className="text-xs text-gray-500">Sem respons&aacute;vel</span></div>
+                          </div>
+                          <div className="mt-5 border-y dark:border-gray-700 divide-y dark:divide-gray-700 text-sm dark:text-gray-200">
+                              <p className="py-3 flex justify-between gap-3"><span>Relat&oacute;rio semanal</span><strong>Segunda-feira, 9h</strong></p>
+                              <p className="py-3 flex justify-between gap-3"><span>Lembretes</span><strong>Diariamente, 9h05</strong></p>
+                              <p className="py-3 flex justify-between gap-3"><span>Formul&aacute;rios sem login</span><strong>{automationSettings.formBaseUrl ? 'Ativos' : <>N&atilde;o configurados</>}</strong></p>
+                          </div>
+                          <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Chrome e WhatsApp s&atilde;o verificados localmente no computador da automa&ccedil;&atilde;o ao entrar no Windows.</p>
+                          <button onClick={() => setShowAutomationModal(false)} className="mt-5 w-full bg-gray-900 text-white font-bold py-3 rounded-md">Fechar</button>
+                      </section>
                   </div>
               )}
 
