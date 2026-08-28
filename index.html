@@ -793,6 +793,9 @@
           const [calendarAutomationStatuses, setCalendarAutomationStatuses] = useState({});
           const [automationSettings, setAutomationSettings] = useState({});
           const [showAutomationModal, setShowAutomationModal] = useState(false);
+          const [manualReminderEventId, setManualReminderEventId] = useState('');
+          const [manualCommandBusy, setManualCommandBusy] = useState(false);
+          const [manualCommandFeedback, setManualCommandFeedback] = useState({ tone: '', text: '' });
 
           useEffect(() => {
               const openAutomationPanel = event => {
@@ -991,6 +994,82 @@
           const currentMonthEvents = events.filter(event => Number(event.year) === year && Number(event.month) === month);
           const currentMonthAssignedEvents = currentMonthEvents.filter(event => event.responsibleId || event.responsible);
           const currentMonthUnassignedEvents = currentMonthEvents.length - currentMonthAssignedEvents.length;
+          const manualReminderEvents = currentMonthEvents.filter(event => event.id && event.status !== 'publicado');
+          const selectedManualReminderEvent = manualReminderEvents.find(event => String(event.id) === manualReminderEventId) || null;
+          const findManualReminderMember = event => {
+              if (!event) return null;
+              const responsibleId = String(event.responsibleId || '');
+              const responsibleEmail = String(event.responsibleEmail || '').trim().toLowerCase();
+              const responsibleName = String(event.responsible || '').trim().toLowerCase();
+              return activeTeamMembers.find(member => responsibleId && String(member.id) === responsibleId) ||
+                  activeTeamMembers.find(member => responsibleEmail && String(member.email || '').trim().toLowerCase() === responsibleEmail) ||
+                  activeTeamMembers.find(member => responsibleName && String(member.name || '').trim().toLowerCase() === responsibleName) || null;
+          };
+          const selectedManualReminderMember = findManualReminderMember(selectedManualReminderEvent);
+
+          const watchManualCommand = commandRef => {
+              let unsubscribe = () => {};
+              unsubscribe = commandRef.onSnapshot(snapshot => {
+                  const data = snapshot.data() || {};
+                  if (data.status === 'pending') {
+                      setManualCommandFeedback({ tone: 'pending', text: 'Pedido registrado. Aguardando o PC da automacao.' });
+                  } else if (data.status === 'processing') {
+                      setManualCommandFeedback({ tone: 'pending', text: 'O PC da automacao esta enviando a mensagem.' });
+                  } else if (data.status === 'completed') {
+                      setManualCommandBusy(false);
+                      setManualCommandFeedback({ tone: 'success', text: data.result?.message || 'Envio confirmado.' });
+                      setTimeout(unsubscribe, 0);
+                  } else if (data.status === 'failed') {
+                      setManualCommandBusy(false);
+                      setManualCommandFeedback({ tone: 'error', text: data.error || 'O envio falhou no computador da automacao.' });
+                      setTimeout(unsubscribe, 0);
+                  }
+              }, error => {
+                  setManualCommandBusy(false);
+                  setManualCommandFeedback({ tone: 'error', text: error.message || 'Nao foi possivel acompanhar o pedido.' });
+              });
+          };
+
+          const enqueueManualCommand = async type => {
+              if (!isAdmin || manualCommandBusy) return;
+              let event = null;
+              let member = null;
+              if (type === 'event_reminder') {
+                  event = selectedManualReminderEvent;
+                  member = selectedManualReminderMember;
+                  if (!event) return alert('Selecione uma demanda para enviar o lembrete.');
+                  if (!member || !member.phone) return alert('A demanda precisa ter um responsavel da equipe com WhatsApp cadastrado.');
+              }
+              const question = type === 'weekly_report'
+                  ? 'Enviar agora o relatorio semanal no grupo do WhatsApp?'
+                  : `Enviar agora o lembrete de "${event.text || 'Post sem titulo'}" para ${member.name}?`;
+              if (!confirm(question)) return;
+              setManualCommandBusy(true);
+              setManualCommandFeedback({ tone: 'pending', text: 'Registrando pedido...' });
+              try {
+                  const commandRef = db.collection('automationCommands').doc();
+                  const sourceCompanyId = event?.sourceCompanyId || selectedCompany || '';
+                  const canonicalEventId = event
+                      ? String(event.id).replace(event.sourceCompanyId ? /_clone$/ : /$^/, '')
+                      : '';
+                  await commandRef.set({
+                      schemaVersion: 1,
+                      type,
+                      status: 'pending',
+                      companyId: type === 'event_reminder' ? sourceCompanyId : '',
+                      eventId: type === 'event_reminder' ? canonicalEventId : '',
+                      companyName: companies.find(company => company.id === sourceCompanyId)?.name || '',
+                      eventTitle: event?.text || '',
+                      requestedBy: user?.email || currentUserName,
+                      requestedByUid: user?.uid || '',
+                      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                  });
+                  watchManualCommand(commandRef);
+              } catch (error) {
+                  setManualCommandBusy(false);
+                  setManualCommandFeedback({ tone: 'error', text: error.message || 'Nao foi possivel registrar o pedido.' });
+              }
+          };
 
           const completeCurrentCalendar = async () => {
               if (!selectedCompany || !isAdmin) return;
@@ -3180,7 +3259,7 @@
 
               {showAutomationModal && (
                   <div id="automation-status" className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] p-4">
-                      <section role="dialog" aria-modal="true" aria-label="Status da automacao" className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-2xl max-w-xl w-full">
+                      <section role="dialog" aria-modal="true" aria-label="Status da automacao" className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
                           <div className="flex justify-between gap-4 border-b dark:border-gray-700 pb-4">
                               <div><h3 className="text-xl font-black dark:text-white">Automa&ccedil;&atilde;o</h3><p className="text-sm text-gray-500 mt-1">{months[month]} {year}</p></div>
                               <button onClick={() => setShowAutomationModal(false)} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 font-black" aria-label="Fechar">&times;</button>
@@ -3197,6 +3276,28 @@
                               <p className="py-3 flex justify-between gap-3"><span>Relat&oacute;rio semanal</span><strong>Segunda-feira, 9h</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Lembretes</span><strong>Diariamente, 9h05</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Formul&aacute;rios sem login</span><strong>{automationSettings.formBaseUrl ? 'Ativos' : <>N&atilde;o configurados</>}</strong></p>
+                          </div>
+                          <div className="mt-5 pt-5 border-t dark:border-gray-700">
+                              <h4 className="font-black text-gray-900 dark:text-white">Envios manuais</h4>
+                              <button onClick={() => enqueueManualCommand('weekly_report')} disabled={manualCommandBusy} className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
+                                  <span aria-hidden="true">&#9654;</span> Enviar relat&oacute;rio semanal agora
+                              </button>
+                              <label className="block mt-5 text-xs font-bold text-gray-600 dark:text-gray-300">Demanda do lembrete</label>
+                              <select value={manualReminderEventId} onChange={event => setManualReminderEventId(event.target.value)} disabled={manualCommandBusy} className="mt-2 w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-3 text-sm">
+                                  <option value="">Selecione uma demanda de {months[month]}</option>
+                                  {manualReminderEvents.map(event => (
+                                      <option key={event.id} value={String(event.id)}>Dia {event.day} &middot; {event.text || 'Post sem titulo'} &middot; {event.responsible || 'Sem responsavel'}</option>
+                                  ))}
+                              </select>
+                              {selectedManualReminderEvent && !selectedManualReminderMember && <p className="mt-2 text-xs font-bold text-red-700 dark:text-red-300">Respons&aacute;vel sem WhatsApp cadastrado na equipe.</p>}
+                              <button onClick={() => enqueueManualCommand('event_reminder')} disabled={manualCommandBusy || !selectedManualReminderEvent || !selectedManualReminderMember} className="mt-3 w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
+                                  <span aria-hidden="true">&#9654;</span> Enviar lembrete agora
+                              </button>
+                              {manualCommandFeedback.text && (
+                                  <p role="status" className={`mt-4 rounded-md border p-3 text-sm font-bold ${manualCommandFeedback.tone === 'success' ? 'border-green-300 bg-green-50 text-green-800' : manualCommandFeedback.tone === 'error' ? 'border-red-300 bg-red-50 text-red-800' : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
+                                      {manualCommandFeedback.text}
+                                  </p>
+                              )}
                           </div>
                           <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Chrome e WhatsApp s&atilde;o verificados localmente no computador da automa&ccedil;&atilde;o ao entrar no Windows.</p>
                           <button onClick={() => setShowAutomationModal(false)} className="mt-5 w-full bg-gray-900 text-white font-bold py-3 rounded-md">Fechar</button>
