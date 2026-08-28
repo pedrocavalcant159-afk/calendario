@@ -792,6 +792,7 @@
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
           const [calendarAutomationStatuses, setCalendarAutomationStatuses] = useState({});
           const [automationSettings, setAutomationSettings] = useState({});
+          const [automationCluster, setAutomationCluster] = useState({});
           const [showAutomationModal, setShowAutomationModal] = useState(false);
           const [manualReminderEventId, setManualReminderEventId] = useState('');
           const [manualCommandBusy, setManualCommandBusy] = useState(false);
@@ -920,6 +921,14 @@
 
           useEffect(() => {
               if (!user) return;
+              const unsubscribe = db.collection('system').doc('automationCluster').onSnapshot(doc => {
+                  setAutomationCluster(doc.exists ? (doc.data() || {}) : {});
+              });
+              return () => unsubscribe();
+          }, [user]);
+
+          useEffect(() => {
+              if (!user) return;
               const unsubscribe = db.collection('system').doc('team').onSnapshot(doc => {
                   const data = doc.exists ? (doc.data() || {}) : {};
                   setTeamMembers(Array.isArray(data.members) ? data.members : []);
@@ -994,6 +1003,11 @@
           const currentMonthEvents = events.filter(event => Number(event.year) === year && Number(event.month) === month);
           const currentMonthAssignedEvents = currentMonthEvents.filter(event => event.responsibleId || event.responsible);
           const currentMonthUnassignedEvents = currentMonthEvents.length - currentMonthAssignedEvents.length;
+          const activeAutomationMachines = Object.values(automationCluster.machines || {}).filter(machine => {
+              const lastSeen = machine?.lastSeen?.toDate ? machine.lastSeen.toDate() : null;
+              return lastSeen && Date.now() - lastSeen.getTime() < 10 * 60 * 1000;
+          });
+          const automationLeaderName = automationCluster.leaderMachineName || 'Aguardando heartbeat';
           const manualReminderEvents = currentMonthEvents.filter(event => event.id && event.status !== 'publicado');
           const selectedManualReminderEvent = manualReminderEvents.find(event => String(event.id) === manualReminderEventId) || null;
           const findManualReminderMember = event => {
@@ -3273,6 +3287,8 @@
                               <div className="border dark:border-gray-700 rounded-md p-3"><strong className="block text-xl text-red-700 dark:text-red-300">{currentMonthUnassignedEvents}</strong><span className="text-xs text-gray-500">Sem respons&aacute;vel</span></div>
                           </div>
                           <div className="mt-5 border-y dark:border-gray-700 divide-y dark:divide-gray-700 text-sm dark:text-gray-200">
+                              <p className="py-3 flex justify-between gap-3"><span>PC l&iacute;der</span><strong className="text-right">{automationLeaderName}</strong></p>
+                              <p className="py-3 flex justify-between gap-3"><span>PCs ativos</span><strong>{activeAutomationMachines.length}</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Relat&oacute;rio semanal</span><strong>Segunda-feira, 9h</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Lembretes</span><strong>Diariamente, 9h05</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Formul&aacute;rios sem login</span><strong>{automationSettings.formBaseUrl ? 'Ativos' : <>N&atilde;o configurados</>}</strong></p>
