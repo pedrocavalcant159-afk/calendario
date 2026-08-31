@@ -1600,20 +1600,13 @@ def wait_for_outgoing_confirmation(page, marker: str, timeout_ms: int = 30_000) 
                     const labels = [...container.querySelectorAll('[aria-label]')]
                         .map(element => (element.getAttribute('aria-label') || '').trim())
                         .filter(Boolean);
-                    const own = labels.some(label => {
-                        const value = label.toLocaleLowerCase();
-                        return value.startsWith('você:') || value.startsWith('you:');
-                    });
                     const combined = labels.join(' ').toLocaleLowerCase();
                     return {
-                        own,
                         error: /erro|error|falha|failed/.test(combined),
                         confirmed: /enviad|sent|entreg|deliver|lida|read/.test(combined)
                     };
                 }"""
             )
-            if not status.get("own"):
-                continue
             if status.get("error"):
                 raise AutomationError(
                     "O WhatsApp criou a mensagem, mas marcou o envio com erro. "

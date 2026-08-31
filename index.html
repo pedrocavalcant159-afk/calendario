@@ -799,6 +799,7 @@
           const [manualReminderEventId, setManualReminderEventId] = useState('');
           const [manualCommandBusy, setManualCommandBusy] = useState(false);
           const [manualCommandFeedback, setManualCommandFeedback] = useState({ tone: '', text: '' });
+          const [assignmentNoticeFeedback, setAssignmentNoticeFeedback] = useState({ tone: '', text: '' });
 
           useEffect(() => {
               const openAutomationPanel = event => {
@@ -1033,6 +1034,27 @@
               });
           };
 
+          const watchAssignmentNotice = (commandRef, event) => {
+              let unsubscribe = () => {};
+              const responsibleName = event?.responsible || 'o responsável';
+              unsubscribe = commandRef.onSnapshot(snapshot => {
+                  const data = snapshot.data() || {};
+                  if (data.status === 'pending') {
+                      setAssignmentNoticeFeedback({ tone: 'pending', text: `Aviso para ${responsibleName} na fila. Aguardando o PC da automação.` });
+                  } else if (data.status === 'processing') {
+                      setAssignmentNoticeFeedback({ tone: 'pending', text: `Enviando o aviso de WhatsApp para ${responsibleName}...` });
+                  } else if (data.status === 'completed') {
+                      setAssignmentNoticeFeedback({ tone: 'success', text: data.result?.message || `Aviso de WhatsApp enviado para ${responsibleName}.` });
+                      setTimeout(unsubscribe, 0);
+                  } else if (data.status === 'failed') {
+                      setAssignmentNoticeFeedback({ tone: 'error', text: data.error || `Não foi possível enviar o aviso para ${responsibleName}.` });
+                      setTimeout(unsubscribe, 0);
+                  }
+              }, error => {
+                  setAssignmentNoticeFeedback({ tone: 'error', text: error.message || 'Não foi possível acompanhar o aviso de WhatsApp.' });
+              });
+          };
+
           const enqueueManualCommand = async type => {
               if (!isAdmin || manualCommandBusy) return;
               let event = null;
@@ -1076,18 +1098,25 @@
 
           const queueAssignmentNotice = async (event, companyId = selectedCompany) => {
               if (!event?.id || !companyId || (!event.responsibleId && !event.responsible)) return;
-              await db.collection('automationCommands').doc().set({
-                  schemaVersion: 1,
-                  type: 'assignment_notice',
-                  status: 'pending',
-                  companyId,
-                  eventId: String(event.id).replace(/_clone$/, ''),
-                  companyName: companies.find(company => company.id === companyId)?.name || '',
-                  eventTitle: event.text || '',
-                  requestedBy: user?.email || currentUserName,
-                  requestedByUid: user?.uid || '',
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
-              });
+              const commandRef = db.collection('automationCommands').doc();
+              setAssignmentNoticeFeedback({ tone: 'pending', text: `Registrando o aviso para ${event.responsible || 'o responsável'}...` });
+              try {
+                  await commandRef.set({
+                      schemaVersion: 1,
+                      type: 'assignment_notice',
+                      status: 'pending',
+                      companyId,
+                      eventId: String(event.id).replace(/_clone$/, ''),
+                      companyName: companies.find(company => company.id === companyId)?.name || '',
+                      eventTitle: event.text || '',
+                      requestedBy: user?.email || currentUserName,
+                      requestedByUid: user?.uid || '',
+                      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                  });
+                  watchAssignmentNotice(commandRef, event);
+              } catch (error) {
+                  setAssignmentNoticeFeedback({ tone: 'error', text: error.message || 'Não foi possível colocar o aviso de WhatsApp na fila.' });
+              }
           };
 
           // BOTÃO DE EMERGÊNCIA (RECONSTRÓI O UPLI GERAL NO NOVO COFRE)
@@ -3808,13 +3837,20 @@
                     </h3>
                   </div>
 
-                  <div className="mb-6 border-2 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100">
-                      <strong className="text-sm">
-                          ● Automação ativa
-                      </strong>
-                      <span className="text-xs font-medium">
-                          Relatórios semanais e lembretes usam os posts atuais deste calendário.
-                      </span>
+                  <div className="mb-6 border-2 p-3 rounded-lg border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                          <strong className="text-sm">
+                              ● Automação ativa
+                          </strong>
+                          <span className="text-xs font-medium">
+                              Relatórios semanais e lembretes usam os posts atuais deste calendário.
+                          </span>
+                      </div>
+                      {assignmentNoticeFeedback.text && (
+                          <p role="status" className={`mt-3 rounded-md border p-3 text-sm font-bold ${assignmentNoticeFeedback.tone === 'success' ? 'border-green-300 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' : assignmentNoticeFeedback.tone === 'error' ? 'border-red-300 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-100' : 'border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-100'}`}>
+                              WhatsApp do responsável: {assignmentNoticeFeedback.text}
+                          </p>
+                      )}
                   </div>
 
                   {isCentral && (
