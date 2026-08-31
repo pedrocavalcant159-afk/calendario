@@ -271,7 +271,10 @@ def main() -> int:
     parser.add_argument("--skip-catchup", action="store_true")
     args = parser.parse_args()
     status = verify(allow_catchup=not args.skip_catchup)
-    print(json.dumps(status, ensure_ascii=False))
+    # O diagnóstico pode conter caracteres fora da página de códigos do
+    # PowerShell legado do Windows. Escapá-los mantém o JSON legível e evita
+    # que a verificação falhe apenas ao exibir o resultado.
+    print(json.dumps(status, ensure_ascii=True))
     return 0 if status["ready"] else 1
 
 
