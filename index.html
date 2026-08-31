@@ -793,7 +793,6 @@
           const [editCompanyColor, setEditCompanyColor] = useState('');
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
-          const [calendarAutomationStatuses, setCalendarAutomationStatuses] = useState({});
           const [automationSettings, setAutomationSettings] = useState({});
           const [automationCluster, setAutomationCluster] = useState({});
           const [showAutomationModal, setShowAutomationModal] = useState(false);
@@ -916,7 +915,6 @@
               if (!user) return;
               const unsubscribe = db.collection('system').doc('automation').onSnapshot(doc => {
                   const data = doc.exists ? (doc.data() || {}) : {};
-                  setCalendarAutomationStatuses(data.calendarStatuses || {});
                   setAutomationSettings(data);
               });
               return () => unsubscribe();
@@ -966,7 +964,7 @@
 
           const saveToCloud = (updates) => {
               if (!selectedCompany) return;
-              db.collection('companies').doc(selectedCompany).set(updates, { merge: true });
+              return db.collection('companies').doc(selectedCompany).set(updates, { merge: true });
           };
 
           const updateStatusColor = (key, newColor) => {
@@ -991,18 +989,6 @@
           const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
           const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
 
-          const getCalendarAutomationKey = (companyId = selectedCompany, targetYear = year, targetMonth = month) =>
-              `${companyId}__${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
-          const getPublicFormBaseUrl = () => {
-              if (!/^https?:$/.test(window.location.protocol)) return '';
-              const url = new URL(window.location.href);
-              url.search = '';
-              url.hash = '';
-              return url.toString();
-          };
-          const currentCalendarAutomationKey = getCalendarAutomationKey();
-          const currentCalendarAutomation = calendarAutomationStatuses[currentCalendarAutomationKey] || null;
-          const isCurrentCalendarCompleted = currentCalendarAutomation?.ready === true;
           const currentMonthEvents = events.filter(event => Number(event.year) === year && Number(event.month) === month);
           const currentMonthAssignedEvents = currentMonthEvents.filter(event => event.responsibleId || event.responsible);
           const currentMonthUnassignedEvents = currentMonthEvents.length - currentMonthAssignedEvents.length;
@@ -1088,35 +1074,20 @@
               }
           };
 
-          const completeCurrentCalendar = async () => {
-              if (!selectedCompany || !isAdmin) return;
-              const companyName = companies.find(company => company.id === selectedCompany)?.name || 'Calendário';
-              if (!confirm(`Confirmar que ${companyName} de ${months[month]} ${year} está concluído e liberar a automação?`)) return;
-              const ref = db.collection('system').doc('automation');
-              const entry = {
-                  ready: true,
-                  companyId: selectedCompany,
-                  companyName,
-                  year,
-                  month,
-                  completedAt: new Date().toISOString(),
-                  completedBy: currentUserName,
-                  completedByEmail: user?.email || ''
-              };
-              const formBaseUrl = getPublicFormBaseUrl();
-              await ref.set({ calendarStatuses: {}, ...(formBaseUrl ? { formBaseUrl } : {}) }, { merge: true });
-              await ref.update(new firebase.firestore.FieldPath('calendarStatuses', currentCalendarAutomationKey), entry);
-          };
-
-          const reopenCurrentCalendar = async () => {
-              if (!selectedCompany || !isAdmin) return;
-              const companyName = companies.find(company => company.id === selectedCompany)?.name || 'Calendário';
-              if (!confirm(`Reabrir ${companyName} de ${months[month]} ${year}? A automação ficará pausada para este calendário.`)) return;
-              const ref = db.collection('system').doc('automation');
-              await ref.update(
-                  new firebase.firestore.FieldPath('calendarStatuses', currentCalendarAutomationKey),
-                  firebase.firestore.FieldValue.delete()
-              );
+          const queueAssignmentNotice = async (event, companyId = selectedCompany) => {
+              if (!event?.id || !companyId || (!event.responsibleId && !event.responsible)) return;
+              await db.collection('automationCommands').doc().set({
+                  schemaVersion: 1,
+                  type: 'assignment_notice',
+                  status: 'pending',
+                  companyId,
+                  eventId: String(event.id).replace(/_clone$/, ''),
+                  companyName: companies.find(company => company.id === companyId)?.name || '',
+                  eventTitle: event.text || '',
+                  requestedBy: user?.email || currentUserName,
+                  requestedByUid: user?.uid || '',
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
           };
 
           // BOTÃO DE EMERGÊNCIA (RECONSTRÓI O UPLI GERAL NO NOVO COFRE)
@@ -1238,7 +1209,7 @@
             return ((r * 299 + g * 587 + b * 114) / 1000) > 155 ? '#000000' : '#ffffff';
           };
 
-          const addEvent = () => {
+          const addEvent = async () => {
             const dayNum = parseInt(newEvent.day);
             const daysInCurrentMonth = getDaysInMonth(year, month);
             if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha os campos obrigatórios!');
@@ -1255,7 +1226,8 @@
             };
 
             const updatedEvents = [...events, eventToAdd];
-            saveToCloud({ events: updatedEvents });
+            await saveToCloud({ events: updatedEvents });
+            await queueAssignmentNotice(eventToAdd);
 
             const selectedCat = colorOptions.find(c => c.id === newEvent.color);
             const catName = selectedCat ? selectedCat.label : '';
@@ -1336,14 +1308,15 @@
               window.open(url, '_blank');
           };
 
-          const saveEditEvent = () => {
+          const saveEditEvent = async () => {
             const dayNum = parseInt(editEventForm.day);
             const daysInCurrentMonth = getDaysInMonth(year, month);
             if (!editEventForm.day || !editEventForm.text || !editEventForm.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
 
+            const previousEvt = events[editingEventIndex];
             const updatedEvt = {
-                ...events[editingEventIndex],
+                ...previousEvt,
                 day: dayNum, text: editEventForm.text, color: editEventForm.color, notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
                 responsibleId: editEventForm.responsibleId || '', responsible: editEventForm.responsible.trim(),
                 responsiblePhone: editEventForm.responsiblePhone || '', responsibleEmail: editEventForm.responsibleEmail || '',
@@ -1352,7 +1325,10 @@
 
             const updatedEvents = [...events];
             updatedEvents[editingEventIndex] = updatedEvt;
-            saveToCloud({ events: updatedEvents });
+            await saveToCloud({ events: updatedEvents });
+            const responsibleChanged = previousEvt.responsibleId !== updatedEvt.responsibleId ||
+                previousEvt.responsible !== updatedEvt.responsible;
+            if (responsibleChanged) await queueAssignmentNotice(updatedEvt);
 
             if (selectedCompany !== UPLI_GERAL_ID) {
                 const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
@@ -3318,8 +3294,8 @@
                               <div><h3 className="text-xl font-black dark:text-white">Automa&ccedil;&atilde;o</h3><p className="text-sm text-gray-500 mt-1">{months[month]} {year}</p></div>
                               <button onClick={() => setShowAutomationModal(false)} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 font-black" aria-label="Fechar">&times;</button>
                           </div>
-                          <div className={`mt-5 border-2 rounded-md p-4 ${isCurrentCalendarCompleted ? 'border-green-300 bg-green-50 text-green-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
-                              <strong>{isCurrentCalendarCompleted ? 'Liberada' : 'Pausada'}</strong>
+                          <div className="mt-5 border-2 rounded-md p-4 border-green-300 bg-green-50 text-green-900">
+                              <strong>Automação ativa</strong>
                           </div>
                           <div className="grid grid-cols-3 gap-2 mt-5 text-center">
                               <div className="border dark:border-gray-700 rounded-md p-3"><strong className="block text-xl dark:text-white">{currentMonthEvents.length}</strong><span className="text-xs text-gray-500">No m&ecirc;s</span></div>
@@ -3816,16 +3792,6 @@
                                 <TrelloIcon /> Trello
                             </button>
 
-                            {isCurrentCalendarCompleted ? (
-                                <button onClick={reopenCurrentCalendar} className="bg-amber-500 text-black rounded-lg px-4 py-2 text-sm font-bold hover:bg-amber-600 transition flex items-center justify-center gap-2 shadow-sm" title="Pausar a automação e reabrir este calendário">
-                                    ↶ Reabrir mês
-                                </button>
-                            ) : (
-                                <button onClick={completeCurrentCalendar} className="bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-green-800 transition flex items-center justify-center gap-2 shadow-sm" title="Liberar a automação para este calendário e mês">
-                                    ✓ Calendário concluído
-                                </button>
-                            )}
-
                             <a href="automation/runtime/status.html" target="_blank" className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-emerald-800 transition flex items-center justify-center gap-2 shadow-sm" title="Verificar a automação semanal do WhatsApp">
                                 ⚙ Automação
                             </a>
@@ -3842,14 +3808,12 @@
                     </h3>
                   </div>
 
-                  <div className={`mb-6 border-2 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 ${isCurrentCalendarCompleted ? 'border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100' : 'border-amber-300 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100'}`}>
+                  <div className="mb-6 border-2 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-2 border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100">
                       <strong className="text-sm">
-                          {isCurrentCalendarCompleted ? 'Automação liberada para este calendário' : 'Automação pausada para este calendário'}
+                          ● Automação ativa
                       </strong>
                       <span className="text-xs font-medium">
-                          {isCurrentCalendarCompleted
-                              ? `Concluído por ${currentCalendarAutomation.completedBy || 'usuário'} em ${formatDateStr(currentCalendarAutomation.completedAt)}`
-                              : `Aguardando “Calendário concluído” para ${months[month]} ${year}`}
+                          Relatórios semanais e lembretes usam os posts atuais deste calendário.
                       </span>
                   </div>
 

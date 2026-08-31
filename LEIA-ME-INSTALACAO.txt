@@ -1,0 +1,15 @@
+AUTOMACAO UPLI - INSTALACAO EM OUTRO PC
+
+1. Extraia todo o conteudo do arquivo ZIP.
+2. Clique duas vezes em INSTALAR-AUTOMACAO-UPLI.bat.
+3. Quando o Chrome abrir, entre na conta do calendario e conecte o WhatsApp Web.
+4. Feche todas as janelas desse Chrome e volte ao instalador.
+
+O instalador verifica ou instala Chrome, Python e Playwright, copia os arquivos
+para uma pasta fixa e registra as tarefas do Windows.
+
+Todos os PCs enviam heartbeat. Apenas um fica como lider. Os demais ficam em
+espera e um deles assume automaticamente se o lider ficar offline.
+
+Nao copie nem reutilize a pasta runtime de outro PC. O pacote oficial nao inclui
+essa pasta, porque cada computador precisa de uma sessao propria do WhatsApp.
