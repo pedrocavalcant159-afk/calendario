@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Automação UPLI</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f3f4f6; color: #111827; font-family: Arial, sans-serif; }
+        main { width: min(520px, 100%); background: white; border: 1px solid #d1d5db; border-radius: 8px; padding: 28px; box-shadow: 0 14px 35px rgba(0,0,0,.12); }
+        h1 { margin: 0 0 8px; font-size: 24px; }
+        p { color: #4b5563; line-height: 1.5; }
+        label { display: block; margin-top: 14px; font-size: 12px; font-weight: 700; color: #4b5563; }
+        input { width: 100%; margin-top: 5px; border: 2px solid #d1d5db; border-radius: 6px; padding: 11px; font-size: 15px; }
+        button, a.button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; padding: 11px 16px; background: #047857; color: white; font-weight: 700; text-decoration: none; cursor: pointer; }
+        button { width: 100%; margin-top: 18px; }
+        .row { display: flex; gap: 10px; margin-top: 18px; }
+        .row > * { flex: 1; margin-top: 0; }
+        .secondary { background: #374151 !important; }
+        .hidden { display: none; }
+        .status { margin-top: 16px; padding: 12px; border-radius: 6px; background: #ecfdf5; color: #065f46; font-weight: 700; }
+        .error { background: #fef2f2; color: #991b1b; }
+        pre { display: none; }
+    </style>
+</head>
+<body data-status="loading">
+    <main>
+        <h1>Automação UPLI</h1>
+        <p>Entre com a mesma conta usada no calendário. Esta sessão ficará somente no perfil local da automação.</p>
+        <form id="login-form" class="hidden">
+            <label for="email">E-mail do calendário</label>
+            <input id="email" type="email" autocomplete="username" required>
+            <label for="password">Senha</label>
+            <input id="password" type="password" autocomplete="current-password" required>
+            <button type="submit">Conectar ao calendário</button>
+        </form>
+        <section id="connected" class="hidden">
+            <div id="account" class="status"></div>
+            <div class="row">
+                <a class="button" href="https://web.whatsapp.com/" target="_blank">Abrir WhatsApp Web</a>
+                <button id="logout" class="secondary" type="button">Trocar conta</button>
+            </div>
+            <p>Depois de conectar o WhatsApp, feche todas as janelas deste perfil e execute a verificação pelo instalador.</p>
+        </section>
+        <div id="message" class="status hidden"></div>
+        <pre id="result"></pre>
+    </main>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAEJFGMGIOy2z9oeX9PQWHA0HYJbIytlg8",
+            authDomain: "calendario-upli.firebaseapp.com",
+            projectId: "calendario-upli",
+            messagingSenderId: "849051732172",
+            appId: "1:849051732172:web:14735da6c16d19bcf71a69"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const mode = new URLSearchParams(location.search).get('mode') || 'setup';
+        const loginForm = document.getElementById('login-form');
+        const connected = document.getElementById('connected');
+        const message = document.getElementById('message');
+        const result = document.getElementById('result');
+        const setMessage = (text, error = false) => {
+            message.textContent = text;
+            message.className = `status${error ? ' error' : ''}`;
+        };
+        loginForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            setMessage('Conectando...');
+            try {
+                await auth.signInWithEmailAndPassword(document.getElementById('email').value.trim(), document.getElementById('password').value);
+            } catch (error) {
+                setMessage('Não foi possível entrar. Confira e-mail e senha.', true);
+            }
+        });
+        document.getElementById('logout').addEventListener('click', () => auth.signOut());
+        auth.onAuthStateChanged(async user => {
+            if (!user) {
+                loginForm.classList.remove('hidden');
+                connected.classList.add('hidden');
+                document.body.dataset.status = 'login-required';
+                return;
+            }
+            loginForm.classList.add('hidden');
+            document.getElementById('account').textContent = `Calendário conectado: ${user.email}`;
+            if (mode === 'setup') {
+                connected.classList.remove('hidden');
+                message.classList.add('hidden');
+                document.body.dataset.status = 'ready';
+                return;
+            }
+            try {
+                const snapshot = await db.collection('companies').get();
+                const companies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const automationDoc = await db.collection('system').doc('automation').get();
+                const automation = automationDoc.exists ? (automationDoc.data() || {}) : {};
+                const teamDoc = await db.collection('system').doc('team').get();
+                const team = teamDoc.exists ? (teamDoc.data() || {}) : {};
+                result.textContent = JSON.stringify({ user: user.email, companies, automation, team });
+                document.body.dataset.status = 'ready';
+            } catch (error) {
+                result.textContent = JSON.stringify({ error: error.message });
+                document.body.dataset.status = 'error';
+            }
+        });
+    </script>
+</body>
+</html>
