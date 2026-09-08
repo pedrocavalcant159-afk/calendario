@@ -34,7 +34,7 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 4
+AUTOMATION_AGENT_VERSION = 5
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -1638,45 +1638,64 @@ def first_visible(locator):
 
 def outgoing_marker_state(page, marker: str) -> str:
     """Inspect whether this exact delivery batch already exists in the chat."""
-    containers = page.locator("#main [data-testid='msg-container']").filter(has_text=marker)
-    found_submitted = False
-    found_error = False
-    for index in range(containers.count()):
-        status = containers.nth(index).evaluate(
-            """container => {
-                const labels = [...container.querySelectorAll('[aria-label]')]
-                    .map(element => (element.getAttribute('aria-label') || '').trim())
+    state = page.evaluate(
+        """marker => {
+            const root = document.querySelector('#main');
+            if (!root) return 'missing';
+            const selectors = [
+                "[data-testid='msg-container']",
+                '.message-out',
+                '[data-id]',
+                "[role='row']"
+            ].join(',');
+            const candidates = [...root.querySelectorAll(selectors)]
+                .filter(element => String(element.textContent || '').includes(marker));
+            let submitted = false;
+            let failed = false;
+            for (const candidate of candidates) {
+                const container = candidate.closest(selectors) || candidate;
+                const signalElements = [container, ...container.querySelectorAll(
+                    '[data-icon], [data-testid], [aria-label], [title]'
+                )];
+                const iconNames = signalElements
+                    .map(element => String(element.getAttribute?.('data-icon') || '').toLowerCase())
                     .filter(Boolean);
-                const combined = labels.join(' ').toLocaleLowerCase();
-                const ancestry = [container, container.parentElement, container.parentElement?.parentElement]
-                    .filter(Boolean)
-                    .map(element => String(element.className || ''))
-                    .join(' ');
-                const confirmed = /enviad|sent|entreg|deliver|lida|read/.test(combined);
-                return {
-                    outgoing: /message-out/.test(ancestry) || confirmed,
-                    error: /erro|error|falha|failed/.test(combined),
-                    confirmed
-                };
-            }"""
-        )
-        if not status.get("outgoing"):
-            continue
-        if status.get("error"):
-            found_error = True
-            continue
-        if status.get("confirmed"):
-            return "confirmed"
-        found_submitted = True
-    if found_submitted:
-        return "submitted"
-    if found_error:
-        return "error"
-    return "missing"
+                const labels = signalElements.map(element => [
+                    element.getAttribute?.('aria-label'),
+                    element.getAttribute?.('title'),
+                    element.getAttribute?.('data-testid')
+                ].filter(Boolean).join(' ')).join(' ').toLowerCase();
+                const dataIds = [container, ...container.querySelectorAll('[data-id]')]
+                    .map(element => String(element.getAttribute?.('data-id') || '').toLowerCase());
+                const hasCheckIcon = iconNames.some(icon =>
+                    icon === 'msg-check' || icon === 'msg-dblcheck' || icon === 'msg-dblcheck-ack'
+                );
+                const confirmed = hasCheckIcon || /enviad|sent|entreg|deliver|lida|read/.test(labels);
+                const error = iconNames.some(icon => /msg-error|alert|failed/.test(icon)) ||
+                    /erro|error|falha|failed/.test(labels);
+                const outgoing = Boolean(container.closest('.message-out')) ||
+                    Boolean(container.querySelector('.message-out')) ||
+                    dataIds.some(value => value.startsWith('true_')) || confirmed || error;
+                if (!outgoing) continue;
+                if (error) {
+                    failed = true;
+                    continue;
+                }
+                if (confirmed) return 'confirmed';
+                submitted = true;
+            }
+            if (submitted) return 'submitted';
+            if (failed) return 'error';
+            return 'missing';
+        }""",
+        marker,
+    )
+    return state if state in ("confirmed", "submitted", "error") else "missing"
 
 
 def wait_for_outgoing_confirmation(page, marker: str, timeout_ms: int = 30_000) -> None:
     deadline = time.monotonic() + timeout_ms / 1000
+    found_submitted = False
     while time.monotonic() < deadline:
         state = outgoing_marker_state(page, marker)
         if state == "error":
@@ -1686,7 +1705,15 @@ def wait_for_outgoing_confirmation(page, marker: str, timeout_ms: int = 30_000) 
             )
         if state == "confirmed":
             return
+        if state == "submitted":
+            found_submitted = True
         page.wait_for_timeout(500)
+    if found_submitted:
+        log(
+            f"Envio {marker} apareceu como mensagem de saída, mas o WhatsApp "
+            "não expôs o ícone de confirmação. O lote será preservado para evitar reenvio."
+        )
+        return
     raise AutomationError(
         "O WhatsApp não confirmou a mensagem como enviada ou entregue dentro do tempo esperado."
     )
