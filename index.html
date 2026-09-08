@@ -7,14 +7,55 @@
     
     <script>
         window.addEventListener('error', function(event) {
-            document.body.innerHTML = '<div style="background:#ffebee; padding:30px; margin:20px; border:3px solid #f44336; border-radius:12px; font-family:sans-serif; color:#b71c1c; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">' +
-                '<h2 style="margin-top:0; font-size: 28px;">🚨 O Código Quebrou (Erro Crítico)!</h2>' +
-                '<p style="font-size: 16px;"><strong>O que deu errado:</strong> ' + event.message + '</p>' +
+            document.body.style.background = '#f7f9fb';
+            document.body.innerHTML = '<div class="critical-error" style="max-width:760px; background:#fffafa; padding:32px; margin:8vh auto; border:1px solid #b94b4b; border-top:6px solid #8d2929; font-family:Atkinson Hyperlegible,Segoe UI,sans-serif; color:#7d2626; box-shadow:14px 14px 0 rgba(125,38,38,.12);">' +
+                '<p style="margin:0 0 8px; font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase;">Falha de sistema</p>' +
+                '<h2 style="margin:0; font-size:28px; color:#421919;">Não foi possível abrir a interface</h2>' +
+                '<p style="font-size:16px;"><strong>Detalhe:</strong> ' + event.message + '</p>' +
                 '<p style="font-size: 16px;"><strong>Linha:</strong> ' + event.lineno + ' | <strong>Coluna:</strong> ' + event.colno + '</p>' +
                 '<p style="margin-top: 10px; font-weight: bold;">Detalhes Técnicos (Envie para o chat):</p>' +
-                '<pre style="background:#fff; padding:15px; border:1px solid #ffcdd2; overflow:auto; border-radius: 8px; font-size: 14px;">' + (event.error && event.error.stack ? event.error.stack : 'Sem detalhes extras.') + '</pre>' +
+                '<pre style="background:#fff; padding:15px; border:1px solid #d9a1a1; overflow:auto; font-size:13px;">' + (event.error && event.error.stack ? event.error.stack : 'Sem detalhes extras.') + '</pre>' +
                 '</div>';
         });
+
+        window.alert = function(message) {
+            const previous = document.querySelector('.system-notice-overlay');
+            if (previous) previous.remove();
+            const overlay = document.createElement('div');
+            overlay.className = 'system-notice-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', 'Aviso do sistema');
+            const panel = document.createElement('section');
+            panel.className = 'system-notice-panel';
+            const eyebrow = document.createElement('p');
+            eyebrow.className = 'system-notice-eyebrow';
+            eyebrow.textContent = 'Aviso do sistema';
+            const title = document.createElement('h2');
+            title.textContent = /erro|inválid|falha|não foi possível/i.test(String(message)) ? 'Algo precisa de atenção' : 'Calendário UPLI';
+            const body = document.createElement('p');
+            body.className = 'system-notice-message';
+            body.textContent = String(message || 'Operação concluída.');
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.textContent = 'Entendi';
+            const dismiss = () => {
+                overlay.remove();
+                document.removeEventListener('keydown', onKey);
+            };
+            close.addEventListener('click', dismiss);
+            overlay.addEventListener('click', event => { if (event.target === overlay) dismiss(); });
+            const onKey = event => {
+                if (event.key === 'Escape') {
+                    dismiss();
+                }
+            };
+            document.addEventListener('keydown', onKey);
+            panel.append(eyebrow, title, body, close);
+            overlay.append(panel);
+            document.body.append(overlay);
+            close.focus();
+        };
     </script>
 
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -37,7 +78,442 @@
         }
     </script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap');
+
+        :root {
+            --paper: #f7f9fb;
+            --surface: #ffffff;
+            --ink: #17212b;
+            --muted: #607080;
+            --line: #cbd5df;
+            --line-strong: #98a8b8;
+            --work: #2f5ea8;
+            --personal: #2e6b57;
+            --health: #79518f;
+            --focus: #f3b61f;
+        }
+
+        * { box-sizing: border-box; }
+        html { font-family: "Atkinson Hyperlegible", "Segoe UI", sans-serif; }
+        body { margin: 0; background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
+        button, input, select, textarea { font: inherit; }
+        button, [role="button"], a, input, select, textarea { outline: none; }
+        button:focus-visible, [role="button"]:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+            box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px var(--focus) !important;
+            position: relative;
+            z-index: 5;
+        }
         [draggable="true"] { touch-action: none; }
+
+        .app-shell {
+            background-color: var(--paper);
+            background-image: linear-gradient(rgba(23,33,43,.035) 1px, transparent 1px);
+            background-size: 100% 32px;
+        }
+        .studio-header {
+            background: var(--surface);
+            border: 1px solid var(--line-strong);
+            border-top: 5px solid var(--ink);
+            border-radius: 2px;
+            box-shadow: none;
+        }
+        .admin-workbench [data-tutorial="companies"],
+        .admin-workbench [data-tutorial="categories"],
+        .admin-workbench [data-tutorial="add-post"] {
+            border-color: var(--line-strong) !important;
+            border-radius: 2px !important;
+            box-shadow: none !important;
+        }
+
+        .system-page, .auth-shell, .system-loading {
+            min-height: 100vh;
+            background-color: var(--paper);
+            background-image: linear-gradient(rgba(23,33,43,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(23,33,43,.025) 1px, transparent 1px);
+            background-size: 100% 32px, 32px 100%;
+            color: var(--ink);
+        }
+        .system-loading { display: grid; place-items: center; }
+        .system-loading-mark { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .system-loading-mark::before { content: ""; width: 12px; height: 12px; border: 3px solid var(--line); border-top-color: var(--work); border-radius: 50%; animation: precision-spin .8s linear infinite; }
+        @keyframes precision-spin { to { transform: rotate(360deg); } }
+
+        .auth-shell { position: relative; display: grid; place-items: center; padding: 24px; overflow: hidden; }
+        .auth-shell::before {
+            content: "UPLI\A AGENDA";
+            position: absolute;
+            left: clamp(24px, 7vw, 110px);
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(47,94,168,.07);
+            font-size: clamp(80px, 17vw, 250px);
+            font-weight: 700;
+            letter-spacing: -.07em;
+            line-height: .72;
+            white-space: pre;
+        }
+        .auth-card, .system-panel {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            padding: 34px;
+            border: 1px solid var(--line-strong);
+            border-top: 6px solid var(--ink);
+            border-radius: 2px;
+            background: var(--surface);
+            box-shadow: 14px 14px 0 rgba(23,33,43,.09);
+        }
+        .auth-brand { margin-bottom: 30px; text-align: left; }
+        .auth-index { display: block; margin-bottom: 18px; color: var(--work); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+        .auth-date-mark { display: grid; place-items: center; width: 52px; height: 58px; margin-bottom: 18px; border: 2px solid var(--ink); color: var(--ink); font-size: 24px; font-weight: 700; box-shadow: 5px 5px 0 var(--line); }
+        .auth-date-mark::before { content: "SET"; align-self: start; width: 100%; padding: 3px 0; background: var(--ink); color: white; font-size: 8px; letter-spacing: .12em; text-align: center; }
+        .auth-brand h2 { margin: 0; color: var(--ink); font-size: 32px; letter-spacing: -.035em; }
+        .auth-brand p { margin-top: 7px; color: var(--muted); font-size: 14px; }
+        .auth-field-label { display: block; margin-bottom: -10px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+        .auth-field-label + input { margin-top: 6px !important; }
+        .auth-card input, .system-panel input, .system-panel textarea, .system-panel select { width: 100%; min-height: 45px; border: 1px solid var(--line-strong) !important; border-radius: 2px !important; background: white; color: var(--ink); }
+        .auth-card input { padding: 11px 12px; }
+        .auth-card form > button[type="submit"], .system-primary-action {
+            min-height: 46px;
+            border: 1px solid var(--ink) !important;
+            border-radius: 2px !important;
+            background: var(--ink) !important;
+            color: white !important;
+            box-shadow: none !important;
+            font-size: 13px !important;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+        .auth-card form > button[type="submit"]:hover, .system-primary-action:hover { background: var(--work) !important; border-color: var(--work) !important; }
+        .system-panel { max-width: 640px; padding: 0; overflow: hidden; }
+        .system-panel > header, .system-panel-header { padding: 22px 26px; border-bottom: 1px solid var(--line-strong); background: var(--ink) !important; color: white; }
+        .system-panel > header p { color: #9fc0f2 !important; letter-spacing: .14em; text-transform: uppercase; }
+        .system-panel-content { padding: 26px; }
+        .system-alert { padding: 13px 14px !important; border-radius: 2px !important; border-width: 1px !important; border-left-width: 5px !important; font-size: 13px; }
+        .system-alert-error { border-color: #b94b4b !important; background: #fff4f4 !important; color: #7d2626 !important; }
+        .system-alert-success { border-color: #2e6b57 !important; background: #f2f8f5 !important; color: #214d40 !important; }
+
+        .studio-overlay { background: rgba(10,17,24,.82) !important; backdrop-filter: blur(7px); }
+        .studio-modal, .app-shell [role="dialog"] {
+            border: 1px solid var(--line-strong) !important;
+            border-top: 6px solid var(--ink) !important;
+            border-radius: 2px !important;
+            background: var(--surface);
+            box-shadow: 14px 14px 0 rgba(0,0,0,.2) !important;
+        }
+        .studio-modal .rounded-2xl, .studio-modal .rounded-xl, .studio-modal .rounded-lg,
+        .app-shell [role="dialog"] .rounded-2xl, .app-shell [role="dialog"] .rounded-xl, .app-shell [role="dialog"] .rounded-lg { border-radius: 2px !important; }
+        .studio-modal input, .studio-modal select, .studio-modal textarea,
+        .app-shell [role="dialog"] input, .app-shell [role="dialog"] select, .app-shell [role="dialog"] textarea {
+            border-width: 1px !important;
+            border-color: var(--line-strong) !important;
+            border-radius: 2px !important;
+            box-shadow: none !important;
+        }
+        .studio-modal button, .studio-modal a, .app-shell [role="dialog"] button, .app-shell [role="dialog"] a { border-radius: 2px !important; box-shadow: none !important; }
+        .studio-modal > .sticky { border-bottom-color: var(--line-strong) !important; }
+        .studio-modal h3, .app-shell [role="dialog"] h2, .app-shell [role="dialog"] h3 { letter-spacing: -.02em; }
+        .studio-modal-close { border: 1px solid var(--line-strong) !important; border-radius: 50% !important; background: transparent !important; color: var(--ink) !important; }
+        .studio-modal-close:hover { border-color: #b94b4b !important; background: #fff4f4 !important; color: #8d2929 !important; }
+
+        .critical-error, .react-error-panel { border-color: #b94b4b !important; border-top: 6px solid #8d2929 !important; border-radius: 2px !important; background: #fffafa !important; box-shadow: 14px 14px 0 rgba(125,38,38,.12) !important; }
+        .critical-error pre, .react-error-panel pre { border: 1px solid #d9a1a1 !important; border-radius: 2px !important; background: white !important; }
+
+        .system-notice-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            background: rgba(10,17,24,.84);
+            backdrop-filter: blur(7px);
+        }
+        .system-notice-panel {
+            width: min(440px, 100%);
+            padding: 28px;
+            border: 1px solid var(--line-strong);
+            border-top: 6px solid #8d2929;
+            background: white;
+            color: var(--ink);
+            box-shadow: 12px 12px 0 rgba(0,0,0,.24);
+        }
+        .system-notice-eyebrow { margin: 0 0 8px; color: #8d2929; font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+        .system-notice-panel h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
+        .system-notice-message { margin: 14px 0 24px; color: var(--muted); line-height: 1.5; white-space: pre-wrap; }
+        .system-notice-panel button { width: 100%; min-height: 44px; border: 1px solid var(--ink); border-radius: 2px; background: var(--ink); color: white; cursor: pointer; font-weight: 700; }
+        .system-notice-panel button:hover { background: var(--work); border-color: var(--work); }
+        .tool-icon { display: inline-grid; place-items: center; min-width: 18px; min-height: 18px; color: currentColor; font-size: 11px; font-weight: 700; line-height: 1; }
+        .tool-icon-box { padding: 2px 3px; border: 1px solid currentColor; font-size: 8px; letter-spacing: .04em; }
+        .tool-date { width: 27px; height: 27px; border: 1px solid currentColor; font-size: 11px; box-shadow: 2px 2px 0 var(--line); }
+
+        .precision-calendar {
+            background: var(--surface);
+            border: 1px solid var(--line-strong);
+            border-radius: 2px;
+            box-shadow: 10px 10px 0 rgba(23, 33, 43, .07);
+            overflow: hidden;
+        }
+        .precision-commandbar {
+            display: grid;
+            grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+            align-items: center;
+            gap: 18px;
+            min-height: 88px;
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--line-strong);
+            background: var(--surface);
+        }
+        .precision-eyebrow {
+            color: var(--work);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+        .precision-period { display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .precision-period h2 {
+            min-width: 245px;
+            margin: 0;
+            color: var(--ink);
+            font-size: clamp(20px, 2vw, 29px);
+            font-weight: 700;
+            letter-spacing: -.025em;
+            text-align: center;
+            text-transform: capitalize;
+        }
+        .precision-icon-button, .precision-today, .precision-view-button, .precision-new-button {
+            min-height: 40px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+            color: var(--ink);
+            cursor: pointer;
+            font-weight: 700;
+            transition: background .16s ease, color .16s ease, transform .16s ease;
+        }
+        .precision-icon-button { width: 40px; font-size: 22px; line-height: 1; }
+        .precision-icon-button:hover, .precision-today:hover { background: var(--ink); color: white; }
+        .precision-today { padding: 0 15px; }
+        .precision-new-button {
+            border-color: var(--ink);
+            background: var(--ink);
+            color: white;
+            padding: 0 17px;
+        }
+        .precision-new-button:hover { background: var(--work); border-color: var(--work); transform: translateY(-1px); }
+        .precision-command-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+        .precision-system-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            min-height: 40px;
+            padding: 8px 22px;
+            border-bottom: 1px solid var(--line-strong);
+            background: #f2f8f5;
+            color: #214d40;
+            font-size: 12px;
+        }
+        .precision-system-strip.paused { background: #fff8e7; color: #7a4a07; }
+        .precision-system-state { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+        .precision-system-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #2e6b57; box-shadow: 0 0 0 3px rgba(46,107,87,.13); }
+        .precision-system-strip.paused .precision-system-state::before { background: #b7791f; box-shadow: 0 0 0 3px rgba(183,121,31,.13); }
+        .precision-system-detail { color: var(--muted); text-align: right; }
+
+        .precision-body { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 610px; }
+        .precision-rail {
+            padding: 22px 16px;
+            border-right: 1px solid var(--line-strong);
+            background:
+                linear-gradient(rgba(47,94,168,.035) 1px, transparent 1px),
+                var(--paper);
+            background-size: 100% 24px;
+        }
+        .precision-rail-label {
+            display: block;
+            margin: 0 0 8px;
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+        .precision-view-list { display: grid; gap: 4px; margin-bottom: 28px; }
+        .precision-view-button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 10px 11px;
+            border-color: transparent;
+            background: transparent;
+            text-align: left;
+        }
+        .precision-view-button span { color: var(--muted); font-size: 11px; }
+        .precision-view-button.active { border-color: var(--ink); background: var(--ink); color: white; }
+        .precision-view-button.active span { color: white; }
+        .precision-filter-list { display: grid; gap: 5px; }
+        .precision-filter {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            width: 100%;
+            min-height: 34px;
+            padding: 6px 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--ink);
+            cursor: pointer;
+            font-size: 13px;
+            text-align: left;
+        }
+        .precision-filter:hover, .precision-filter.active { border-color: var(--line-strong); background: white; }
+        .precision-filter.active { font-weight: 700; }
+        .precision-filter-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+        .precision-filter-count { margin-left: auto; color: var(--muted); font-size: 11px; }
+        .precision-stage { min-width: 0; background: var(--surface); }
+
+        .precision-weekdays, .precision-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .precision-weekdays {
+            position: sticky;
+            top: 0;
+            z-index: 4;
+            border-bottom: 1px solid var(--line-strong);
+            background: var(--ink);
+            color: white;
+        }
+        .precision-weekday { padding: 11px 12px; border-right: 1px solid rgba(255,255,255,.16); font-size: 11px; font-weight: 700; letter-spacing: .13em; text-align: center; }
+        .precision-day-cell {
+            position: relative;
+            min-height: 190px;
+            padding: 9px 8px 8px;
+            border-right: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            background: white;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .precision-day-cell:nth-child(7n) { border-right: 0; }
+        .precision-day-cell.outside { background: #f1f4f7; color: #8a98a6; }
+        .precision-day-cell.weekend { background-image: linear-gradient(135deg, rgba(23,33,43,.018) 25%, transparent 25%, transparent 50%, rgba(23,33,43,.018) 50%, rgba(23,33,43,.018) 75%, transparent 75%, transparent); background-size: 8px 8px; }
+        .precision-day-cell.selected { box-shadow: inset 0 0 0 2px var(--ink); z-index: 2; }
+        .precision-day-cell:hover { background-color: #f8fbff; }
+        .precision-day-head { display: flex; align-items: center; justify-content: space-between; min-height: 25px; margin-bottom: 5px; }
+        .precision-day-number { display: inline-grid; place-items: center; width: 27px; height: 27px; color: inherit; font-size: 13px; font-weight: 700; }
+        .precision-day-number.today { border-radius: 50%; background: var(--ink); color: white; }
+        .precision-event-stack { display: grid; gap: 4px; }
+        .precision-event {
+            --event-color: var(--work);
+            position: relative;
+            display: block;
+            width: 100%;
+            min-width: 0;
+            padding: 7px 8px 7px 11px;
+            border: 1px solid color-mix(in srgb, var(--status-color, var(--line-strong)) 32%, var(--line));
+            border-left: 4px solid var(--status-color, var(--event-color));
+            background: color-mix(in srgb, var(--status-color, var(--event-color)) 8%, white);
+            color: var(--ink);
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-align: left;
+        }
+        .precision-event::before { content: ""; position: absolute; left: -4px; top: 0; bottom: 0; width: 4px; background: var(--status-color, var(--event-color)); }
+        .precision-event:hover { background: color-mix(in srgb, var(--status-color, var(--event-color)) 15%, white); }
+        .precision-event-kicker { display: flex; align-items: center; gap: 5px; min-width: 0; margin-bottom: 4px; }
+        .precision-event-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--event-color); box-shadow: 0 0 0 1px rgba(23,33,43,.12); }
+        .precision-event-category { min-width: 0; overflow: hidden; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .045em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+        .precision-event-status { margin-left: auto; padding: 2px 4px; background: var(--status-color, var(--line-strong)); color: var(--status-text, white); font-size: 8px; font-weight: 700; letter-spacing: .035em; text-transform: uppercase; white-space: nowrap; }
+        .precision-event-time { display: block; margin-bottom: 2px; color: var(--muted); font-size: 9px; font-weight: 400; letter-spacing: .04em; }
+        .precision-event-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .precision-event-meta { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+        .precision-more { padding: 2px 5px; color: var(--work); font-size: 10px; font-weight: 700; }
+        .precision-empty { color: #82909d; font-size: 11px; }
+
+        .precision-week-scroll { overflow-x: auto; }
+        .precision-week-grid { display: grid; grid-template-columns: 66px repeat(7, minmax(116px, 1fr)); min-width: 880px; }
+        .precision-week-corner, .precision-week-date { min-height: 68px; padding: 11px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-strong); background: var(--paper); text-align: center; }
+        .precision-week-date strong { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-top: 3px; border-radius: 50%; font-size: 16px; }
+        .precision-week-date strong.today { background: var(--ink); color: white; }
+        .precision-week-date span { display: block; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+        .precision-week-time { min-height: 54px; padding: 9px 8px; border-right: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; text-align: right; }
+        .precision-week-slot { min-height: 72px; padding: 4px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: white; }
+        .precision-week-slot.today-column { background: #f3f7fc; }
+        .precision-week-slot .precision-event { margin-bottom: 3px; }
+        .precision-week-all-day { min-height: 62px; }
+
+        .precision-day-view { display: grid; grid-template-columns: 110px minmax(0, 1fr); }
+        .precision-day-banner { grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; min-height: 104px; padding: 24px; border-bottom: 1px solid var(--line-strong); background: var(--paper); }
+        .precision-day-banner h3 { margin: 3px 0 0; font-size: clamp(28px, 4vw, 48px); line-height: .95; letter-spacing: -.04em; }
+        .precision-day-banner p { margin: 0; color: var(--muted); }
+        .precision-day-hour { min-height: 76px; padding: 12px 14px; border-right: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; text-align: right; }
+        .precision-day-lane { min-height: 76px; padding: 7px; border-bottom: 1px solid var(--line); background: linear-gradient(90deg, rgba(203,213,223,.2) 1px, transparent 1px); background-size: 25% 100%; }
+        .precision-day-lane .precision-event { max-width: 620px; padding: 9px 12px 9px 15px; font-size: 13px; }
+        .precision-mobile-agenda { display: none; }
+
+        .precision-legend {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+            gap: 28px;
+            padding: 20px 22px 22px;
+            border-top: 1px solid var(--line-strong);
+            background: var(--paper);
+        }
+        .precision-legend-title { display: block; margin-bottom: 10px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+        .precision-legend-items { display: flex; flex-wrap: wrap; gap: 7px; }
+        .precision-legend-item { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 5px 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 10px; font-weight: 700; }
+        .precision-legend-item::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--legend-color); }
+        .precision-flow-item { border-left: 4px solid var(--legend-color); }
+        .precision-flow-item::before { display: none; }
+
+        .dark .precision-calendar { --surface: #17212b; --paper: #101820; --ink: #eef3f7; --muted: #aab7c3; --line: #33414e; --line-strong: #566574; background: var(--surface); }
+        .dark .precision-day-cell, .dark .precision-week-slot { background-color: #17212b; }
+        .dark .precision-day-cell.outside { background: #111a22; }
+        .dark .precision-event { background: color-mix(in srgb, var(--status-color, var(--event-color)) 24%, #17212b); color: #f5f7fa; }
+        .dark .precision-system-strip { background: #15271f; color: #b9e4d4; }
+        .dark .precision-system-strip.paused { background: #2a2112; color: #f7d899; }
+        .dark .precision-filter:hover, .dark .precision-filter.active { background: #1e2b36; }
+        .dark .precision-week-slot.today-column { background: #1b2d40; }
+
+        @media (max-width: 900px) {
+            .precision-commandbar { grid-template-columns: 1fr; gap: 12px; padding: 15px; }
+            .precision-brand { display: none; }
+            .precision-command-actions { justify-content: center; }
+            .precision-body { grid-template-columns: 1fr; }
+            .precision-system-strip { align-items: flex-start; flex-direction: column; gap: 3px; }
+            .precision-system-detail { text-align: left; }
+            .precision-rail { display: flex; gap: 8px; padding: 10px; border-right: 0; border-bottom: 1px solid var(--line-strong); overflow-x: auto; }
+            .precision-rail-label { display: none; }
+            .precision-view-list { display: flex; gap: 5px; margin: 0; }
+            .precision-view-button { width: auto; min-width: 84px; }
+            .precision-view-button span { display: none; }
+            .precision-legend { grid-template-columns: 1fr; gap: 18px; }
+            .precision-filter-list { display: flex; gap: 4px; }
+            .precision-filter { width: auto; min-width: max-content; background: var(--surface); border-color: var(--line); }
+            .precision-filter-count { display: none; }
+            .precision-tools { display: none; }
+        }
+        @media (max-width: 720px) {
+            .precision-calendar { box-shadow: 5px 5px 0 rgba(23,33,43,.07); }
+            .precision-period h2 { min-width: 170px; font-size: 21px; }
+            .precision-today { display: none; }
+            .precision-command-actions { display: grid; grid-template-columns: 1fr; }
+            .precision-new-button { width: 100%; }
+            .precision-weekday { padding: 9px 2px; font-size: 9px; }
+            .precision-day-cell { min-height: 62px; padding: 5px 3px; }
+            .precision-day-head { justify-content: center; margin: 0; }
+            .precision-day-number { width: 25px; height: 25px; }
+            .precision-event-stack { display: flex; justify-content: center; gap: 3px; padding-top: 3px; }
+            .precision-month-grid .precision-event { width: 6px; height: 6px; min-height: 6px; padding: 0; border: 0; border-radius: 50%; background: var(--event-color); font-size: 0; }
+            .precision-month-grid .precision-event::before, .precision-month-grid .precision-event > *, .precision-month-grid .precision-more { display: none; }
+            .precision-mobile-agenda { display: block; padding: 16px; border-top: 1px solid var(--line-strong); }
+            .precision-mobile-agenda h3 { margin: 0 0 11px; color: var(--ink); font-size: 16px; }
+            .precision-mobile-agenda .precision-event { margin-bottom: 6px; padding: 10px 10px 10px 14px; font-size: 13px; }
+            .precision-day-view { grid-template-columns: 62px minmax(0, 1fr); }
+            .precision-day-banner { padding: 18px 14px; }
+            .precision-day-hour { padding: 12px 8px; }
+        }
     </style>
     
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
@@ -54,9 +530,10 @@
             render() {
                 if (this.state.hasError) {
                     return (
-                        <div className="min-h-screen flex items-center justify-center bg-red-50 p-8">
-                            <div className="bg-white p-8 rounded-xl shadow-xl border-2 border-red-500 max-w-2xl w-full">
-                                <h2 className="text-2xl font-black text-red-600 mb-4">Oops! Erro na Interface.</h2>
+                        <div className="system-page min-h-screen flex items-center justify-center p-8">
+                            <div className="react-error-panel bg-white p-8 max-w-2xl w-full">
+                                <p className="text-xs font-bold uppercase tracking-widest text-red-700 mb-2">Falha de sistema</p>
+                                <h2 className="text-2xl font-black text-slate-900 mb-4">Não foi possível abrir a interface</h2>
                                 <pre className="bg-gray-100 p-4 rounded text-sm text-red-800 overflow-auto">{this.state.errorMsg}</pre>
                                 <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-2 rounded font-bold">Recarregar Página</button>
                             </div>
@@ -87,21 +564,21 @@
 
         const { useState, useEffect } = React;
         
-        const Download = () => <span>⬇️</span>;
-        const Upload = () => <span>📥</span>;
-        const Trash2 = () => <span>🗑️</span>;
-        const CalendarDays = () => <span>📅</span>;
-        const Edit2 = () => <span>✏️</span>;
-        const LogOut = () => <span>🚪</span>;
-        const DatabaseIcon = () => <span>☁️</span>;
-        const MessageSquare = () => <span className="text-[10px]">💬</span>;
-        const FilterIcon = () => <span>🔍</span>;
-        const ImageIcon = () => <span>🖼️</span>;
-        const PDFIcon = () => <span>📄</span>;
-        const KeyIcon = () => <span>🔑</span>;
-        const CheckIcon = () => <span>✓</span>;
-        const MultiSelectIcon = () => <span>✅</span>;
-        const TrelloIcon = () => <span title={'Trello'}>📋</span>;
+        const Download = () => <span className="tool-icon" aria-hidden="true">↓</span>;
+        const Upload = () => <span className="tool-icon" aria-hidden="true">↑</span>;
+        const Trash2 = () => <span className="tool-icon" aria-hidden="true">×</span>;
+        const CalendarDays = () => <span className="tool-icon tool-date" aria-hidden="true">31</span>;
+        const Edit2 = () => <span className="tool-icon" aria-hidden="true">↗</span>;
+        const LogOut = () => <span className="tool-icon" aria-hidden="true">→</span>;
+        const DatabaseIcon = () => <span className="tool-icon" aria-hidden="true">●</span>;
+        const MessageSquare = () => <span className="tool-icon" aria-hidden="true">•••</span>;
+        const FilterIcon = () => <span className="tool-icon" aria-hidden="true">⌕</span>;
+        const ImageIcon = () => <span className="tool-icon tool-icon-box" aria-hidden="true">IMG</span>;
+        const PDFIcon = () => <span className="tool-icon tool-icon-box" aria-hidden="true">PDF</span>;
+        const KeyIcon = () => <span className="tool-icon tool-icon-box" aria-hidden="true">KEY</span>;
+        const CheckIcon = () => <span className="tool-icon" aria-hidden="true">✓</span>;
+        const MultiSelectIcon = () => <span className="tool-icon" aria-hidden="true">□</span>;
+        const TrelloIcon = () => <span className="tool-icon tool-icon-box" title="Trello" aria-hidden="true">TR</span>;
         
         const MEU_EMAIL_MASTER = "pedrocavalcant159@gmail.com".toLowerCase();
         
@@ -329,37 +806,37 @@
           };
 
           if (!companyId || !eventId) {
-              return <main className="min-h-screen flex items-center justify-center p-5"><section className="w-full max-w-lg bg-white border border-gray-300 rounded-lg p-6 shadow-lg"><h1 className="text-xl font-bold">Link inválido</h1><p className="mt-2 text-gray-600">O endereço do post está incompleto.</p></section></main>;
+              return <main className="system-page min-h-screen flex items-center justify-center p-5"><section className="system-panel p-6"><p className="precision-eyebrow">Falha de acesso</p><h1 className="text-xl font-bold mt-2">Link inválido</h1><p className="mt-2 text-gray-600">O endereço do post está incompleto.</p></section></main>;
           }
-          if (loadingAuth) return <main className="min-h-screen grid place-items-center text-gray-600">Carregando...</main>;
+          if (loadingAuth) return <main className="system-loading"><span className="system-loading-mark">Validando acesso</span></main>;
           if (!user) {
               return (
-                  <main className="min-h-screen flex items-center justify-center p-5">
-                      <form onSubmit={handleLogin} className="w-full max-w-md bg-white border border-gray-300 rounded-lg p-6 shadow-lg">
-                          <p className="text-sm font-bold text-emerald-700">CALENDÁRIO UPLI</p>
+                  <main className="system-page min-h-screen flex items-center justify-center p-5">
+                      <form onSubmit={handleLogin} className="system-panel p-6">
+                          <p className="precision-eyebrow">CALENDÁRIO UPLI</p>
                           <h1 className="text-2xl font-bold mt-1">Atualizar andamento</h1>
                           <p className="text-gray-600 mt-2">Entre com sua conta do calendário para responder ao lembrete.</p>
                           <label className="block text-sm font-bold mt-5">E-mail</label>
                           <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 w-full border-2 border-gray-300 rounded-md px-3 py-3" autoComplete="username" />
                           <label className="block text-sm font-bold mt-4">Senha</label>
                           <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 w-full border-2 border-gray-300 rounded-md px-3 py-3" autoComplete="current-password" />
-                          {loginError && <p className="mt-3 text-sm font-bold text-red-700">{loginError}</p>}
-                          <button type="submit" className="mt-5 w-full bg-emerald-700 text-white rounded-md px-4 py-3 font-bold">Entrar e continuar</button>
+                          {loginError && <p className="system-alert system-alert-error mt-3 font-bold">{loginError}</p>}
+                          <button type="submit" className="system-primary-action mt-5 w-full px-4 py-3 font-bold">Entrar e continuar</button>
                       </form>
                   </main>
               );
           }
           return (
-              <main className="min-h-screen bg-gray-100 p-4 sm:p-8">
-                  <section className="mx-auto w-full max-w-xl bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+              <main className="system-page min-h-screen p-4 sm:p-8">
+                  <section className="system-panel mx-auto">
                       <header className="bg-gray-900 text-white p-5">
                           <p className="text-xs font-bold text-emerald-400">CALENDÁRIO UPLI</p>
                           <h1 className="text-xl font-bold mt-1">Atualizar andamento do post</h1>
                       </header>
-                      <div className="p-5">
+                      <div className="system-panel-content">
                           {loadingPost && <p className="text-gray-600">Carregando post...</p>}
-                          {error && <p className="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 font-semibold">{error}</p>}
-                          {success && <div className="border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-md p-4"><strong>Andamento atualizado.</strong><p className="text-sm mt-1">O novo status já aparece no calendário.</p></div>}
+                          {error && <p className="system-alert system-alert-error font-semibold">{error}</p>}
+                          {success && <div className="system-alert system-alert-success"><strong>Andamento atualizado.</strong><p className="text-sm mt-1">O novo status já aparece no calendário.</p></div>}
                           {eventData && !success && (
                               <form onSubmit={submitStatusUpdate}>
                                   <div className="border-b border-gray-200 pb-4 mb-5">
@@ -381,7 +858,7 @@
                                   </fieldset>
                                   <label className="block font-bold mt-5">Observação <span className="font-normal text-gray-500">(opcional)</span></label>
                                   <textarea value={updateNote} onChange={e => setUpdateNote(e.target.value)} rows="3" maxLength="500" className="mt-2 w-full border-2 border-gray-300 rounded-md px-3 py-3" placeholder="Ex.: material enviado para aprovação"></textarea>
-                                  <button type="submit" disabled={saving} className="mt-5 w-full bg-emerald-700 disabled:bg-gray-400 text-white rounded-md px-4 py-3 font-bold">{saving ? 'Atualizando...' : 'Confirmar andamento'}</button>
+                                  <button type="submit" disabled={saving} className="system-primary-action mt-5 w-full px-4 py-3 font-bold disabled:opacity-50">{saving ? 'Atualizando...' : 'Confirmar andamento'}</button>
                               </form>
                           )}
                           <div className="mt-5 pt-4 border-t border-gray-200 flex items-center justify-between gap-3 text-xs text-gray-500">
@@ -466,16 +943,16 @@
           };
 
           return (
-              <main className="min-h-screen bg-gray-100 p-4 sm:p-8">
-                  <section className="mx-auto w-full max-w-xl bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+              <main className="system-page min-h-screen p-4 sm:p-8">
+                  <section className="system-panel mx-auto">
                       <header className="bg-gray-900 text-white p-5">
                           <p className="text-xs font-bold text-emerald-400">CALENDÁRIO UPLI</p>
                           <h1 className="text-xl font-bold mt-1">Atualizar andamento</h1>
                       </header>
-                      <div className="p-5">
+                      <div className="system-panel-content">
                           {loading && <p className="text-gray-600">Carregando demanda...</p>}
-                          {error && <p className="border border-red-300 bg-red-50 text-red-800 rounded-md p-3 font-semibold">{error}</p>}
-                          {success && <div className="border border-emerald-300 bg-emerald-50 text-emerald-900 rounded-md p-4"><strong>{success}</strong></div>}
+                          {error && <p className="system-alert system-alert-error font-semibold">{error}</p>}
+                          {success && <div className="system-alert system-alert-success"><strong>{success}</strong></div>}
                           {requestData && !success && (
                               <form onSubmit={submitResponse}>
                                   <div className="border-b border-gray-200 pb-4 mb-5">
@@ -497,7 +974,7 @@
                                   </fieldset>
                                   <label className="block font-bold mt-5">Observação <span className="font-normal text-gray-500">(opcional)</span></label>
                                   <textarea value={updateNote} onChange={event => setUpdateNote(event.target.value)} rows="3" maxLength="500" className="mt-2 w-full border-2 border-gray-300 rounded-md px-3 py-3" placeholder="Ex.: material enviado para aprovação"></textarea>
-                                  <button type="submit" disabled={saving} className="mt-5 w-full bg-emerald-700 disabled:bg-gray-400 text-white rounded-md px-4 py-3 font-bold">{saving ? 'Enviando...' : 'Confirmar andamento'}</button>
+                                  <button type="submit" disabled={saving} className="system-primary-action mt-5 w-full px-4 py-3 font-bold disabled:opacity-50">{saving ? 'Enviando...' : 'Confirmar andamento'}</button>
                               </form>
                           )}
                       </div>
@@ -773,7 +1250,7 @@
           const [colorOptions, setColorOptions] = useState([]);
           const [statusPipeline, setStatusPipeline] = useState(DEFAULT_STATUS_PIPELINE);
           
-          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           const [sendToUpliGeral, setSendToUpliGeral] = useState(true); 
           
@@ -782,7 +1259,7 @@
           const [editColorValue, setEditColorValue] = useState('');
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
@@ -797,6 +1274,8 @@
           const [editCompanyColor, setEditCompanyColor] = useState('');
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
+          const [calendarView, setCalendarView] = useState('month');
+          const [selectedDay, setSelectedDay] = useState(new Date().getDate());
           const [automationSettings, setAutomationSettings] = useState({});
           const [automationCluster, setAutomationCluster] = useState({});
           const [showAutomationModal, setShowAutomationModal] = useState(false);
@@ -993,8 +1472,28 @@
               return new Date(isoString).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit'});
           };
 
-          const handlePrevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1); } else { setMonth(month - 1); } };
-          const handleNextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } };
+          const moveCalendar = (direction) => {
+              if (calendarView === 'month') {
+                  const nextDate = new Date(year, month + direction, 1);
+                  setYear(nextDate.getFullYear());
+                  setMonth(nextDate.getMonth());
+                  setSelectedDay(1);
+                  return;
+              }
+              const step = calendarView === 'week' ? 7 : 1;
+              const nextDate = new Date(year, month, selectedDay + (direction * step));
+              setYear(nextDate.getFullYear());
+              setMonth(nextDate.getMonth());
+              setSelectedDay(nextDate.getDate());
+          };
+          const handlePrevMonth = () => moveCalendar(-1);
+          const handleNextMonth = () => moveCalendar(1);
+          const goToToday = () => {
+              const today = new Date();
+              setYear(today.getFullYear());
+              setMonth(today.getMonth());
+              setSelectedDay(today.getDate());
+          };
 
           const currentMonthEvents = events.filter(event => Number(event.year) === year && Number(event.month) === month);
           const currentMonthAssignedEvents = currentMonthEvents.filter(event => event.responsibleId || event.responsible);
@@ -1343,7 +1842,7 @@
                     db.collection('companies').doc(UPLI_GERAL_ID).set({ events: [...upliGeral.events, clonedEvent] }, { merge: true });
                 }
             }
-            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           };
 
           const removeEvent = (index) => {
@@ -1378,7 +1877,7 @@
             }
 
             setEditEventForm({
-                day: event.day || '', text: textToEdit, color: event.color || '', notes: event.notes || '', imageUrl: event.imageUrl || '',
+                day: event.day || '', text: textToEdit, color: event.color || '', startTime: event.startTime || '', endTime: event.endTime || '', notes: event.notes || '', imageUrl: event.imageUrl || '',
                 responsibleId: event.responsibleId || '', responsible: event.responsible || '', responsiblePhone: event.responsiblePhone || '', responsibleEmail: event.responsibleEmail || ''
             });
           };
@@ -1396,7 +1895,7 @@
               
               const dayNum = parseInt(editEventForm.day || 1);
               const startDate = new Date(year, month, dayNum);
-              const endDate = new Date(year, month, dayNum + 1); 
+              const endDate = new Date(year, month, dayNum + 1);
               
               const formatGCalDate = (d) => {
                   return d.getFullYear().toString() + 
@@ -1404,7 +1903,16 @@
                          d.getDate().toString().padStart(2, '0');
               };
               
-              const dates = `${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`;
+              let dates = `${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`;
+              if (editEventForm.startTime) {
+                  const [startHour, startMinute] = editEventForm.startTime.split(':').map(Number);
+                  const [endHour, endMinute] = (editEventForm.endTime || editEventForm.startTime).split(':').map(Number);
+                  const timedStart = new Date(year, month, dayNum, startHour, startMinute || 0);
+                  const timedEnd = new Date(year, month, dayNum, endHour, endMinute || 0);
+                  if (!editEventForm.endTime || timedEnd <= timedStart) timedEnd.setTime(timedStart.getTime() + 60 * 60 * 1000);
+                  const formatTimedDate = date => `${formatGCalDate(date)}T${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}00`;
+                  dates = `${formatTimedDate(timedStart)}/${formatTimedDate(timedEnd)}`;
+              }
               const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${dates}`;
               
               window.open(url, '_blank');
@@ -1419,7 +1927,7 @@
             const previousEvt = events[editingEventIndex];
             const updatedEvt = {
                 ...previousEvt,
-                day: dayNum, text: editEventForm.text, color: editEventForm.color, notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
+                day: dayNum, text: editEventForm.text, color: editEventForm.color, startTime: editEventForm.startTime || '', endTime: editEventForm.endTime || '', notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
                 responsibleId: editEventForm.responsibleId || '', responsible: editEventForm.responsible.trim(),
                 responsiblePhone: editEventForm.responsiblePhone || '', responsibleEmail: editEventForm.responsibleEmail || '',
                 updatedBy: currentUserName, updatedAt: new Date().toISOString()
@@ -1457,6 +1965,8 @@
                                 ...upliEvents[linkedIdx],
                                 day: updatedEvt.day,
                                 text: newText,
+                                startTime: updatedEvt.startTime || '',
+                                endTime: updatedEvt.endTime || '',
                                 notes: updatedEvt.notes,
                                 imageUrl: updatedEvt.imageUrl,
                                 responsibleId: updatedEvt.responsibleId,
@@ -1551,6 +2061,163 @@
 
           const filteredViewEvents = getFilteredEvents();
           const getCalendarEventsForDay = (day) => filteredViewEvents.filter(e => e.day === day);
+
+          const allIndexedEvents = safeEvents.map((event, index) => ({
+              ...event,
+              _origIdx: index,
+              _key: event.id || `legacy_${index}`
+          }));
+          const getCalendarEventsForDate = (date) => {
+              const dateEvents = allIndexedEvents.filter(event =>
+                  Number(event.year) === date.getFullYear() &&
+                  Number(event.month) === date.getMonth() &&
+                  Number(event.day) === date.getDate()
+              );
+              if (calendarFilter === 'ALL') return dateEvents;
+              if (statusPipeline[calendarFilter]) {
+                  return dateEvents.filter(event => getEventStatus(event._origIdx) === calendarFilter);
+              }
+              return dateEvents.filter(event => event.color === calendarFilter);
+          };
+          const todayDate = new Date();
+          const isSameDate = (first, second) =>
+              first.getFullYear() === second.getFullYear() &&
+              first.getMonth() === second.getMonth() &&
+              first.getDate() === second.getDate();
+          const activeDate = new Date(year, month, Math.min(selectedDay, getDaysInMonth(year, month)));
+          const firstMonthDate = new Date(year, month, 1);
+          const monthGridStart = new Date(year, month, 1 - ((firstMonthDate.getDay() + 6) % 7));
+          const monthGridDates = Array.from({ length: 42 }, (_, index) => {
+              const date = new Date(monthGridStart);
+              date.setDate(monthGridStart.getDate() + index);
+              return date;
+          });
+          const weekStart = new Date(activeDate);
+          weekStart.setDate(activeDate.getDate() - ((activeDate.getDay() + 6) % 7));
+          const weekDates = Array.from({ length: 7 }, (_, index) => {
+              const date = new Date(weekStart);
+              date.setDate(weekStart.getDate() + index);
+              return date;
+          });
+          const scheduleHours = Array.from({ length: 14 }, (_, index) => index + 7);
+          const weekDaysCompact = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
+          const monthNamesDisplay = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+          const periodLabel = calendarView === 'day'
+              ? `${activeDate.getDate()} de ${monthNamesDisplay[activeDate.getMonth()]} de ${activeDate.getFullYear()}`
+              : calendarView === 'week'
+                  ? `${weekDates[0].getDate()}–${weekDates[6].getDate()} de ${monthNamesDisplay[weekDates[6].getMonth()]} ${weekDates[6].getFullYear()}`
+                  : `${monthNamesDisplay[month]} ${year}`;
+          const selectCalendarDate = (date, prepareEvent = false) => {
+              setYear(date.getFullYear());
+              setMonth(date.getMonth());
+              setSelectedDay(date.getDate());
+              if (prepareEvent && isAdmin) {
+                  setNewEvent(previous => ({
+                      ...previous,
+                      day: String(date.getDate()),
+                      color: previous.color || safeColorOptions[0]?.id || ''
+                  }));
+                  window.setTimeout(() => document.querySelector('[data-tutorial="add-post"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+              }
+          };
+
+          const onDropToDate = (eventAction, targetDate, targetTime) => {
+              if (isSelectionMode || !isAdmin) return;
+              eventAction.preventDefault();
+              const originalIndex = eventAction.dataTransfer.getData('eventIndex');
+              if (originalIndex === null || originalIndex === '') return;
+              const updatedEvents = [...events];
+              const previousEvent = updatedEvents[originalIndex];
+              let timeUpdate = {};
+              if (targetTime !== undefined) {
+                  if (!targetTime) {
+                      timeUpdate = { startTime: '', endTime: '' };
+                  } else {
+                      const toMinutes = value => {
+                          const [hoursPart, minutesPart] = String(value || '').split(':').map(Number);
+                          return Number.isFinite(hoursPart) ? (hoursPart * 60) + (minutesPart || 0) : null;
+                      };
+                      const previousStart = toMinutes(previousEvent.startTime);
+                      const previousEnd = toMinutes(previousEvent.endTime);
+                      const duration = previousStart !== null && previousEnd !== null && previousEnd > previousStart ? previousEnd - previousStart : 60;
+                      const targetStart = toMinutes(targetTime);
+                      const targetEnd = Math.min((targetStart || 0) + duration, 1439);
+                      timeUpdate = {
+                          startTime: targetTime,
+                          endTime: `${String(Math.floor(targetEnd / 60)).padStart(2, '0')}:${String(targetEnd % 60).padStart(2, '0')}`
+                      };
+                  }
+              }
+              updatedEvents[originalIndex] = {
+                  ...previousEvent,
+                  ...timeUpdate,
+                  day: targetDate.getDate(),
+                  month: targetDate.getMonth(),
+                  year: targetDate.getFullYear(),
+                  updatedBy: currentUserName,
+                  updatedAt: new Date().toISOString()
+              };
+              saveToCloud({ events: updatedEvents });
+
+              if (selectedCompany !== UPLI_GERAL_ID) {
+                  const centralCalendar = companies.find(company => company.id === UPLI_GERAL_ID);
+                  if (centralCalendar) {
+                      const centralEvents = [...centralCalendar.events];
+                      const linkedIndex = centralEvents.findIndex(item => item.id === previousEvent.id || item.id === `${previousEvent.id}_clone`);
+                      if (linkedIndex !== -1) {
+                          centralEvents[linkedIndex] = {
+                              ...centralEvents[linkedIndex],
+                              ...timeUpdate,
+                              day: targetDate.getDate(),
+                              month: targetDate.getMonth(),
+                              year: targetDate.getFullYear()
+                          };
+                          db.collection('companies').doc(UPLI_GERAL_ID).set({ events: centralEvents }, { merge: true });
+                      }
+                  }
+              }
+          };
+          const renderPrecisionEvent = (event, options = {}) => {
+              const category = safeColorOptions.find(item => item.id === event.color);
+              const eventColor = category?.color || '#2f5ea8';
+              const status = getEventStatus(event._origIdx);
+              const statusConfig = status && statusPipeline[status] ? statusPipeline[status] : null;
+              const statusLabel = statusConfig?.label || 'Sem status';
+              const isSelected = selectedEvents.includes(event._key);
+              const eventTime = event.startTime
+                  ? `${event.startTime}${event.endTime ? `–${event.endTime}` : ''}`
+                  : 'Dia inteiro';
+              const displayTitle = getCleanDisplayText(event.text, isCentral, category?.label);
+              return (
+                  <button
+                      key={event._key}
+                      type="button"
+                      className={`precision-event ${isSelected ? 'ring-2 ring-offset-1 ring-slate-900' : ''}`}
+                      style={{
+                          '--event-color': eventColor,
+                          '--status-color': statusConfig?.bg || '#98a8b8',
+                          '--status-text': statusConfig?.text || '#17212b'
+                      }}
+                      draggable={isAdmin && !isSelectionMode}
+                      onDragStart={eventAction => onDragStart(eventAction, event._origIdx)}
+                      onClick={eventAction => {
+                          eventAction.stopPropagation();
+                          if (isSelectionMode) toggleEventSelection(event._key);
+                          else startEditEvent(event, event._origIdx);
+                      }}
+                      aria-label={`${eventTime}: ${displayTitle}. ${category?.label || 'Sem categoria'}. ${statusLabel}. Responsável: ${event.responsible || 'não definido'}`}
+                  >
+                      <span className="precision-event-kicker">
+                          <span className="precision-event-dot" aria-hidden="true"></span>
+                          <span className="precision-event-category">{category?.label || 'Sem categoria'}</span>
+                          <span className="precision-event-status">{statusLabel}</span>
+                      </span>
+                      {!options.hideTime && <span className="precision-event-time">{eventTime}</span>}
+                      <span className="precision-event-title">{displayTitle}</span>
+                      <span className="precision-event-meta">Resp. {event.responsible || 'não definido'}</span>
+                  </button>
+              );
+          };
 
           const handleSelectionToggle = () => {
               setIsSelectionMode(!isSelectionMode);
@@ -2308,6 +2975,23 @@
             lines.push(currentLine); return lines;
           };
 
+          const getExportEventText = (event, isCentral, category) => {
+              let displayText = getCleanDisplayText(event.text, isCentral, category?.label);
+              if (isCentral && category?.label) displayText = `${category.label} · ${displayText}`;
+              const status = getEventStatus(event._origIdx);
+              if (status && statusPipeline[status]) displayText += ` · ${statusPipeline[status].label}`;
+              return displayText;
+          };
+
+          const getExportResponsibleText = event => event.responsible ? `Resp. ${event.responsible}` : '';
+
+          const mixWithWhite = (hexColor, ratio = 0.88) => {
+              const clean = String(hexColor || '#98a8b8').replace('#', '');
+              if (clean.length !== 6) return '#f1f4f7';
+              const channels = [0, 2, 4].map(index => parseInt(clean.slice(index, index + 2), 16));
+              return `#${channels.map(channel => Math.round(channel + ((255 - channel) * ratio)).toString(16).padStart(2, '0')).join('')}`;
+          };
+
           const drawCalendarToCanvas = () => {
             const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
             const weeks = getWeeks(); const canvasWidth = 1920; const padding = 60; const contentWidth = canvasWidth - (padding * 2); const colWidth = contentWidth / 7; const eventSpacing = 10;
@@ -2326,29 +3010,17 @@
                   const dayEvents = getCalendarEventsForDay(day); let colHeight = 0;
                   dayEvents.forEach(event => {
                     const colorObj = safeColorOptions.find(c => c.id === event.color);
-                    let displayText = getCleanDisplayText(event.text, isCentral, colorObj?.label);
-                    const status = getEventStatus(event._origIdx);
-                    
-                    if (!isCentral) {
-                        const catLabel = colorObj ? colorObj.label : '';
-                        if (catLabel) {
-                            const catPrefix = catLabel.toLowerCase() + ':';
-                            if (!displayText.toLowerCase().startsWith(catPrefix)) {
-                                displayText = `${catLabel}: ${displayText}`;
-                            }
-                        }
-                    }
-
-                    if (!isCentral && status && statusPipeline[status]) {
-                        displayText += ` [${statusPipeline[status].label}]`;
-                    }
-                    if (event.responsible) displayText += ` [Resp: ${event.responsible}]`;
+                    const displayText = getExportEventText(event, isCentral, colorObj);
                     
                     let textWidthArea = colWidth - 20;
                     if (isCentral) textWidthArea -= 24; 
 
-                    const lines = getLines(ctx, displayText, textWidthArea); 
-                    const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
+                    ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial';
+                    const lines = getLines(ctx, displayText, textWidthArea);
+                    ctx.font = 'bold 12px "Atkinson Hyperlegible", Arial';
+                    const responsibleLines = getExportResponsibleText(event) ? getLines(ctx, getExportResponsibleText(event), textWidthArea) : [];
+                    const responsibleHeight = responsibleLines.length ? 5 + (responsibleLines.length * 15) : 0;
+                    const dynamicHeight = (lines.length * lineHeight) + responsibleHeight + (paddingY * 2);
                     colHeight += dynamicHeight + eventSpacing;
                   });
                   maxWeekHeightCalc = Math.max(maxWeekHeightCalc, colHeight);
@@ -2373,7 +3045,10 @@
                 totalHeight += statusRows * 50 + padding + 60; 
             }
             
-            const finalHeight = Math.max(1080, totalHeight); 
+            // Reserva inferior para a última linha das legendas/status não tocar
+            // nem ultrapassar a moldura da prancha exportada.
+            const exportBottomSafety = 96;
+            const finalHeight = Math.max(1080, totalHeight + exportBottomSafety);
             const scale = 4; 
             canvas.width = canvasWidth * scale; 
             canvas.height = finalHeight * scale;
@@ -2382,25 +3057,34 @@
             ctx.imageSmoothingEnabled = true; 
             ctx.imageSmoothingQuality = 'high';
             
-            ctx.fillStyle = '#ffffff'; 
+            ctx.fillStyle = '#F7F9FB'; 
             ctx.fillRect(0, 0, canvasWidth, finalHeight);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(padding - 18, 26, contentWidth + 36, finalHeight - 52);
+            ctx.strokeStyle = '#CBD5DF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(padding - 18, 26, contentWidth + 36, finalHeight - 52);
             
             let currentY = padding; 
             const companyName = companies.find(c => c.id === selectedCompany)?.name || '';
-            ctx.fillStyle = '#000000'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-            ctx.fillText(`${months[month]} ${year} ${companyName ? `| ${companyName.toUpperCase()}` : ''}`, padding, currentY + 40);
+            ctx.fillStyle = '#2F5EA8'; ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.fillText('AGENDA DE CONTEÚDO · VISÃO MENSAL', padding, currentY + 6);
+            ctx.fillStyle = '#17212B'; ctx.font = 'bold 44px "Atkinson Hyperlegible", Arial';
+            ctx.fillText(`${months[month]} ${year} ${companyName ? `· ${companyName.toUpperCase()}` : ''}`, padding, currentY + 54);
+            ctx.fillStyle = '#2E6B57';
+            ctx.fillRect(padding, currentY + 70, 90, 5);
             
             currentY += 100; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             fullWeekDays.forEach((day, i) => {
-              const x = padding + (i * colWidth); const pillMargin = 10;
-              ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(x + pillMargin, currentY, colWidth - (pillMargin * 2), 50, 25); ctx.fill();
-              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 25);
+              const x = padding + (i * colWidth);
+              ctx.fillStyle = '#17212B'; ctx.fillRect(x, currentY, colWidth - 2, 48);
+              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 17px "Atkinson Hyperlegible", Arial'; ctx.fillText(day, x + (colWidth / 2), currentY + 24);
             });
             
             currentY += 80;
             weeks.forEach(week => {
-              ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.roundRect(padding, currentY, contentWidth, 36, 18); ctx.fill();
-              ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+              ctx.fillStyle = '#E7ECF1'; ctx.beginPath(); ctx.roundRect(padding, currentY, contentWidth, 36, 3); ctx.fill();
+              ctx.fillStyle = '#17212B'; ctx.font = 'bold 20px "Atkinson Hyperlegible", Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
               week.forEach((day, i) => { if (day) ctx.fillText(day.toString(), padding + (i * colWidth) + 25, currentY + 18); });
               
               currentY += 50; let maxWeekHeight = 0;
@@ -2414,42 +3098,22 @@
                   const color = safeColorOptions.find(c => c.id === event.color); if (!color) return;
                   const status = getEventStatus(event._origIdx); 
                   
-                  let finalBgColor = color.color;
-                  let finalTextColor = getTextColor(color.color);
-
-                  if (isCentral) {
-                      if (status && statusPipeline[status]) {
-                          finalBgColor = statusPipeline[status].bg;
-                          finalTextColor = statusPipeline[status].text;
-                      } else {
-                          finalBgColor = '#E5E7EB'; 
-                          finalTextColor = '#374151';
-                      }
-                  }
+                  const accentColor = status && statusPipeline[status] ? statusPipeline[status].bg : color.color;
+                  const finalBgColor = mixWithWhite(accentColor, 0.88);
+                  const finalTextColor = '#17212B';
                   
-                  ctx.font = 'bold 14px Arial'; 
-                  let displayText = getCleanDisplayText(event.text, isCentral, color.label);
-                  
-                  if (!isCentral) {
-                      const catLabel = color.label;
-                      if (catLabel) {
-                          const catPrefix = catLabel.toLowerCase() + ':';
-                          if (!displayText.toLowerCase().startsWith(catPrefix)) {
-                              displayText = `${catLabel}: ${displayText}`;
-                          }
-                      }
-                  }
-
-                  if (!isCentral && status && statusPipeline[status]) {
-                      displayText += ` [${statusPipeline[status].label}]`;
-                  }
-                  if (event.responsible) displayText += ` [Resp: ${event.responsible}]`;
+                  ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial'; 
+                  const displayText = getExportEventText(event, isCentral, color);
                   
                   let textWidthArea = eventW - 20;
                   if (isCentral) textWidthArea -= 24; 
 
-                  const lines = getLines(ctx, displayText, textWidthArea); 
-                  const dynamicHeight = (lines.length * lineHeight) + (paddingY * 2);
+                  const lines = getLines(ctx, displayText, textWidthArea);
+                  ctx.font = 'bold 12px "Atkinson Hyperlegible", Arial';
+                  const responsibleText = getExportResponsibleText(event);
+                  const responsibleLines = responsibleText ? getLines(ctx, responsibleText, textWidthArea) : [];
+                  const responsibleHeight = responsibleLines.length ? 5 + (responsibleLines.length * 15) : 0;
+                  const dynamicHeight = (lines.length * lineHeight) + responsibleHeight + (paddingY * 2);
                   
                   if (event.imageUrl) {
                       let urlFormated = event.imageUrl.trim();
@@ -2459,7 +3123,9 @@
                       pdfLinks.push({ x: x + eventMargin, y: eventY, w: eventW, h: dynamicHeight, url: urlFormated });
                   }
 
-                  ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 16); ctx.fill();
+                  ctx.fillStyle = finalBgColor; ctx.beginPath(); ctx.roundRect(x + eventMargin, eventY, eventW, dynamicHeight, 5); ctx.fill();
+                  ctx.strokeStyle = '#CBD5DF'; ctx.lineWidth = 1; ctx.stroke();
+                  ctx.fillStyle = accentColor; ctx.fillRect(x + eventMargin, eventY, 5, dynamicHeight);
 
                   ctx.textBaseline = 'top';
                   if (isCentral) {
@@ -2467,19 +3133,33 @@
                       ctx.beginPath();
                       ctx.arc(x + eventMargin + 18, eventY + (dynamicHeight / 2), 8, 0, 2 * Math.PI);
                       ctx.fill();
-                      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                      ctx.lineWidth = 2;
+                      ctx.strokeStyle = '#ffffff';
+                      ctx.lineWidth = 1.5;
                       ctx.stroke();
 
                       ctx.fillStyle = finalTextColor;
+                      ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial';
                       ctx.textAlign = 'left';
                       let textY = eventY + paddingY;
                       lines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += lineHeight; });
+                      if (responsibleLines.length) {
+                          textY += 5;
+                          ctx.fillStyle = '#6F7D8A';
+                          ctx.font = 'bold 12px "Atkinson Hyperlegible", Arial';
+                          responsibleLines.forEach(line => { ctx.fillText(line, x + eventMargin + 34, textY); textY += 15; });
+                      }
                   } else {
                       ctx.fillStyle = finalTextColor;
-                      ctx.textAlign = 'center';
+                      ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial';
+                      ctx.textAlign = 'left';
                       let textY = eventY + paddingY; 
-                      lines.forEach(line => { ctx.fillText(line, x + (colWidth / 2), textY); textY += lineHeight; });
+                      lines.forEach(line => { ctx.fillText(line, x + eventMargin + 14, textY); textY += lineHeight; });
+                      if (responsibleLines.length) {
+                          textY += 5;
+                          ctx.fillStyle = '#6F7D8A';
+                          ctx.font = 'bold 12px "Atkinson Hyperlegible", Arial';
+                          responsibleLines.forEach(line => { ctx.fillText(line, x + eventMargin + 14, textY); textY += 15; });
+                      }
                   }
                   
                   eventY += dynamicHeight + eventSpacing;
@@ -2491,8 +3171,8 @@
 
             if (legendItems.length > 0) {
               currentY += 40; 
-              ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-              ctx.fillText('LEGENDA DE CATEGORIAS / EMPRESAS:', padding, currentY);
+              ctx.fillStyle = '#607080'; ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+              ctx.fillText('CATEGORIAS / EMPRESAS', padding, currentY);
               currentY += 30; 
               
               const itemsPerRow = 6; 
@@ -2505,18 +3185,20 @@
                 const itemX = padding + (col * (itemWidth + gap)); 
                 const itemY = currentY + (row * 50);
                 
-                ctx.fillStyle = item.color || '#000000'; ctx.beginPath(); ctx.roundRect(itemX, itemY, itemWidth, 36, 18); ctx.fill();
-                ctx.fillStyle = getTextColor(item.color); ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.roundRect(itemX, itemY, itemWidth, 36, 3); ctx.fill();
+                ctx.strokeStyle = '#CBD5DF'; ctx.lineWidth = 1; ctx.stroke();
+                ctx.fillStyle = item.color || '#98A8B8'; ctx.beginPath(); ctx.arc(itemX + 17, itemY + 18, 6, 0, 2 * Math.PI); ctx.fill();
+                ctx.fillStyle = '#17212B'; ctx.font = 'bold 13px "Atkinson Hyperlegible", Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
                 let label = item.label || ''; while (ctx.measureText(label).width > itemWidth - 20 && label.length > 3) label = label.slice(0, -4) + '...';
-                ctx.fillText(label, itemX + (itemWidth / 2), itemY + 18);
+                ctx.fillText(label, itemX + 31, itemY + 18);
               });
               currentY += (Math.ceil(legendItems.length / itemsPerRow) * 50) + 20;
             }
 
             if (isCentral) {
                 currentY += 30;
-                ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-                ctx.fillText('STATUS DE PRODUÇÃO:', padding, currentY);
+                ctx.fillStyle = '#607080'; ctx.font = 'bold 14px "Atkinson Hyperlegible", Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+                ctx.fillText('FLUXO DE PRODUÇÃO', padding, currentY);
                 currentY += 30;
                 
                 const statusItemsPerRow = 7; 
@@ -2529,8 +3211,10 @@
                     const itemX = padding + (col * (statusItemWidth + gapStatus)); 
                     const itemY = currentY + (row * 50);
                     
-                    ctx.fillStyle = val.bg; ctx.beginPath(); ctx.roundRect(itemX, itemY, statusItemWidth, 36, 8); ctx.fill();
-                    ctx.fillStyle = val.text; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.roundRect(itemX, itemY, statusItemWidth, 36, 3); ctx.fill();
+                    ctx.strokeStyle = '#CBD5DF'; ctx.lineWidth = 1; ctx.stroke();
+                    ctx.fillStyle = val.bg; ctx.fillRect(itemX, itemY, 5, 36);
+                    ctx.fillStyle = '#17212B'; ctx.font = 'bold 11px "Atkinson Hyperlegible", Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                     let label = val.label || ''; while (ctx.measureText(label).width > statusItemWidth - 10 && label.length > 3) label = label.slice(0, -4) + '...';
                     ctx.fillText(label.toUpperCase(), itemX + (statusItemWidth / 2), itemY + 18);
                 });
@@ -2834,27 +3518,31 @@
               return () => window.removeEventListener('keydown', handleTutorialKey);
           }, [showTutorial, tutorialStep, userRole, selectedCompany]);
 
-          if (loadingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 font-bold text-gray-500">Carregando Nuvem...</div>;
+          if (loadingAuth) return <div className="system-loading"><span className="system-loading-mark">Sincronizando agenda</span></div>;
 
           if (!user) {
               return (
-                  <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-900 p-4">
-                      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full relative overflow-hidden">
-                          <div className="text-center mb-8">
-                              <span className="text-5xl">{isResetMode ? '🔐' : '📅'}</span>
+                  <div className="auth-shell">
+                      <div className="auth-card">
+                          <div className="auth-brand">
+                              <span className="auth-index">UPLI · Agenda de conteúdo</span>
+                              <span className="auth-date-mark" aria-hidden="true">{isResetMode ? '••' : new Date().getDate()}</span>
                               <h2 className="text-3xl font-black mt-2 text-gray-800 tracking-tight">{isResetMode ? 'Recuperar Senha' : 'Calendário UPLI'}</h2>
-                              <p className="text-gray-500 text-sm mt-1">{isResetMode ? 'Digite seu e-mail para receber o link' : 'Faça login para acessar a nuvem'}</p>
+                              <p>{isResetMode ? 'Digite seu e-mail para receber o link de acesso.' : 'Entre para organizar demandas, responsáveis e produção.'}</p>
                           </div>
                           {isResetMode ? (
                               <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
-                                  <input type="email" placeholder="Seu e-mail cadastrado" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
+                                  <label className="auth-field-label" htmlFor="recovery-email">E-mail cadastrado</label>
+                                  <input id="recovery-email" type="email" placeholder="nome@empresa.com" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
                                   <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENVIAR LINK</button>
                                   <div className="text-center mt-4 pt-2 border-t"><button type="button" onClick={() => setIsResetMode(false)} className="text-sm text-gray-500 hover:text-gray-800 font-bold transition">← Voltar</button></div>
                               </form>
                           ) : (
                               <form onSubmit={handleLogin} className="space-y-4">
-                                  <input type="email" placeholder="E-mail de acesso" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
-                                  <input type="password" placeholder="Senha" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={password} onChange={e=>setPassword(e.target.value)} required />
+                                  <label className="auth-field-label" htmlFor="login-email">E-mail</label>
+                                  <input id="login-email" type="email" placeholder="nome@empresa.com" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={email} onChange={e=>setEmail(e.target.value)} required />
+                                  <label className="auth-field-label" htmlFor="login-password">Senha</label>
+                                  <input id="login-password" type="password" placeholder="Sua senha" className="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 transition font-medium" value={password} onChange={e=>setPassword(e.target.value)} required />
                                   <div className="flex justify-end"><button type="button" onClick={() => setIsResetMode(true)} className="text-sm text-blue-600 hover:text-blue-800 font-bold transition mt-1">Esqueceu a senha?</button></div>
                                   <button type="submit" className="w-full bg-blue-600 text-white font-black text-lg p-3 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">ENTRAR</button>
                               </form>
@@ -2872,9 +3560,9 @@
           const activeTutorialStep = activeTutorialSteps[tutorialStep] || activeTutorialSteps[0];
 
           return (
-            <div className={`min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+            <div className={`app-shell min-h-screen p-2 md:p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'text-black'}`}>
               {showTutorialMenu && (
-                  <div className="fixed inset-0 bg-slate-950 bg-opacity-80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" style={{ zIndex: 210 }}>
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center p-4 overflow-y-auto" style={{ zIndex: 210 }}>
                       <section role="dialog" aria-modal="true" aria-label="Central de tutoriais" className="bg-white dark:bg-gray-800 text-gray-800 dark:text-white rounded-2xl shadow-2xl border-2 border-sky-400 max-w-3xl w-full p-5 md:p-7 relative">
                           <button onClick={finishTutorial} className="absolute top-4 right-4 w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-red-100 hover:text-red-600 font-black" aria-label="Fechar central de tutoriais">×</button>
                           <div className="pr-10">
@@ -3061,8 +3749,8 @@
 
               {/* Trello modal */}
               {showTrelloModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[120] p-3 backdrop-blur-sm">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[96vh] overflow-y-auto">
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-[120] p-3">
+                      <div role="dialog" aria-modal="true" aria-label="Exportar para o Trello" className="studio-modal bg-white dark:bg-gray-800 max-w-5xl w-full max-h-[96vh] overflow-y-auto">
                           <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-5 flex justify-between gap-4">
                               <div>
                                   <h3 className="font-black text-2xl text-sky-700 dark:text-sky-400 flex gap-2"><TrelloIcon /> {trelloSingleEventKey ? 'Exportar demanda para o Trello' : 'Exportar para o Trello'}</h3>
@@ -3243,8 +3931,8 @@
               )}
               
               {showImportModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full relative">
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-50 p-4 z-[100]">
+                      <div role="dialog" aria-modal="true" aria-label="Importar arquivo" className="studio-modal bg-white dark:bg-gray-800 p-6 max-w-sm w-full relative">
                           <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportTargetCompany(''); }} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-50 hover:text-white transition">X</button>
                           <h3 className="font-black text-xl mb-4 text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Upload/> Importar Posts</h3>
                           
@@ -3278,8 +3966,8 @@
               )}
 
               {editingEventIndex !== null && !isSelectionMode && (
-                  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 backdrop-blur-sm z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-md w-full relative max-h-[95vh] overflow-y-auto">
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-50 p-4 z-[100]">
+                      <div role="dialog" aria-modal="true" aria-label="Detalhes do evento" className="studio-modal bg-white dark:bg-gray-800 p-6 max-w-md w-full relative max-h-[95vh] overflow-y-auto">
                           <button onClick={() => setEditingEventIndex(null)} className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white w-8 h-8 rounded-full font-black hover:bg-red-500 hover:text-white transition">X</button>
                           <h3 className="font-black text-xl mb-3 text-gray-800 dark:text-white flex items-center gap-2"><Edit2/> Detalhes do Post</h3>
                           
@@ -3304,6 +3992,16 @@
                                       <div className="flex-1">
                                           <label className="block text-xs font-bold text-gray-500 mb-1">Título</label>
                                           <input type="text" value={editEventForm.text} onChange={e=>setEditEventForm({...editEventForm, text: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white" />
+                                      </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                          <label className="block text-xs font-bold text-gray-500 mb-1">Início</label>
+                                          <input type="time" value={editEventForm.startTime} onChange={e=>setEditEventForm({...editEventForm, startTime: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white" />
+                                      </div>
+                                      <div>
+                                          <label className="block text-xs font-bold text-gray-500 mb-1">Fim</label>
+                                          <input type="time" value={editEventForm.endTime} onChange={e=>setEditEventForm({...editEventForm, endTime: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white" />
                                       </div>
                                   </div>
                                   <div>
@@ -3390,7 +4088,7 @@
               )}
 
               {showAutomationModal && (
-                  <div id="automation-status" className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] p-4">
+                  <div id="automation-status" className="studio-overlay fixed inset-0 flex items-center justify-center z-[110] p-4">
                       <section role="dialog" aria-modal="true" aria-label="Status da automacao" className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
                           <div className="flex justify-between gap-4 border-b dark:border-gray-700 pb-4">
                               <div><h3 className="text-xl font-black dark:text-white">Automa&ccedil;&atilde;o</h3><p className="text-sm text-gray-500 mt-1">{months[month]} {year}</p></div>
@@ -3478,8 +4176,8 @@
               )}
 
               {showProfileModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4 relative">
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-50 p-4 z-[100]">
+                      <div role="dialog" aria-modal="true" aria-label="Meu perfil" className="studio-modal bg-white dark:bg-gray-800 p-6 max-w-sm w-full space-y-4 relative">
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👤 Meu Perfil</h3>
                           <div className="bg-blue-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center mb-4">
                               <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Nível de Acesso</p>
@@ -3499,8 +4197,8 @@
               )}
 
               {showRolesModal && userRole === 'master' && (
-                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 z-[100]">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-50 p-4 z-[100]">
+                      <div role="dialog" aria-modal="true" aria-label="Painel da diretoria" className="studio-modal bg-white dark:bg-gray-800 p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
                           <h3 className="text-xl font-black text-gray-800 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">👑 Painel da Diretoria</h3>
                           
                           <div className="bg-blue-50 dark:bg-gray-700 p-4 rounded-xl border border-blue-200 dark:border-gray-600 shadow-sm">
@@ -3594,7 +4292,7 @@
               )}
 
               {showTeamModal && isAdmin && (
-                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100] p-4">
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-[100] p-4">
                       <section role="dialog" aria-modal="true" aria-label="Cadastro da equipe" className="bg-white dark:bg-gray-800 rounded-lg p-5 md:p-6 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                           <div className="flex items-center justify-between gap-3 border-b dark:border-gray-700 pb-3">
                               <div>
@@ -3642,9 +4340,9 @@
                   </div>
               )}
 
-              <div className="max-w-7xl mx-auto space-y-6">
+              <div className="max-w-[1600px] mx-auto space-y-6">
                 
-                <div data-tutorial="header" className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 shadow-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                <div data-tutorial="header" className="studio-header dark:bg-gray-800 p-4 md:p-6 transition-colors duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     
                     <div className="flex items-center w-full justify-between">
@@ -3711,7 +4409,7 @@
                 </div>
 
                 {isAdmin && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="admin-workbench grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div data-tutorial="companies" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
                       <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
@@ -3839,6 +4537,14 @@
                             <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
                             <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">INÍCIO
+                                <input type="time" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} className="mt-1 block w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm outline-none" />
+                            </label>
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">FIM
+                                <input type="time" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} className="mt-1 block w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm outline-none" />
+                            </label>
+                        </div>
                         <div>
                             <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">RESPONSÁVEL PELO POST</label>
                             <select value={responsibleFormValue(newEvent)} onChange={e => assignResponsible(newEvent, setNewEvent, e.target.value)} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none">
@@ -3877,355 +4583,235 @@
                 </div>
                 )}
 
-                <div data-tutorial="calendar" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 md:p-8 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
-                  
+                <div data-tutorial="calendar" className="precision-calendar">
+                  <div className="precision-commandbar" data-tutorial="calendar-controls">
+                      <div className="precision-brand">
+                          <span className="precision-eyebrow">Agenda de precisão</span>
+                          <div className="mt-1 font-bold text-lg text-slate-900 dark:text-white">
+                              {companies.find(company => company.id === selectedCompany)?.name || 'Calendário'}
+                              {companies.find(company => company.id === selectedCompany)?.isPrivate ? ' · privado' : ''}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              <span aria-hidden="true" style={{ color: automationPaused ? '#b45309' : '#2e6b57' }}>●</span>{' '}
+                              {automationPaused ? 'Automação pausada' : 'Nuvem sincronizada'}
+                          </div>
+                      </div>
+
+                      <div className="precision-period" aria-label="Navegação do calendário">
+                          <button type="button" className="precision-icon-button" onClick={handlePrevMonth} aria-label="Período anterior">‹</button>
+                          <h2 aria-live="polite">{periodLabel}</h2>
+                          <button type="button" className="precision-icon-button" onClick={handleNextMonth} aria-label="Próximo período">›</button>
+                      </div>
+
+                      <div className="precision-command-actions" data-tutorial="calendar-actions">
+                          <button type="button" className="precision-today" onClick={goToToday}>Hoje</button>
+                          {isAdmin && (
+                              <button type="button" className="precision-new-button" onClick={() => selectCalendarDate(activeDate, true)}>+ Novo evento</button>
+                          )}
+                      </div>
+                  </div>
+
+                  <div className={`precision-system-strip ${automationPaused ? 'paused' : ''}`} role="status">
+                      <span className="precision-system-state">{automationPaused ? 'Automação pausada' : 'Automação ativa'}</span>
+                      <span className="precision-system-detail">
+                          {automationPaused
+                              ? 'Relatórios e lembretes estão suspensos até a retomada.'
+                              : 'Relatórios semanais e lembretes usam os eventos atuais deste calendário.'}
+                      </span>
+                  </div>
+
                   {isSelectionMode && (
-                      <div className="bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-400 p-4 rounded-xl mb-6 shadow-md transition-all">
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                              <div className="flex-1">
-                                  <h3 className="font-black text-indigo-800 dark:text-indigo-200 flex items-center gap-2">🛠️ MODO DE SELEÇÃO ATIVADO</h3>
-                                  <p className="text-sm text-indigo-600 dark:text-indigo-300">Clique nos posts para selecionar ou use os atalhos por categoria abaixo.</p>
-                                  <div className="flex flex-wrap gap-2 mt-3 items-center">
-                                      {getLegendItems().map(cat => (
-                                          <button 
-                                              key={cat.id} 
-                                              onClick={() => toggleCategorySelection(cat.id)}
-                                              style={{ backgroundColor: cat.color, color: getTextColor(cat.color) }}
-                                              className="px-3 py-1.5 text-[10px] font-black rounded-lg shadow-sm hover:scale-105 transition-transform uppercase"
-                                          >
-                                              + {cat.label}
+                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b border-slate-300 bg-indigo-50 dark:bg-slate-900">
+                          <div>
+                              <strong className="text-indigo-900 dark:text-indigo-200">Seleção ativa · {selectedEvents.length} eventos</strong>
+                              <p className="text-xs text-indigo-700 dark:text-indigo-300">Escolha os eventos que deseja exportar ou remover.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                              <button onClick={exportSelectedToTXT} disabled={!selectedEvents.length} className="px-3 py-2 border border-indigo-800 text-indigo-900 dark:text-indigo-200 text-xs font-bold disabled:opacity-40">Exportar TXT</button>
+                              <button onClick={openTrelloIntegration} disabled={!selectedEvents.length} className="px-3 py-2 bg-sky-700 text-white text-xs font-bold disabled:opacity-40">Enviar ao Trello</button>
+                              <button onClick={deleteSelectedEvents} disabled={!selectedEvents.length} className="px-3 py-2 bg-red-700 text-white text-xs font-bold disabled:opacity-40">Excluir</button>
+                          </div>
+                      </div>
+                  )}
+
+                  <div className="precision-body">
+                      <aside className="precision-rail" aria-label="Controles de visualização e filtros">
+                          <span className="precision-rail-label">Visualização</span>
+                          <div className="precision-view-list">
+                              {[
+                                  ['month', 'Mês', '01'],
+                                  ['week', 'Semana', '07'],
+                                  ['day', 'Dia', '24h']
+                              ].map(([view, label, marker]) => (
+                                  <button
+                                      key={view}
+                                      type="button"
+                                      className={`precision-view-button ${calendarView === view ? 'active' : ''}`}
+                                      onClick={() => setCalendarView(view)}
+                                      aria-pressed={calendarView === view}
+                                  >
+                                      {label}<span>{marker}</span>
+                                  </button>
+                              ))}
+                          </div>
+
+                          <span className="precision-rail-label">{isCentral ? 'Status' : 'Categorias'}</span>
+                          <div className="precision-filter-list" data-tutorial={isCentral ? 'status-filters' : undefined}>
+                              <button type="button" className={`precision-filter ${calendarFilter === 'ALL' ? 'active' : ''}`} onClick={() => setCalendarFilter('ALL')}>
+                                  <span className="precision-filter-dot" style={{ background: '#17212b' }}></span>
+                                  Todos
+                                  <span className="precision-filter-count">{currentViewEvents.length}</span>
+                              </button>
+                              {(isCentral ? Object.entries(statusPipeline).map(([id, item]) => ({ id, label: item.label, color: item.bg })) : safeColorOptions).map(item => (
+                                  <button key={item.id} type="button" className={`precision-filter ${calendarFilter === item.id ? 'active' : ''}`} onClick={() => setCalendarFilter(item.id)}>
+                                      <span className="precision-filter-dot" style={{ background: item.color }}></span>
+                                      <span className="truncate">{item.label}</span>
+                                      <span className="precision-filter-count">
+                                          {currentViewEvents.filter(event => isCentral ? getEventStatus(event._origIdx) === item.id : event.color === item.id).length}
+                                      </span>
+                                  </button>
+                              ))}
+                          </div>
+
+                          {isAdmin && (
+                              <div className="precision-filter-list precision-tools mt-8">
+                                  <span className="precision-rail-label">Ferramentas</span>
+                                  <button className="precision-filter" onClick={handleSelectionToggle}><span>□</span>{isSelectionMode ? 'Cancelar seleção' : 'Selecionar'}</button>
+                                  <button className="precision-filter" onClick={() => setShowImportModal(true)}><span>↓</span>Importar arquivo</button>
+                                  <button className="precision-filter" onClick={openTrelloIntegration}><span>↗</span>Enviar ao Trello</button>
+                                  <button className="precision-filter" onClick={() => setShowAutomationModal(true)}><span>⚙</span>Automação</button>
+                                  <button className="precision-filter text-red-700 dark:text-red-300" onClick={rescueUpliGeral}><span>↺</span>Recuperar central</button>
+                              </div>
+                          )}
+                      </aside>
+
+                      <main className="precision-stage">
+                          {calendarView === 'month' && (
+                              <>
+                                  <div className="precision-weekdays" aria-hidden="true">
+                                      {weekDaysCompact.map(dayName => <div key={dayName} className="precision-weekday">{dayName}</div>)}
+                                  </div>
+                                  <div className="precision-month-grid" role="grid" aria-label={`Calendário de ${periodLabel}`}>
+                                      {monthGridDates.map(date => {
+                                          const dateEvents = getCalendarEventsForDate(date);
+                                          const outside = date.getMonth() !== month;
+                                          const selected = isSameDate(date, activeDate);
+                                          const dateIsToday = isSameDate(date, todayDate);
+                                          return (
+                                              <div
+                                                  key={date.toISOString()}
+                                                  role="gridcell"
+                                                  tabIndex={selected ? 0 : -1}
+                                                  className={`precision-day-cell ${outside ? 'outside' : ''} ${date.getDay() === 0 || date.getDay() === 6 ? 'weekend' : ''} ${selected ? 'selected' : ''}`}
+                                                  onClick={() => selectCalendarDate(date)}
+                                                  onDoubleClick={() => selectCalendarDate(date, true)}
+                                                  onKeyDown={event => {
+                                                      if (event.key === 'Enter' || event.key === ' ') selectCalendarDate(date, event.key === 'Enter' && isAdmin);
+                                                  }}
+                                                  onDragOver={onDragOver}
+                                                  onDrop={event => onDropToDate(event, date)}
+                                                  aria-label={`${date.getDate()} de ${monthNamesDisplay[date.getMonth()]}, ${dateEvents.length} eventos`}
+                                              >
+                                                  <div className="precision-day-head">
+                                                      <span className={`precision-day-number ${dateIsToday ? 'today' : ''}`} aria-current={dateIsToday ? 'date' : undefined}>{date.getDate()}</span>
+                                                      {dateEvents.length === 0 && !outside && <span className="precision-empty">+</span>}
+                                                  </div>
+                                                  <div className="precision-event-stack">
+                                                      {dateEvents.slice(0, 3).map(event => renderPrecisionEvent(event, { hideTime: true }))}
+                                                      {dateEvents.length > 3 && <span className="precision-more">+ {dateEvents.length - 3} eventos</span>}
+                                                  </div>
+                                              </div>
+                                          );
+                                      })}
+                                  </div>
+                                  <section className="precision-mobile-agenda" aria-label="Agenda do dia selecionado">
+                                      <h3>{activeDate.getDate()} de {monthNamesDisplay[activeDate.getMonth()]} · {getCalendarEventsForDate(activeDate).length || 'nenhum'} evento{getCalendarEventsForDate(activeDate).length === 1 ? '' : 's'}</h3>
+                                      {getCalendarEventsForDate(activeDate).length
+                                          ? getCalendarEventsForDate(activeDate).map(event => renderPrecisionEvent(event, { showMeta: true }))
+                                          : <button className="precision-new-button" onClick={() => selectCalendarDate(activeDate, true)}>Planejar este dia</button>}
+                                  </section>
+                              </>
+                          )}
+
+                          {calendarView === 'week' && (
+                              <div className="precision-week-scroll">
+                                  <div className="precision-week-grid" aria-label={`Semana de ${periodLabel}`}>
+                                      <div className="precision-week-corner"><span className="precision-eyebrow">Horário</span></div>
+                                      {weekDates.map((date, index) => (
+                                          <button key={`head-${date.toISOString()}`} className="precision-week-date" onClick={() => selectCalendarDate(date)}>
+                                              <span>{weekDaysCompact[index]}</span>
+                                              <strong className={isSameDate(date, todayDate) ? 'today' : ''}>{date.getDate()}</strong>
                                           </button>
                                       ))}
+
+                                      <div className="precision-week-time precision-week-all-day">DIA TODO</div>
+                                      {weekDates.map(date => (
+                                          <div key={`all-${date.toISOString()}`} className={`precision-week-slot precision-week-all-day ${isSameDate(date, todayDate) ? 'today-column' : ''}`} onDragOver={onDragOver} onDrop={event => onDropToDate(event, date, '')}>
+                                              {getCalendarEventsForDate(date).filter(event => !event.startTime).map(event => renderPrecisionEvent(event, { hideTime: true }))}
+                                          </div>
+                                      ))}
+
+                                      {scheduleHours.flatMap(hour => [
+                                          <div key={`time-${hour}`} className="precision-week-time">{String(hour).padStart(2, '0')}:00</div>,
+                                          ...weekDates.map(date => (
+                                              <div key={`${date.toISOString()}-${hour}`} className={`precision-week-slot ${isSameDate(date, todayDate) ? 'today-column' : ''}`} onDragOver={onDragOver} onDrop={event => onDropToDate(event, date, `${String(hour).padStart(2, '0')}:00`)}>
+                                                  {getCalendarEventsForDate(date).filter(event => event.startTime && parseInt(event.startTime, 10) === hour).map(event => renderPrecisionEvent(event))}
+                                              </div>
+                                          ))
+                                      ])}
                                   </div>
                               </div>
-                              <div className="text-right flex flex-col items-start md:items-end w-full md:w-auto gap-3">
-                                  <span className="font-black text-2xl text-indigo-700 dark:text-indigo-300">{selectedEvents.length} selecionados</span>
-                                  <div className="flex flex-wrap gap-2 w-full justify-end">
-                                      <button onClick={exportSelectedToTXT} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Download/> Exportar TXT</button>
-                                      <button onClick={openTrelloIntegration} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-sky-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-sky-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><TrelloIcon/> Trello</button>
-                                      <button onClick={deleteSelectedEvents} disabled={selectedEvents.length === 0} className="flex-1 md:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 disabled:opacity-50 transition flex items-center justify-center gap-2"><Trash2/> Apagar</button>
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-                  )}
-
-                  <div data-tutorial="calendar-controls" className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4 gap-4">
-                    
-                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full md:w-auto justify-between md:justify-start">
-                        <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">⬅️</button>
-                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight text-center min-w-[150px] md:min-w-[200px]">
-                          {months[month]} {year}
-                        </h2>
-                        <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition text-2xl font-black">➡️</button>
-                    </div>
-
-                    {isAdmin && (
-                        <div data-tutorial="calendar-actions" className="flex flex-wrap items-center justify-center gap-2 flex-1 mx-2">
-                            {/* BOTÃO DE RESGATE DEFINITIVO */}
-                            <button onClick={rescueUpliGeral} className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-sm" title="Restaurar UPLI Geral">
-                                🚑 Restaurar
-                            </button>
-
-                            <button onClick={() => setShowImportModal(true)} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-sm" title="Importar arquivo TXT">
-                                <Upload /> Importar
-                            </button>
-
-                            <button onClick={openTrelloIntegration} className="bg-sky-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-sky-700 transition flex items-center justify-center gap-2 shadow-sm" title="Exportar o mês para o Trello">
-                                <TrelloIcon /> Trello
-                            </button>
-
-                            <a href="automation/runtime/status.html" target="_blank" className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-emerald-800 transition flex items-center justify-center gap-2 shadow-sm" title="Verificar a automação semanal do WhatsApp">
-                                ⚙ Automação
-                            </a>
-                            
-                            <button onClick={handleSelectionToggle} className={`${isSelectionMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm`} title="Selecionar posts">
-                                <MultiSelectIcon /> {isSelectionMode ? `Cancelar Seleção` : 'Selecionar'}
-                            </button>
-                        </div>
-                    )}
-
-                    <h3 className="text-xl md:text-3xl font-black text-blue-600 dark:text-blue-400 uppercase bg-blue-50 dark:bg-gray-900 px-6 py-3 rounded-xl border border-blue-100 dark:border-gray-700 shadow-sm whitespace-nowrap w-full md:w-auto text-center">
-                        {companies.find(c => c.id === selectedCompany)?.name}
-                        {companies.find(c => c.id === selectedCompany)?.isPrivate ? ' 🔒' : ''}
-                    </h3>
-                  </div>
-
-                  <div className={`mb-6 border-2 p-3 rounded-lg ${automationPaused ? 'border-amber-300 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100' : 'border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100'}`}>
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                          <strong className="text-sm">
-                              {automationPaused ? '⏸ Automação pausada' : '● Automação ativa'}
-                          </strong>
-                          <span className="text-xs font-medium">
-                              {automationPaused ? 'Nenhuma mensagem será enviada até a retomada.' : 'Relatórios semanais e lembretes usam os posts atuais deste calendário.'}
-                          </span>
-                      </div>
-                      {assignmentNoticeFeedback.text && (
-                          <p role="status" className={`mt-3 rounded-md border p-3 text-sm font-bold ${assignmentNoticeFeedback.tone === 'success' ? 'border-green-300 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' : assignmentNoticeFeedback.tone === 'error' ? 'border-red-300 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-100' : 'border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-100'}`}>
-                              WhatsApp do responsável: {assignmentNoticeFeedback.text}
-                          </p>
-                      )}
-                  </div>
-
-                  {isCentral && (
-                      <div data-tutorial="status-filters" className="mb-6 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2 shadow-sm">
-                          <span className="text-sm font-bold text-gray-500 dark:text-gray-400 mr-2 flex items-center gap-1"><FilterIcon/> Filtros:</span>
-                          <button onClick={() => setCalendarFilter('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${calendarFilter === 'ALL' ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'}`}>Tudo</button>
-                          <span className="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                          {Object.entries(statusPipeline).map(([key, val]) => (
-                              <button key={key} onClick={() => setCalendarFilter(key)} style={{backgroundColor: calendarFilter === key ? val.bg : 'transparent', color: calendarFilter === key ? val.text : (darkMode ? '#9CA3AF' : '#4B5563'), border: `2px solid ${val.bg}`}} className={`px-3 py-1 text-xs font-bold rounded-lg transition ${calendarFilter === key ? 'shadow-md scale-105' : 'hover:opacity-70'}`}>
-                                  {val.label}
-                              </button>
-                          ))}
-                      </div>
-                  )}
-
-                  <div className="hidden md:block overflow-x-auto pb-4">
-                    <div className="min-w-[800px]">
-                      <div className="grid grid-cols-7 gap-4 mb-4">
-                        {fullWeekDays.map(day => (
-                          <div key={day} className="bg-black dark:bg-gray-700 text-white text-center py-3 rounded-full font-bold text-xs md:text-sm tracking-wide shadow-md">
-                            {day}
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="space-y-4">
-                        {weeks.map((week, wIdx) => (
-                          <div key={wIdx} className="flex flex-col">
-                            <div className="bg-gray-200 dark:bg-gray-700 rounded-t-xl h-10 flex items-center px-4 shadow-sm">
-                              {week.map((day, dIdx) => (
-                                <div key={dIdx} className="flex-1 text-gray-800 dark:text-gray-200 font-black text-sm px-2 text-center border-r border-gray-300 dark:border-gray-600 last:border-0">
-                                  {day || ''}
-                                </div>
-                              ))}
-                            </div>
-                            
-                            <div className="grid grid-cols-7 gap-2 bg-gray-50 dark:bg-gray-900 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-xl p-2 min-h-[120px] shadow-sm">
-                              {week.map((day, dIdx) => (
-                                <div 
-                                  key={dIdx} 
-                                  className="flex flex-col gap-2 p-1 min-h-[100px] rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 relative"
-                                  onDragOver={onDragOver}
-                                  onDrop={(e) => day ? onDrop(e, day) : null}
-                                >
-                                  {day && getCalendarEventsForDay(day).map((event, eIdx) => {
-                                    const color = safeColorOptions.find(c => c.id === event.color);
-                                    if (!color) return null;
-                                    
-                                    const originalIndex = event._origIdx;
-                                    const eventKey = event._key;
-                                    const status = getEventStatus(originalIndex);
-                                    
-                                    let finalBgColor = color.color;
-                                    let finalTextColor = getTextColor(color.color);
-
-                                    if (isCentral) {
-                                        if (status && statusPipeline[status]) {
-                                            finalBgColor = statusPipeline[status].bg;
-                                            finalTextColor = statusPipeline[status].text;
-                                        } else {
-                                            finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
-                                            finalTextColor = darkMode ? '#D1D5DB' : '#374151';
-                                        }
-                                    }
-                                    
-                                    const isSelected = selectedEvents.includes(eventKey);
-
-                                    return (
-                                      <div
-                                        key={eIdx}
-                                        draggable={isAdmin && !isSelectionMode}
-                                        onDragStart={(e) => onDragStart(e, originalIndex)}
-                                        style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                        className={`rounded-2xl p-3 text-[11px] font-bold shadow-md relative group transition-all h-auto flex 
-                                            ${isAdmin ? 'cursor-pointer' : ''} 
-                                            ${isCentral ? 'flex-row items-start gap-2 text-left' : 'flex-col text-center justify-center'}
-                                            ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
-                                            ${isSelectionMode && !isSelected ? 'opacity-50 hover:opacity-100' : 'hover:scale-105'}
-                                        `}
-                                        onClick={() => {
-                                            if(isSelectionMode) toggleEventSelection(eventKey);
-                                            else if(isAdmin) startEditEvent(event, originalIndex);
-                                        }}
-                                      >
-                                        {isSelectionMode && isSelected && (
-                                            <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
-                                        )}
-
-                                        {isCentral && (
-                                            <div className="w-3.5 h-3.5 mt-0.5 rounded-full flex-shrink-0 shadow-inner border border-white border-opacity-50" style={{ backgroundColor: color.color }} title={`Categoria: ${color.label}`}></div>
-                                        )}
-
-                                        <div className={`flex flex-col ${isCentral ? 'flex-1 overflow-hidden' : 'items-center w-full'}`}>
-                                            {event.imageUrl && !isCentral && (
-                                                <div className="mb-1 text-[10px] bg-black bg-opacity-20 rounded text-white flex items-center justify-center p-1 w-fit mx-auto shadow-sm" title="Possui Anexo"><ImageIcon /></div>
-                                            )}
-                                            
-                                            <span className="leading-snug whitespace-normal break-words block w-full">
-                                                {getCleanDisplayText(event.text, isCentral, color.label)}
-                                                {event.notes && !isCentral && <span className="ml-1 drop-shadow-md"><MessageSquare /></span>}
-                                            </span>
-
-                                            {event.responsible && (
-                                                <span className="mt-1 text-[9px] font-semibold leading-tight break-words opacity-90" title={`Responsável: ${event.responsible}`}>
-                                                    Resp: {event.responsible}
-                                                </span>
-                                            )}
-
-                                            {!isCentral && status && statusPipeline[status] && (
-                                                <div className="mt-2 text-[9px] px-1.5 py-0.5 rounded-md inline-block font-black uppercase tracking-wider shadow-sm mx-auto w-fit" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
-                                                    {statusPipeline[status].label}
-                                                </div>
-                                            )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="block md:hidden space-y-4 mt-2">
-                    {daysArray.map(day => {
-                      const dayEvents = getCalendarEventsForDay(day);
-                      const date = new Date(year, month, day);
-                      const dayOfWeek = fullWeekDays[date.getDay()];
-                      
-                      if(calendarFilter !== 'ALL' && dayEvents.length === 0) return null; 
-
-                      return (
-                        <div key={day} 
-                             className={`border-2 rounded-2xl p-4 shadow-sm transition dark:border-gray-700 ${dayEvents.length > 0 ? 'bg-white dark:bg-gray-800 border-gray-300' : 'bg-gray-50 dark:bg-gray-900 border-gray-100'}`}
-                             onDragOver={onDragOver}
-                             onDrop={(e) => day ? onDrop(e, day) : null}
-                        >
-                          <div className="flex items-center gap-3 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
-                            <span className={`w-10 h-10 flex items-center justify-center rounded-full font-black text-lg ${dayEvents.length > 0 ? 'bg-black text-white dark:bg-white dark:text-black shadow-md' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-                              {day}
-                            </span>
-                            <span className={`font-black text-sm uppercase tracking-wide ${dayEvents.length > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                              {dayOfWeek}
-                            </span>
-                          </div>
-                          
-                          {dayEvents.length > 0 ? (
-                            <div className="flex flex-col gap-3 pl-2">
-                              {dayEvents.map((event, eIdx) => {
-                                const color = safeColorOptions.find(c => c.id === event.color);
-                                if (!color) return null;
-                                
-                                const originalIndex = event._origIdx;
-                                const eventKey = event._key;
-                                const status = getEventStatus(originalIndex);
-                                
-                                let finalBgColor = color.color;
-                                let finalTextColor = getTextColor(color.color);
-
-                                if (isCentral) {
-                                    if (status && statusPipeline[status]) {
-                                        finalBgColor = statusPipeline[status].bg;
-                                        finalTextColor = statusPipeline[status].text;
-                                    } else {
-                                        finalBgColor = darkMode ? '#374151' : '#E5E7EB'; 
-                                        finalTextColor = darkMode ? '#D1D5DB' : '#374151';
-                                    }
-                                }
-
-                                const isSelected = selectedEvents.includes(eventKey);
-                                
-                                return (
-                                  <div
-                                    key={eIdx}
-                                    draggable={isAdmin && !isSelectionMode}
-                                    onDragStart={(e) => onDragStart(e, originalIndex)}
-                                    style={{ backgroundColor: finalBgColor, color: finalTextColor }}
-                                    className={`rounded-2xl px-4 py-3 text-sm font-bold shadow-md flex break-words whitespace-normal leading-tight relative cursor-pointer transition-all h-auto
-                                        ${isCentral ? 'flex-row items-start gap-3 text-left' : 'flex-col text-center'}
-                                        ${isSelectionMode && isSelected ? 'ring-4 ring-indigo-500 scale-105' : ''}
-                                        ${isSelectionMode && !isSelected ? 'opacity-50' : ''}
-                                    `}
-                                    onClick={() => {
-                                        if(isSelectionMode) toggleEventSelection(eventKey);
-                                        else if(isAdmin) startEditEvent(event, originalIndex);
-                                    }}
-                                  >
-                                    {isSelectionMode && isSelected && (
-                                        <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-black z-10 shadow-lg"><CheckIcon/></div>
-                                    )}
-
-                                    {isCentral && (
-                                        <div className="w-5 h-5 mt-0.5 rounded-full shadow-inner border border-white border-opacity-50 flex-shrink-0" style={{ backgroundColor: color.color }}></div>
-                                    )}
-
-                                    <div className={`flex flex-col ${isCentral ? 'flex-1' : 'w-full items-center'}`}>
-                                        {event.imageUrl && !isCentral && (
-                                            <div className="mb-2 flex flex-col gap-1 mt-1">
-                                                <a href={event.imageUrl} target="_blank" className="text-[10px] bg-black bg-opacity-20 hover:bg-opacity-30 text-white rounded px-2 py-1 inline-flex items-center gap-1 w-fit transition shadow-sm" onClick={e => e.stopPropagation()}>🔗 Ver Arte</a>
-                                            </div>
-                                        )}
-                                        <span className="text-base block w-full whitespace-normal break-words leading-snug">
-                                            {getCleanDisplayText(event.text, isCentral, color.label)}
-                                        </span>
-                                        {event.responsible && (
-                                            <div className="mt-2 px-2 py-1 rounded text-xs font-semibold bg-black bg-opacity-15 w-fit max-w-full break-words">
-                                                Responsável: {event.responsible}
-                                            </div>
-                                        )}
-                                        {event.notes && !isCentral && (
-                                            <div className="mt-3 p-3 rounded-lg text-xs font-normal border border-white border-opacity-30 shadow-inner w-full text-left" style={{ backgroundColor: 'rgba(255,255,255,0.2)'}}>
-                                                <p className="whitespace-pre-wrap">{event.notes}</p>
-                                            </div>
-                                        )}
-                                        {!isCentral && status && statusPipeline[status] && (
-                                            <div className="mt-3 text-[10px] px-2 py-1 rounded-md inline-block font-black uppercase tracking-wider w-fit shadow-sm" style={{ backgroundColor: statusPipeline[status].bg, color: statusPipeline[status].text }}>
-                                                {statusPipeline[status].label}
-                                            </div>
-                                        )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 italic pl-2">Nenhum post agendado ou solte aqui...</p>
                           )}
-                        </div>
-                      );
-                    })}
+
+                          {calendarView === 'day' && (
+                              <div className="precision-day-view" aria-label={`Agenda de ${periodLabel}`}>
+                                  <header className="precision-day-banner">
+                                      <div>
+                                          <span className="precision-eyebrow">{activeDate.toLocaleDateString('pt-BR', { weekday: 'long' })}</span>
+                                          <h3>{activeDate.getDate()} <span className="font-normal text-slate-400">/ {String(activeDate.getMonth() + 1).padStart(2, '0')}</span></h3>
+                                      </div>
+                                      <p>{getCalendarEventsForDate(activeDate).length} evento{getCalendarEventsForDate(activeDate).length === 1 ? '' : 's'}</p>
+                                  </header>
+                                  <div className="precision-day-hour">DIA TODO</div>
+                                  <div className="precision-day-lane" onDragOver={onDragOver} onDrop={event => onDropToDate(event, activeDate, '')}>
+                                      {getCalendarEventsForDate(activeDate).filter(event => !event.startTime).map(event => renderPrecisionEvent(event, { hideTime: true, showMeta: true }))}
+                                  </div>
+                                  {scheduleHours.flatMap(hour => [
+                                      <div key={`day-time-${hour}`} className="precision-day-hour">{String(hour).padStart(2, '0')}:00</div>,
+                                      <div key={`day-lane-${hour}`} className="precision-day-lane" onDragOver={onDragOver} onDrop={event => onDropToDate(event, activeDate, `${String(hour).padStart(2, '0')}:00`)} onDoubleClick={() => {
+                                          setNewEvent(previous => ({ ...previous, day: String(activeDate.getDate()), startTime: `${String(hour).padStart(2, '0')}:00`, color: previous.color || safeColorOptions[0]?.id || '' }));
+                                          if (isAdmin) window.setTimeout(() => document.querySelector('[data-tutorial="add-post"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+                                      }}>
+                                          {getCalendarEventsForDate(activeDate).filter(event => event.startTime && parseInt(event.startTime, 10) === hour).map(event => renderPrecisionEvent(event, { showMeta: true }))}
+                                      </div>
+                                  ])}
+                              </div>
+                          )}
+                      </main>
                   </div>
 
-                  {getLegendItems().length > 0 && (
-                    <div className="mt-8 md:mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">LEGENDA DE CATEGORIAS / EMPRESAS</h3>
-                      <div className="flex flex-wrap gap-2 md:gap-3">
-                        {getLegendItems().map(item => (
-                          <div key={item.id} style={{ backgroundColor: item.color || '#000000', color: getTextColor(item.color) }} className="rounded-full px-4 md:px-6 py-2 text-xs md:text-sm font-bold shadow-md border border-black border-opacity-10">
-                            {item.label}
+                  <footer className="precision-legend" aria-label="Legendas do calendário">
+                      <section>
+                          <span className="precision-legend-title">Categorias / empresas</span>
+                          <div className="precision-legend-items">
+                              {getLegendItems().length > 0 ? getLegendItems().map(item => (
+                                  <span key={item.id} className="precision-legend-item" style={{ '--legend-color': item.color || '#98a8b8' }}>
+                                      {item.label}
+                                  </span>
+                              )) : <span className="precision-empty">Nenhuma categoria configurada</span>}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {isCentral && (
-                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-lg md:text-xl mb-4 text-gray-800 dark:text-white">STATUS DE PRODUÇÃO</h3>
-                      <div className="flex flex-wrap gap-2 md:gap-3">
-                          {Object.entries(statusPipeline).map(([key, val]) => (
-                              <div key={key} style={{ backgroundColor: val.bg, color: val.text }} className="rounded-md px-4 md:px-6 py-2 text-xs md:text-sm font-black shadow-md uppercase tracking-wider">
-                                  {val.label}
-                              </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                  
+                      </section>
+                      <section>
+                          <span className="precision-legend-title">Fluxo de produção</span>
+                          <div className="precision-legend-items">
+                              {Object.entries(statusPipeline).map(([key, item]) => (
+                                  <span key={key} className="precision-legend-item precision-flow-item" style={{ '--legend-color': item.bg }}>
+                                      {item.label}
+                                  </span>
+                              ))}
+                          </div>
+                      </section>
+                  </footer>
                 </div>
               </div>
             </div>
