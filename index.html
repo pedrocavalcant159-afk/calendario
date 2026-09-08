@@ -107,6 +107,7 @@
         
         // 🔥 A GRANDE SACADA: Mudamos o ID do banco de dados para despistar o bug.
         const UPLI_GERAL_ID = "upli_geral_v2";
+        const REQUIRED_AUTOMATION_AGENT_VERSION = 3;
 
         const STANDARD_CATEGORIES = [
             { id: 'cat_reels', label: 'Reels', color: '#E1306C' },
@@ -999,6 +1000,10 @@
               const lastSeen = machine?.lastSeen?.toDate ? machine.lastSeen.toDate() : null;
               return lastSeen && Date.now() - lastSeen.getTime() < 10 * 60 * 1000;
           });
+          const outdatedAutomationMachines = activeAutomationMachines.filter(
+              machine => Number(machine.agentVersion || 0) < REQUIRED_AUTOMATION_AGENT_VERSION
+          );
+          const automationFleetReady = activeAutomationMachines.length > 0 && outdatedAutomationMachines.length === 0;
           const automationPaused = automationCluster.paused === true;
           const automationLeaderName = automationCluster.leaderMachineName || 'Aguardando heartbeat';
           const manualReminderEvents = currentMonthEvents.filter(event => event.id && !isTerminalEventStatus(event.status));
@@ -1061,6 +1066,13 @@
           const toggleAutomationPause = async () => {
               if (!isAdmin || automationPauseBusy) return;
               const nextPaused = !automationPaused;
+              if (!nextPaused && !automationFleetReady) {
+                  return alert(
+                      activeAutomationMachines.length === 0
+                          ? 'Nenhum computador atualizado está ativo. Instale a versão nova e aguarde o PC aparecer no painel.'
+                          : 'Ainda existe computador ativo com a versão antiga. Atualize todos antes de retomar.'
+                  );
+              }
               const question = nextPaused
                   ? 'Pausar todos os envios da automação? Relatórios, lembretes e avisos deixarão de ser enviados.'
                   : 'Retomar a automação? Os lembretes automáticos voltarão no próximo ciclo agendado.';
@@ -3380,7 +3392,7 @@
                                       <button
                                           type="button"
                                           onClick={toggleAutomationPause}
-                                          disabled={automationPauseBusy}
+                                          disabled={automationPauseBusy || (automationPaused && !automationFleetReady)}
                                           className={`shrink-0 rounded-md px-4 py-2 text-sm font-black text-white disabled:bg-gray-400 ${automationPaused ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-amber-600 hover:bg-amber-700'}`}
                                       >
                                           {automationPauseBusy ? 'Aguarde...' : automationPaused ? '▶ Retomar automação' : '⏸ Pausar automação'}
@@ -3397,10 +3409,18 @@
                           <div className="mt-5 border-y dark:border-gray-700 divide-y dark:divide-gray-700 text-sm dark:text-gray-200">
                               <p className="py-3 flex justify-between gap-3"><span>PC l&iacute;der</span><strong className="text-right">{automationLeaderName}</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>PCs ativos</span><strong>{activeAutomationMachines.length}</strong></p>
+                              <p className="py-3 flex justify-between gap-3"><span>Versão segura</span><strong className={automationFleetReady ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>{activeAutomationMachines.length - outdatedAutomationMachines.length} de {activeAutomationMachines.length} PC(s)</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Relat&oacute;rio semanal</span><strong>Segunda-feira, 9h</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Lembretes</span><strong>Diariamente, 9h05</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Formul&aacute;rios sem login</span><strong>{automationSettings.formBaseUrl ? 'Ativos' : <>N&atilde;o configurados</>}</strong></p>
                           </div>
+                          {automationPaused && !automationFleetReady && (
+                              <p className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-xs font-bold text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200">
+                                  Retomada bloqueada: {activeAutomationMachines.length === 0
+                                      ? 'aguardando um computador atualizado ficar ativo.'
+                                      : `${outdatedAutomationMachines.length} computador(es) ativo(s) ainda precisam do instalador novo.`}
+                              </p>
+                          )}
                           <div className="mt-5 pt-5 border-t dark:border-gray-700">
                               <h4 className="font-black text-gray-900 dark:text-white">Envios manuais</h4>
                               <button onClick={() => enqueueManualCommand('weekly_report')} disabled={manualCommandBusy || automationPaused} className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">

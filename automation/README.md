@@ -60,6 +60,8 @@ A automação usa os posts atuais do calendário no momento de cada envio. Não 
 
 Administradores podem abrir **Automação** no calendário e usar **Pausar automação**. A pausa vale para todos os computadores e bloqueia relatórios, lembretes, avisos de atribuição e pedidos manuais. O heartbeat e a sincronização das respostas já recebidas continuam ativos. Ao retomar, os lembretes automáticos voltam no próximo ciclo agendado, sem reabrir o ciclo interrompido no mesmo dia.
 
+Enquanto estiver pausada, a tela mostra quantos computadores ativos estão na **Versão segura**. A retomada fica bloqueada até todos os computadores ativos terem sido atualizados com o instalador atual.
+
 ## Primeira configuração
 
 1. Execute `install.ps1` com o PowerShell.

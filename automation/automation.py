@@ -34,6 +34,7 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
+AUTOMATION_AGENT_VERSION = 3
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -181,7 +182,8 @@ def claim_cluster_leadership(
                     id: input.id,
                     name: input.name,
                     lastSeen: now,
-                    ready: true
+                    ready: true,
+                    agentVersion: input.agentVersion
                 };
                 const update = {
                     schemaVersion: 1,
@@ -217,6 +219,7 @@ def claim_cluster_leadership(
                         id: String(machine.id || ''),
                         name: String(machine.name || ''),
                         ready: machine.ready !== false,
+                        agentVersion: Number(machine.agentVersion || 0),
                         lastSeen: machine.lastSeen?.toDate
                             ? machine.lastSeen.toDate().toISOString() : ''
                     }))
@@ -227,6 +230,7 @@ def claim_cluster_leadership(
             "id": identity["id"],
             "name": identity["name"],
             "leaseSeconds": lease_seconds,
+            "agentVersion": AUTOMATION_AGENT_VERSION,
         },
     )
 
