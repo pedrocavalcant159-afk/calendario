@@ -34,7 +34,10 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-CLUSTER_LEASE_SECONDS = 300
+# The scheduled task may remain active for up to 20 minutes. Keep leadership
+# longer than the whole task so another PC cannot take over halfway through a
+# recipient list and send the same batches again.
+CLUSTER_LEASE_SECONDS = 30 * 60
 CHROME_PATHS = (
     Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
     Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
@@ -206,6 +209,10 @@ def claim_cluster_leadership(
                     lastWeeklyFingerprint: String(data.lastWeeklyFingerprint || ''),
                     lastReminderCheckDate: String(data.lastReminderCheckDate || ''),
                     reminderDeliveries: data.reminderDeliveries || {},
+                    paused: data.paused === true,
+                    pauseChangedBy: String(data.pauseChangedBy || ''),
+                    pauseChangedAt: data.pauseChangedAt?.toDate
+                        ? data.pauseChangedAt.toDate().toISOString() : '',
                     machines: Object.values(machines).map(machine => ({
                         id: String(machine.id || ''),
                         name: String(machine.name || ''),
@@ -988,7 +995,12 @@ def process_pending_manual_commands(
     commands = load_pending_manual_commands(page)
     completed = 0
     failed = 0
+    paused = False
     for command in commands:
+        cluster = claim_cluster_leadership(page)
+        if cluster.get("paused") or not cluster.get("isLeader"):
+            paused = bool(cluster.get("paused"))
+            break
         command_id = normalize_text(command.get("id"))
         if not command_id or not claim_manual_command(page, command_id):
             continue
@@ -1011,6 +1023,7 @@ def process_pending_manual_commands(
         "queued": len(commands),
         "completed": completed,
         "failed": failed,
+        "paused": paused,
     }
 
 
@@ -1031,8 +1044,14 @@ def run_sync() -> dict[str, Any]:
                 payload = read_calendar(page)
             command_result = (
                 process_pending_manual_commands(page, payload, config)
-                if cluster.get("isLeader")
-                else {"queued": 0, "completed": 0, "failed": 0, "standby": True}
+                if cluster.get("isLeader") and not cluster.get("paused")
+                else {
+                    "queued": 0,
+                    "completed": 0,
+                    "failed": 0,
+                    "standby": not cluster.get("isLeader"),
+                    "paused": bool(cluster.get("paused")),
+                }
             )
             result["manualCommands"] = command_result
             result["cluster"] = cluster
@@ -1096,6 +1115,9 @@ def run_supervisor() -> dict[str, Any]:
         result["role"] = "standby"
         return result
     result["role"] = "leader"
+    if cluster.get("paused"):
+        result["paused"] = True
+        return result
     config = load_config()
     if weekly_supervisor_due(config, cluster):
         result["weeklyCatchup"] = run_send()
@@ -1416,7 +1438,10 @@ def build_reminder_batches(
     batches: list[dict[str, Any]] = []
     for phone, items in sorted(grouped.items()):
         items.sort(key=lambda item: (item["due_date"], item["company_name"].casefold(), item["title"].casefold()))
-        marker_hash = hashlib.sha256(phone.encode("ascii")).hexdigest()[:6].upper()
+        # Identify the batch, not only the recipient. An exact rerun keeps the
+        # marker, while a newly added event on the same day produces a new one.
+        marker_source = "|".join([phone, *sorted(item["delivery_key"] for item in items)])
+        marker_hash = hashlib.sha256(marker_source.encode("utf-8")).hexdigest()[:10].upper()
         marker = f"[UPLI-LEM-{today:%Y%m%d}-{marker_hash}]"
         responsible = items[0]["responsible"]
         if len(items) == 1:
@@ -1590,30 +1615,56 @@ def first_visible(locator):
     return None
 
 
+def outgoing_marker_state(page, marker: str) -> str:
+    """Inspect whether this exact delivery batch already exists in the chat."""
+    containers = page.locator("#main [data-testid='msg-container']").filter(has_text=marker)
+    found_submitted = False
+    found_error = False
+    for index in range(containers.count()):
+        status = containers.nth(index).evaluate(
+            """container => {
+                const labels = [...container.querySelectorAll('[aria-label]')]
+                    .map(element => (element.getAttribute('aria-label') || '').trim())
+                    .filter(Boolean);
+                const combined = labels.join(' ').toLocaleLowerCase();
+                const ancestry = [container, container.parentElement, container.parentElement?.parentElement]
+                    .filter(Boolean)
+                    .map(element => String(element.className || ''))
+                    .join(' ');
+                const confirmed = /enviad|sent|entreg|deliver|lida|read/.test(combined);
+                return {
+                    outgoing: /message-out/.test(ancestry) || confirmed,
+                    error: /erro|error|falha|failed/.test(combined),
+                    confirmed
+                };
+            }"""
+        )
+        if not status.get("outgoing"):
+            continue
+        if status.get("error"):
+            found_error = True
+            continue
+        if status.get("confirmed"):
+            return "confirmed"
+        found_submitted = True
+    if found_submitted:
+        return "submitted"
+    if found_error:
+        return "error"
+    return "missing"
+
+
 def wait_for_outgoing_confirmation(page, marker: str, timeout_ms: int = 30_000) -> None:
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
-        containers = page.locator("#main [data-testid='msg-container']").filter(has_text=marker)
-        for index in range(containers.count()):
-            status = containers.nth(index).evaluate(
-                """container => {
-                    const labels = [...container.querySelectorAll('[aria-label]')]
-                        .map(element => (element.getAttribute('aria-label') || '').trim())
-                        .filter(Boolean);
-                    const combined = labels.join(' ').toLocaleLowerCase();
-                    return {
-                        error: /erro|error|falha|failed/.test(combined),
-                        confirmed: /enviad|sent|entreg|deliver|lida|read/.test(combined)
-                    };
-                }"""
+        state = outgoing_marker_state(page, marker)
+        if state == "error":
+            raise AutomationError(
+                "O WhatsApp criou a mensagem, mas marcou o envio com erro. "
+                "Nada foi confirmado como enviado."
             )
-            if status.get("error"):
-                raise AutomationError(
-                    "O WhatsApp criou a mensagem, mas marcou o envio com erro. "
-                    "Nada foi confirmado como enviado."
-                )
-            if status.get("confirmed"):
-                return
+        if state == "confirmed":
+            return
         page.wait_for_timeout(500)
     raise AutomationError(
         "O WhatsApp não confirmou a mensagem como enviada ou entregue dentro do tempo esperado."
@@ -1646,6 +1697,9 @@ def send_whatsapp(page, group_name: str, message: str, marker: str) -> None:
     input_box = first_visible(composer)
     if input_box is None:
         raise AutomationError("Não encontrei a caixa de mensagem do grupo.")
+    if outgoing_marker_state(page, marker) in ("submitted", "confirmed"):
+        log(f"Envio {marker} recuperado da conversa; nenhuma nova mensagem foi criada.")
+        return
     input_box.click()
     input_box.fill(message)
     input_box.press("Enter")
@@ -1687,6 +1741,9 @@ def send_whatsapp_to_phone(page, phone: str, message: str, marker: str) -> str:
         page.wait_for_timeout(500)
     if input_box is None:
         raise AutomationError("Não encontrei a caixa de mensagem para o número de teste.")
+    if outgoing_marker_state(page, marker) in ("submitted", "confirmed"):
+        log(f"Envio {marker} recuperado da conversa; nenhuma nova mensagem foi criada.")
+        return normalized_phone
     if not normalize_text(input_box.text_content()):
         input_box.fill(message)
     input_box.click()
@@ -1757,6 +1814,9 @@ def run_send(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "standby": True,
                     "leader": cluster.get("leaderMachineName", ""),
                 }
+            if cluster.get("paused"):
+                log("Relatorio ignorado: a automacao esta pausada.")
+                return {"sent": False, "paused": True, "marker": marker}
             sync_result = sync_pending_reminder_responses(page, config=config)
             if sync_result.get("applied"):
                 payload = read_calendar(page)
@@ -1774,6 +1834,13 @@ def run_send(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             if dry_run:
                 log(f"Relatório de teste gerado com {event_count} post(s).")
                 return {"sent": False, "dry_run": True, "events": event_count, "marker": marker}
+            cluster = claim_cluster_leadership(page)
+            if cluster.get("paused"):
+                log("Relatorio cancelado antes do envio: a automacao foi pausada.")
+                return {"sent": False, "paused": True, "marker": marker}
+            if not cluster.get("isLeader"):
+                log("Relatorio cancelado antes do envio: este PC deixou de ser o lider.")
+                return {"sent": False, "standby": True, "marker": marker}
             whatsapp_page = context.new_page()
             send_whatsapp(whatsapp_page, group_name, message, marker)
             state.update({
@@ -1823,6 +1890,9 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "standby": True,
                     "leader": cluster.get("leaderMachineName", ""),
                 }
+            if cluster.get("paused"):
+                log("Lembretes ignorados: a automacao esta pausada.")
+                return {"sent": False, "paused": True, "events": 0, "recipients": 0}
             today_key = date.today().isoformat()
             if not force and cluster.get("lastReminderCheckDate") == today_key:
                 log("Lembretes ignorados: a verificacao diaria ja foi concluida por outro PC.")
@@ -1896,7 +1966,14 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             failures: list[str] = []
             sent_events = 0
             sent_recipients = 0
+            interrupted_during_send = False
+            paused_during_send = False
             for batch in batches:
+                cluster = claim_cluster_leadership(page)
+                if cluster.get("paused") or not cluster.get("isLeader"):
+                    interrupted_during_send = True
+                    paused_during_send = bool(cluster.get("paused"))
+                    break
                 try:
                     send_whatsapp_to_phone(
                         whatsapp_page,
@@ -1940,6 +2017,20 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                 "last_reminder_issues": [*missing, *failures],
             })
             save_json(STATE_PATH, state)
+            if interrupted_during_send:
+                log(
+                    f"Lembretes interrompidos antes do fim: {sent_recipients} destinatario(s) "
+                    "confirmado(s); os demais permanecem pendentes."
+                )
+                return {
+                    "sent": sent_recipients > 0,
+                    "paused": paused_during_send,
+                    "standby": not paused_during_send,
+                    "events": sent_events,
+                    "recipients": sent_recipients,
+                    "missing_recipients": len(missing),
+                    "marker": marker,
+                }
             if failures:
                 raise AutomationError(
                     f"{len(failures)} destinatário(s) falharam. "

@@ -800,6 +800,8 @@
           const [manualCommandBusy, setManualCommandBusy] = useState(false);
           const [manualCommandFeedback, setManualCommandFeedback] = useState({ tone: '', text: '' });
           const [assignmentNoticeFeedback, setAssignmentNoticeFeedback] = useState({ tone: '', text: '' });
+          const [automationPauseBusy, setAutomationPauseBusy] = useState(false);
+          const [automationPauseFeedback, setAutomationPauseFeedback] = useState('');
 
           useEffect(() => {
               const openAutomationPanel = event => {
@@ -997,6 +999,7 @@
               const lastSeen = machine?.lastSeen?.toDate ? machine.lastSeen.toDate() : null;
               return lastSeen && Date.now() - lastSeen.getTime() < 10 * 60 * 1000;
           });
+          const automationPaused = automationCluster.paused === true;
           const automationLeaderName = automationCluster.leaderMachineName || 'Aguardando heartbeat';
           const manualReminderEvents = currentMonthEvents.filter(event => event.id && !isTerminalEventStatus(event.status));
           const selectedManualReminderEvent = manualReminderEvents.find(event => String(event.id) === manualReminderEventId) || null;
@@ -1055,8 +1058,32 @@
               });
           };
 
+          const toggleAutomationPause = async () => {
+              if (!isAdmin || automationPauseBusy) return;
+              const nextPaused = !automationPaused;
+              const question = nextPaused
+                  ? 'Pausar todos os envios da automação? Relatórios, lembretes e avisos deixarão de ser enviados.'
+                  : 'Retomar a automação? Os envios pendentes poderão ser processados.';
+              if (!confirm(question)) return;
+              setAutomationPauseBusy(true);
+              setAutomationPauseFeedback(nextPaused ? 'Pausando automação...' : 'Retomando automação...');
+              try {
+                  await db.collection('system').doc('automationCluster').set({
+                      paused: nextPaused,
+                      pauseChangedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                      pauseChangedBy: user?.email || currentUserName || ''
+                  }, { merge: true });
+                  setAutomationPauseFeedback(nextPaused ? 'Automação pausada.' : 'Automação retomada.');
+              } catch (error) {
+                  setAutomationPauseFeedback(error.message || 'Não foi possível alterar a automação.');
+              } finally {
+                  setAutomationPauseBusy(false);
+              }
+          };
+
           const enqueueManualCommand = async type => {
               if (!isAdmin || manualCommandBusy) return;
+              if (automationPaused) return alert('Retome a automação antes de solicitar um envio manual.');
               let event = null;
               let member = null;
               if (type === 'event_reminder') {
@@ -1098,6 +1125,10 @@
 
           const queueAssignmentNotice = async (event, companyId = selectedCompany) => {
               if (!event?.id || !companyId || (!event.responsibleId && !event.responsible)) return;
+              if (automationPaused) {
+                  setAssignmentNoticeFeedback({ tone: 'pending', text: 'Aviso não enviado porque a automação está pausada.' });
+                  return;
+              }
               const commandRef = db.collection('automationCommands').doc();
               setAssignmentNoticeFeedback({ tone: 'pending', text: `Registrando o aviso para ${event.responsible || 'o responsável'}...` });
               try {
@@ -3323,8 +3354,28 @@
                               <div><h3 className="text-xl font-black dark:text-white">Automa&ccedil;&atilde;o</h3><p className="text-sm text-gray-500 mt-1">{months[month]} {year}</p></div>
                               <button onClick={() => setShowAutomationModal(false)} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 font-black" aria-label="Fechar">&times;</button>
                           </div>
-                          <div className="mt-5 border-2 rounded-md p-4 border-green-300 bg-green-50 text-green-900">
-                              <strong>Automação ativa</strong>
+                          <div className={`mt-5 border-2 rounded-md p-4 ${automationPaused ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100' : 'border-green-300 bg-green-50 text-green-900 dark:border-green-700 dark:bg-green-950 dark:text-green-100'}`}>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div>
+                                      <strong>{automationPaused ? 'Automação pausada' : 'Automação ativa'}</strong>
+                                      <p className="mt-1 text-xs font-medium">
+                                          {automationPaused
+                                              ? 'Nenhuma mensagem será enviada até um administrador retomar.'
+                                              : 'Relatórios, lembretes e avisos estão habilitados.'}
+                                      </p>
+                                  </div>
+                                  {isAdmin && (
+                                      <button
+                                          type="button"
+                                          onClick={toggleAutomationPause}
+                                          disabled={automationPauseBusy}
+                                          className={`shrink-0 rounded-md px-4 py-2 text-sm font-black text-white disabled:bg-gray-400 ${automationPaused ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-amber-600 hover:bg-amber-700'}`}
+                                      >
+                                          {automationPauseBusy ? 'Aguarde...' : automationPaused ? '▶ Retomar automação' : '⏸ Pausar automação'}
+                                      </button>
+                                  )}
+                              </div>
+                              {automationPauseFeedback && <p role="status" className="mt-3 text-xs font-bold">{automationPauseFeedback}</p>}
                           </div>
                           <div className="grid grid-cols-3 gap-2 mt-5 text-center">
                               <div className="border dark:border-gray-700 rounded-md p-3"><strong className="block text-xl dark:text-white">{currentMonthEvents.length}</strong><span className="text-xs text-gray-500">No m&ecirc;s</span></div>
@@ -3340,18 +3391,18 @@
                           </div>
                           <div className="mt-5 pt-5 border-t dark:border-gray-700">
                               <h4 className="font-black text-gray-900 dark:text-white">Envios manuais</h4>
-                              <button onClick={() => enqueueManualCommand('weekly_report')} disabled={manualCommandBusy} className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
+                              <button onClick={() => enqueueManualCommand('weekly_report')} disabled={manualCommandBusy || automationPaused} className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
                                   <span aria-hidden="true">&#9654;</span> Enviar relat&oacute;rio semanal agora
                               </button>
                               <label className="block mt-5 text-xs font-bold text-gray-600 dark:text-gray-300">Demanda do lembrete</label>
-                              <select value={manualReminderEventId} onChange={event => setManualReminderEventId(event.target.value)} disabled={manualCommandBusy} className="mt-2 w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-3 text-sm">
+                              <select value={manualReminderEventId} onChange={event => setManualReminderEventId(event.target.value)} disabled={manualCommandBusy || automationPaused} className="mt-2 w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-3 text-sm">
                                   <option value="">Selecione uma demanda de {months[month]}</option>
                                   {manualReminderEvents.map(event => (
                                       <option key={event.id} value={String(event.id)}>Dia {event.day} &middot; {event.text || 'Post sem titulo'} &middot; {event.responsible || 'Sem responsavel'}</option>
                                   ))}
                               </select>
                               {selectedManualReminderEvent && !selectedManualReminderMember && <p className="mt-2 text-xs font-bold text-red-700 dark:text-red-300">Respons&aacute;vel sem WhatsApp cadastrado na equipe.</p>}
-                              <button onClick={() => enqueueManualCommand('event_reminder')} disabled={manualCommandBusy || !selectedManualReminderEvent || !selectedManualReminderMember} className="mt-3 w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
+                              <button onClick={() => enqueueManualCommand('event_reminder')} disabled={manualCommandBusy || automationPaused || !selectedManualReminderEvent || !selectedManualReminderMember} className="mt-3 w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
                                   <span aria-hidden="true">&#9654;</span> Enviar lembrete agora
                               </button>
                               {manualCommandFeedback.text && (
@@ -3837,13 +3888,13 @@
                     </h3>
                   </div>
 
-                  <div className="mb-6 border-2 p-3 rounded-lg border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100">
+                  <div className={`mb-6 border-2 p-3 rounded-lg ${automationPaused ? 'border-amber-300 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100' : 'border-green-300 bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100'}`}>
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                           <strong className="text-sm">
-                              ● Automação ativa
+                              {automationPaused ? '⏸ Automação pausada' : '● Automação ativa'}
                           </strong>
                           <span className="text-xs font-medium">
-                              Relatórios semanais e lembretes usam os posts atuais deste calendário.
+                              {automationPaused ? 'Nenhuma mensagem será enviada até a retomada.' : 'Relatórios semanais e lembretes usam os posts atuais deste calendário.'}
                           </span>
                       </div>
                       {assignmentNoticeFeedback.text && (

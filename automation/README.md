@@ -54,9 +54,11 @@ Os modos que enviam ao WhatsApp exigem a confirmação `SIM`. Mensagens de teste
 
 Depois da confirmação, o painel aceita um número com DDD para receber o teste diretamente. Se o campo ficar vazio, usa o grupo configurado. O teste de lembrete também gera um link temporário real. O painel só informa sucesso quando a bolha de saída aparece como enviada, entregue ou lida; mensagens marcadas com erro pelo WhatsApp são reportadas como falha.
 
-## Automação sempre ativa
+## Controle da automação
 
-A automação está sempre ativa e usa os posts atuais do calendário no momento de cada envio. Não é necessário concluir ou liberar o mês. Em semanas que atravessam dois meses, o relatório inclui normalmente todos os posts de segunda-feira a domingo.
+A automação usa os posts atuais do calendário no momento de cada envio. Não é necessário concluir ou liberar o mês. Em semanas que atravessam dois meses, o relatório inclui normalmente todos os posts de segunda-feira a domingo.
+
+Administradores podem abrir **Automação** no calendário e usar **Pausar automação**. A pausa vale para todos os computadores e bloqueia relatórios, lembretes, avisos de atribuição e pedidos manuais. O heartbeat e a sincronização das respostas já recebidas continuam ativos. Ao retomar, os envios que permaneceram pendentes voltam a ser processados.
 
 ## Primeira configuração
 
@@ -73,7 +75,7 @@ O instalador cria estas tarefas no Agendador do Windows:
 - `Calendario UPLI - Sincronizar Respostas`: verifica a fila a cada minuto.
 - `Calendario UPLI - Verificacao ao Entrar`: sempre que o usuário entrar no Windows.
 
-O verificador confere internet, Chrome, sessões do calendário e WhatsApp e todos os agendamentos. Se o computador estava desligado no horário, ele sincroniza as respostas guardadas e tenta recuperar o envio quando o usuário entrar. O marcador semanal impede duplicidade.
+O verificador confere internet, Chrome, sessões do calendário e WhatsApp e todos os agendamentos. Se o computador estava desligado no horário, ele sincroniza as respostas guardadas e tenta recuperar o envio quando o usuário entrar. Os marcadores semanais e individuais impedem duplicidade; antes de enviar, a automação também verifica na conversa se o mesmo lote já foi submetido.
 
 ## Arquivos de diagnóstico
 
