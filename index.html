@@ -1068,11 +1068,26 @@
               setAutomationPauseBusy(true);
               setAutomationPauseFeedback(nextPaused ? 'Pausando automação...' : 'Retomando automação...');
               try {
-                  await db.collection('system').doc('automationCluster').set({
+                  const now = new Date();
+                  const todayKey = [
+                      now.getFullYear(),
+                      String(now.getMonth() + 1).padStart(2, '0'),
+                      String(now.getDate()).padStart(2, '0')
+                  ].join('-');
+                  const pauseUpdate = {
                       paused: nextPaused,
                       pauseChangedAt: firebase.firestore.FieldValue.serverTimestamp(),
                       pauseChangedBy: user?.email || currentUserName || ''
-                  }, { merge: true });
+                  };
+                  if (nextPaused) {
+                      // Compatibilidade com agentes antigos, que ainda não leem
+                      // o campo `paused`: encerra imediatamente o ciclo de hoje.
+                      pauseUpdate.pausePreviousReminderCheckDate = automationCluster.lastReminderCheckDate || '';
+                      pauseUpdate.lastReminderCheckDate = todayKey;
+                  } else {
+                      pauseUpdate.lastReminderCheckDate = automationCluster.pausePreviousReminderCheckDate || '';
+                  }
+                  await db.collection('system').doc('automationCluster').set(pauseUpdate, { merge: true });
                   setAutomationPauseFeedback(nextPaused ? 'Automação pausada.' : 'Automação retomada.');
               } catch (error) {
                   setAutomationPauseFeedback(error.message || 'Não foi possível alterar a automação.');
