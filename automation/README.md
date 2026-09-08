@@ -1,17 +1,18 @@
 # Automação local UPLI
 
-Esta pasta envia o relatório do calendário para um grupo do WhatsApp toda segunda-feira às 9h e verifica lembretes de prazo diariamente às 9h05, usando um perfil local e separado do Chrome. O relatório semanal vai para o grupo; os lembretes de prazo vão individualmente para o WhatsApp do responsável. Quando uma demanda recebe responsável, a automação envia também um aviso simples de atribuição, sem link, na próxima sincronização.
+Esta pasta envia o relatório do calendário para um grupo do WhatsApp toda segunda-feira às 9h e verifica lembretes de prazo diariamente às 9h05, usando um perfil local e separado do Chrome. O relatório semanal vai para o grupo geral; os lembretes de prazo e as mensagens de marcação vão para o grupo específico cadastrado para cada responsável. Quando uma demanda recebe responsável, a automação envia também um aviso de atribuição com as anotações, os comentários e o link da demanda quando essas informações estiverem preenchidas no calendário.
 
 ## Equipe e responsáveis
 
-Administradores podem abrir **Equipe** no calendário para cadastrar, editar e remover funcionários ou membros da equipe. Cada cadastro contém nome, WhatsApp e, opcionalmente, o e-mail da conta que acessa o formulário.
+Administradores podem abrir **Equipe** no calendário para cadastrar, editar e remover funcionários ou membros da equipe. Cada cadastro contém nome, nome exato do grupo individual de WhatsApp e, opcionalmente, o telefone e o e-mail da conta que acessa o formulário.
 
 - Ao criar ou editar um post, o responsável é escolhido entre os membros cadastrados.
-- Os lembretes do dia são agrupados por responsável e enviados em uma conversa privada para o número cadastrado.
+- Os lembretes do dia são agrupados por responsável e enviados ao grupo específico cadastrado para essa pessoa.
 - Um responsável com várias demandas recebe uma única mensagem contendo todos os posts daquele dia.
-- Uma demanda sem responsável cadastrado ou com WhatsApp inválido não é enviada ao grupo. Ela fica registrada como pendência no diagnóstico e em \`runtime/last-reminders.txt\`.
-- Alterar o nome ou o número no cadastro vale para os próximos lembretes, porque a automação consulta a equipe novamente antes de cada execução.
+- Uma demanda sem responsável cadastrado ou sem grupo configurado não é enviada. Ela fica registrada como pendência no diagnóstico e em \`runtime/last-reminders.txt\`.
+- Alterar o nome ou o grupo no cadastro vale para os próximos lembretes, porque a automação consulta a equipe novamente antes de cada execução.
 - Ao remover um membro, os posts já atribuídos a ele permanecem no calendário, mas deixam de gerar lembretes até receberem outro responsável.
+- O nome do grupo deve ser digitado exatamente como aparece no WhatsApp.
 
 O link temporário já identifica o membro cadastrado como responsável. Ele não precisa informar e-mail ou senha para atualizar o andamento.
 
@@ -49,6 +50,8 @@ O instalador cria o atalho **Testar Automacao UPLI** na Área de Trabalho deste 
 - mensagem simples para confirmar o grupo;
 - relatório semanal marcado como teste;
 - lembrete do próximo post com um link real do formulário.
+
+Além desse painel local, administradores podem abrir **Automação** no calendário, selecionar uma demanda e usar **Enviar lembrete agora** ou **Enviar mensagem de marcação**. Ambos os envios usam o grupo específico do responsável cadastrado em **Equipe**.
 
 Os modos que enviam ao WhatsApp exigem a confirmação `SIM`. Mensagens de teste recebem o marcador `UPLI-TEST` e não alteram os registros de envio oficial, as chaves de lembrete ou o status dos posts. O status só muda se alguém abrir o link do lembrete e confirmar o formulário.
 

@@ -107,7 +107,7 @@
         
         // 🔥 A GRANDE SACADA: Mudamos o ID do banco de dados para despistar o bug.
         const UPLI_GERAL_ID = "upli_geral_v2";
-        const REQUIRED_AUTOMATION_AGENT_VERSION = 3;
+        const REQUIRED_AUTOMATION_AGENT_VERSION = 4;
 
         const STANDARD_CATEGORIES = [
             { id: 'cat_reels', label: 'Reels', color: '#E1306C' },
@@ -524,7 +524,7 @@
           const [teamMembers, setTeamMembers] = useState([]);
           const [showTeamModal, setShowTeamModal] = useState(false);
           const [editingTeamMemberId, setEditingTeamMemberId] = useState(null);
-          const [teamMemberForm, setTeamMemberForm] = useState({ name: '', email: '', phone: '' });
+          const [teamMemberForm, setTeamMemberForm] = useState({ name: '', email: '', phone: '', whatsappGroup: '' });
           
           const [newAccEmail, setNewAccEmail] = useState('');
           const [newAccPassword, setNewAccPassword] = useState('');
@@ -594,7 +594,7 @@
 
           const resetTeamMemberForm = () => {
               setEditingTeamMemberId(null);
-              setTeamMemberForm({ name: '', email: '', phone: '' });
+              setTeamMemberForm({ name: '', email: '', phone: '', whatsappGroup: '' });
           };
 
           const saveTeamMember = async () => {
@@ -602,8 +602,10 @@
               const name = teamMemberForm.name.trim();
               const email = teamMemberForm.email.trim().toLowerCase();
               const phone = normalizeTeamPhone(teamMemberForm.phone);
+              const whatsappGroup = teamMemberForm.whatsappGroup.trim();
               if (!name) return alert('Informe o nome do membro.');
-              if (phone.length < 12 || phone.length > 15) return alert('Informe um WhatsApp válido com DDD.');
+              if (phone && (phone.length < 12 || phone.length > 15)) return alert('Informe um WhatsApp válido com DDD.');
+              if (!whatsappGroup) return alert('Informe o nome exato do grupo de WhatsApp deste membro.');
               const now = new Date().toISOString();
               const memberId = editingTeamMemberId || (crypto.randomUUID ? crypto.randomUUID() : 'member_' + Date.now());
               const previous = teamMembers.find(member => member.id === memberId) || {};
@@ -613,6 +615,7 @@
                   name,
                   email,
                   phone,
+                  whatsappGroup,
                   active: true,
                   createdAt: previous.createdAt || now,
                   updatedAt: now,
@@ -627,7 +630,7 @@
 
           const editTeamMember = (member) => {
               setEditingTeamMemberId(member.id);
-              setTeamMemberForm({ name: member.name || '', email: member.email || '', phone: member.phone || '' });
+              setTeamMemberForm({ name: member.name || '', email: member.email || '', phone: member.phone || '', whatsappGroup: member.whatsappGroup || '' });
           };
 
           const removeTeamMember = async (member) => {
@@ -1018,6 +1021,7 @@
                   activeTeamMembers.find(member => responsibleName && String(member.name || '').trim().toLowerCase() === responsibleName) || null;
           };
           const selectedManualReminderMember = findManualReminderMember(selectedManualReminderEvent);
+          const selectedManualReminderGroup = String(selectedManualReminderMember?.whatsappGroup || '').trim();
 
           const watchManualCommand = commandRef => {
               let unsubscribe = () => {};
@@ -1110,15 +1114,20 @@
               if (automationPaused) return alert('Retome a automação antes de solicitar um envio manual.');
               let event = null;
               let member = null;
-              if (type === 'event_reminder') {
+              const isEventCommand = type === 'event_reminder' || type === 'assignment_notice';
+              if (isEventCommand) {
+                  if (!automationFleetReady) return alert('Atualize o instalador da automação antes de fazer envios individuais.');
                   event = selectedManualReminderEvent;
                   member = selectedManualReminderMember;
-                  if (!event) return alert('Selecione uma demanda para enviar o lembrete.');
-                  if (!member || !member.phone) return alert('A demanda precisa ter um responsavel da equipe com WhatsApp cadastrado.');
+                  if (!event) return alert('Selecione uma demanda.');
+                  if (!member) return alert('A demanda precisa ter um responsável cadastrado na equipe.');
+                  if (!String(member.whatsappGroup || '').trim()) return alert('Cadastre o grupo de WhatsApp desse responsável na Equipe.');
               }
               const question = type === 'weekly_report'
                   ? 'Enviar agora o relatorio semanal no grupo do WhatsApp?'
-                  : `Enviar agora o lembrete de "${event.text || 'Post sem titulo'}" para ${member.name}?`;
+                  : type === 'assignment_notice'
+                      ? `Enviar agora a mensagem de marcação de "${event.text || 'Post sem título'}" no grupo ${member.whatsappGroup}?`
+                      : `Enviar agora o lembrete de "${event.text || 'Post sem titulo'}" no grupo ${member.whatsappGroup}?`;
               if (!confirm(question)) return;
               setManualCommandBusy(true);
               setManualCommandFeedback({ tone: 'pending', text: 'Registrando pedido...' });
@@ -1132,8 +1141,8 @@
                       schemaVersion: 1,
                       type,
                       status: 'pending',
-                      companyId: type === 'event_reminder' ? sourceCompanyId : '',
-                      eventId: type === 'event_reminder' ? canonicalEventId : '',
+                      companyId: isEventCommand ? sourceCompanyId : '',
+                      eventId: isEventCommand ? canonicalEventId : '',
                       companyName: companies.find(company => company.id === sourceCompanyId)?.name || '',
                       eventTitle: event?.text || '',
                       requestedBy: user?.email || currentUserName,
@@ -1149,8 +1158,17 @@
 
           const queueAssignmentNotice = async (event, companyId = selectedCompany) => {
               if (!event?.id || !companyId || (!event.responsibleId && !event.responsible)) return;
+              if (!automationFleetReady) {
+                  setAssignmentNoticeFeedback({ tone: 'pending', text: 'Marcação aguardando atualização do instalador. Depois, envie manualmente pelo painel Automação.' });
+                  return;
+              }
               if (automationPaused) {
                   setAssignmentNoticeFeedback({ tone: 'pending', text: 'Aviso não enviado porque a automação está pausada.' });
+                  return;
+              }
+              const destinationMember = findManualReminderMember(event);
+              if (!String(destinationMember?.whatsappGroup || '').trim()) {
+                  setAssignmentNoticeFeedback({ tone: 'error', text: 'Cadastre o grupo de WhatsApp do responsável antes de enviar a marcação.' });
                   return;
               }
               const commandRef = db.collection('automationCommands').doc();
@@ -3293,7 +3311,7 @@
                                       <select value={responsibleFormValue(editEventForm)} onChange={e => assignResponsible(editEventForm, setEditEventForm, e.target.value)} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg outline-none dark:bg-gray-700 dark:text-white">
                                           <option value="">Sem responsável</option>
                                           {editEventForm.responsible && !editEventForm.responsibleId && <option value="__legacy__">{editEventForm.responsible} (não cadastrado)</option>}
-                                          {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · +{member.phone}</option>)}
+                                          {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · {member.whatsappGroup || 'grupo não configurado'}</option>)}
                                       </select>
                                   </div>
                                   <div>
@@ -3421,21 +3439,31 @@
                                       : `${outdatedAutomationMachines.length} computador(es) ativo(s) ainda precisam do instalador novo.`}
                               </p>
                           )}
+                          {!automationPaused && !automationFleetReady && (
+                              <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs font-bold text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                                  Pause a automação e instale a versão nova antes dos próximos envios. Os botões de lembrete e marcação ficam bloqueados enquanto nenhum PC atualizado estiver ativo.
+                              </p>
+                          )}
                           <div className="mt-5 pt-5 border-t dark:border-gray-700">
                               <h4 className="font-black text-gray-900 dark:text-white">Envios manuais</h4>
                               <button onClick={() => enqueueManualCommand('weekly_report')} disabled={manualCommandBusy || automationPaused} className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
                                   <span aria-hidden="true">&#9654;</span> Enviar relat&oacute;rio semanal agora
                               </button>
-                              <label className="block mt-5 text-xs font-bold text-gray-600 dark:text-gray-300">Demanda do lembrete</label>
+                              <label className="block mt-5 text-xs font-bold text-gray-600 dark:text-gray-300">Demanda para envio individual</label>
                               <select value={manualReminderEventId} onChange={event => setManualReminderEventId(event.target.value)} disabled={manualCommandBusy || automationPaused} className="mt-2 w-full border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-3 text-sm">
                                   <option value="">Selecione uma demanda de {months[month]}</option>
                                   {manualReminderEvents.map(event => (
                                       <option key={event.id} value={String(event.id)}>Dia {event.day} &middot; {event.text || 'Post sem titulo'} &middot; {event.responsible || 'Sem responsavel'}</option>
                                   ))}
                               </select>
-                              {selectedManualReminderEvent && !selectedManualReminderMember && <p className="mt-2 text-xs font-bold text-red-700 dark:text-red-300">Respons&aacute;vel sem WhatsApp cadastrado na equipe.</p>}
-                              <button onClick={() => enqueueManualCommand('event_reminder')} disabled={manualCommandBusy || automationPaused || !selectedManualReminderEvent || !selectedManualReminderMember} className="mt-3 w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
+                              {selectedManualReminderEvent && !selectedManualReminderMember && <p className="mt-2 text-xs font-bold text-red-700 dark:text-red-300">Respons&aacute;vel n&atilde;o cadastrado na equipe.</p>}
+                              {selectedManualReminderMember && !selectedManualReminderGroup && <p className="mt-2 text-xs font-bold text-red-700 dark:text-red-300">Cadastre o grupo de WhatsApp de {selectedManualReminderMember.name} na Equipe.</p>}
+                              {selectedManualReminderGroup && <p className="mt-2 text-xs font-bold text-green-700 dark:text-green-300">Destino: {selectedManualReminderGroup}</p>}
+                              <button onClick={() => enqueueManualCommand('event_reminder')} disabled={manualCommandBusy || automationPaused || !automationFleetReady || !selectedManualReminderEvent || !selectedManualReminderMember || !selectedManualReminderGroup} className="mt-3 w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
                                   <span aria-hidden="true">&#9654;</span> Enviar lembrete agora
+                              </button>
+                              <button onClick={() => enqueueManualCommand('assignment_notice')} disabled={manualCommandBusy || automationPaused || !automationFleetReady || !selectedManualReminderEvent || !selectedManualReminderMember || !selectedManualReminderGroup} className="mt-3 w-full bg-violet-700 hover:bg-violet-800 disabled:bg-gray-400 text-white font-bold px-4 py-3 rounded-md flex items-center justify-center gap-2">
+                                  <span aria-hidden="true">&#64;</span> Enviar mensagem de marcação
                               </button>
                               {manualCommandFeedback.text && (
                                   <p role="status" className={`mt-4 rounded-md border p-3 text-sm font-bold ${manualCommandFeedback.tone === 'success' ? 'border-green-300 bg-green-50 text-green-800' : manualCommandFeedback.tone === 'error' ? 'border-red-300 bg-red-50 text-red-800' : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
@@ -3571,22 +3599,25 @@
                           <div className="flex items-center justify-between gap-3 border-b dark:border-gray-700 pb-3">
                               <div>
                                   <h3 className="text-xl font-black text-gray-800 dark:text-white">Equipe</h3>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Membros disponíveis para atribuição e lembretes individuais.</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cadastre o grupo específico que receberá as marcações e os lembretes de cada membro.</p>
                               </div>
                               <button onClick={() => { setShowTeamModal(false); resetTeamMemberForm(); }} className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 font-black" aria-label="Fechar cadastro da equipe">×</button>
                           </div>
 
-                          <div className="grid md:grid-cols-3 gap-3 py-5 border-b dark:border-gray-700">
+                          <div className="grid md:grid-cols-2 gap-3 py-5 border-b dark:border-gray-700">
                               <label className="text-xs font-bold text-gray-600 dark:text-gray-300">Nome
                                   <input type="text" value={teamMemberForm.name} onChange={e => setTeamMemberForm({...teamMemberForm, name: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="Nome completo" />
                               </label>
-                              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">WhatsApp
+                              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">WhatsApp pessoal (opcional)
                                   <input type="tel" inputMode="tel" value={teamMemberForm.phone} onChange={e => setTeamMemberForm({...teamMemberForm, phone: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="27999999999" />
+                              </label>
+                              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">Grupo de WhatsApp
+                                  <input type="text" value={teamMemberForm.whatsappGroup} onChange={e => setTeamMemberForm({...teamMemberForm, whatsappGroup: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="Nome exato do grupo" />
                               </label>
                               <label className="text-xs font-bold text-gray-600 dark:text-gray-300">E-mail da conta
                                   <input type="email" value={teamMemberForm.email} onChange={e => setTeamMemberForm({...teamMemberForm, email: e.target.value})} className="block w-full mt-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm" placeholder="Opcional" />
                               </label>
-                              <div className="md:col-span-3 flex justify-end gap-2">
+                              <div className="md:col-span-2 flex justify-end gap-2">
                                   {editingTeamMemberId && <button onClick={resetTeamMemberForm} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white rounded-md px-4 py-2 text-sm font-bold">Cancelar</button>}
                                   <button onClick={saveTeamMember} className="bg-blue-700 text-white rounded-md px-5 py-2 text-sm font-bold hover:bg-blue-800">{editingTeamMemberId ? 'Salvar alterações' : 'Adicionar membro'}</button>
                               </div>
@@ -3598,7 +3629,7 @@
                                   <article key={member.id} className="border border-gray-200 dark:border-gray-700 rounded-md p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                       <div className="min-w-0">
                                           <strong className="block text-gray-900 dark:text-white break-words">{member.name}</strong>
-                                          <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">+{member.phone}{member.email ? ' · ' + member.email : ''}</span>
+                                          <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">Grupo: {member.whatsappGroup || 'não configurado'}{member.phone ? ' · +' + member.phone : ''}{member.email ? ' · ' + member.email : ''}</span>
                                       </div>
                                       <div className="flex gap-2 shrink-0">
                                           <button onClick={() => editTeamMember(member)} className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-md px-3 py-2 text-sm font-bold flex items-center gap-1"><Edit2 /> Editar</button>
@@ -3812,7 +3843,7 @@
                             <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">RESPONSÁVEL PELO POST</label>
                             <select value={responsibleFormValue(newEvent)} onChange={e => assignResponsible(newEvent, setNewEvent, e.target.value)} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none">
                                 <option value="">Sem responsável</option>
-                                {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · +{member.phone}</option>)}
+                                {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · {member.whatsappGroup || 'grupo não configurado'}</option>)}
                             </select>
                         </div>
                         

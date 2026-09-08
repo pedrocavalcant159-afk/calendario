@@ -34,7 +34,7 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 3
+AUTOMATION_AGENT_VERSION = 4
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -331,6 +331,15 @@ def find_responsible_member(
         if responsible_name and normalize_text(member.get("name")).casefold() == responsible_name:
             return member
     return None
+
+
+def member_whatsapp_group(member: dict[str, Any]) -> str:
+    group_name = normalize_text(member.get("whatsappGroup"))
+    if not group_name:
+        raise SetupRequired(
+            f"Cadastre o grupo de WhatsApp de {normalize_text(member.get('name')) or 'responsável'} na equipe."
+        )
+    return group_name
 
 
 def create_firestore_reminder_link(
@@ -818,18 +827,27 @@ def build_assignment_notice_message(
     except (KeyError, TypeError, ValueError) as error:
         raise AutomationError("A demanda esta sem uma data valida.") from error
     title = normalize_text(event.get("text")) or "Post sem titulo"
-    return "\n".join([
+    notes = str(event.get("notes") or "").strip()
+    demand_link = normalize_text(event.get("imageUrl"))
+    lines = [
         f"Oi, {responsible_name}! Tudo bem? 😊",
         "",
         "Passando para avisar que seu nome foi colocado como responsável por uma nova demanda:",
         "",
         f"*{company_name} | {title}*",
         f"Data prevista: {due_date:%d/%m/%Y}",
+    ]
+    if notes:
+        lines.extend(["", "*Anotações / comentários:*", notes])
+    if demand_link:
+        lines.extend(["", "*Link da demanda / arte:*", demand_link])
+    lines.extend([
         "",
         "Quando puder, dá uma olhadinha no calendário. Qualquer coisa, estamos por aqui!",
         "",
         marker,
     ])
+    return "\n".join(lines)
 
 
 def send_manual_weekly_report(
@@ -903,7 +921,7 @@ def send_manual_event_reminder(
     member = find_responsible_member(payload, event)
     if not member:
         raise SetupRequired("Cadastre o responsavel da demanda na equipe antes do envio.")
-    phone = normalize_test_phone(normalize_text(member.get("phone")))
+    group_name = member_whatsapp_group(member)
     responsible_name = normalize_text(member.get("name")) or "Responsavel"
     update_url = create_firestore_reminder_link(page, payload, config, company_id, event_id)
     marker_token = re.sub(r"[^A-Za-z0-9]", "", command["id"])[:10].upper()
@@ -917,26 +935,26 @@ def send_manual_event_reminder(
     )
     whatsapp_page = page.context.new_page()
     try:
-        send_whatsapp_to_phone(whatsapp_page, phone, message, marker)
+        send_whatsapp(whatsapp_page, group_name, message, marker)
     finally:
         whatsapp_page.close()
     (RUNTIME_DIR / "last-reminders.txt").write_text(
         "\n".join([
-            f"DESTINO: {responsible_name} (final {phone[-4:]})",
+            f"DESTINO: grupo {group_name} ({responsible_name})",
             redact_reminder_token(message),
         ]),
         encoding="utf-8",
     )
     log(
         f"Lembrete manual confirmado para {responsible_name} "
-        f"(numero final {phone[-4:]})."
+        f"no grupo '{group_name}'."
     )
     return {
         "sent": True,
         "events": 1,
         "responsible": responsible_name,
-        "phoneLast4": phone[-4:],
-        "message": f"Lembrete enviado para {responsible_name} (final {phone[-4:]}).",
+        "group": group_name,
+        "message": f"Lembrete enviado no grupo {group_name} para {responsible_name}.",
     }
 
 
@@ -956,7 +974,7 @@ def send_assignment_notice(
     member = find_responsible_member(payload, event)
     if not member:
         raise SetupRequired("Cadastre o responsável na equipe antes de enviar o aviso.")
-    phone = normalize_test_phone(normalize_text(member.get("phone")))
+    group_name = member_whatsapp_group(member)
     responsible_name = normalize_text(member.get("name")) or "Responsável"
     marker_token = re.sub(r"[^A-Za-z0-9]", "", command["id"])[:10].upper()
     marker = f"[UPLI-ATR-{marker_token}]"
@@ -968,26 +986,26 @@ def send_assignment_notice(
     )
     whatsapp_page = page.context.new_page()
     try:
-        send_whatsapp_to_phone(whatsapp_page, phone, message, marker)
+        send_whatsapp(whatsapp_page, group_name, message, marker)
     finally:
         whatsapp_page.close()
     (RUNTIME_DIR / "last-assignment-notices.txt").write_text(
         "\n".join([
-            f"DESTINO: {responsible_name} (final {phone[-4:]})",
+            f"DESTINO: grupo {group_name} ({responsible_name})",
             message,
         ]),
         encoding="utf-8",
     )
     log(
         f"Aviso de atribuição confirmado para {responsible_name} "
-        f"(número final {phone[-4:]})."
+        f"no grupo '{group_name}'."
     )
     return {
         "sent": True,
         "events": 1,
         "responsible": responsible_name,
-        "phoneLast4": phone[-4:],
-        "message": f"Aviso de atribuição enviado para {responsible_name} (final {phone[-4:]}).",
+        "group": group_name,
+        "message": f"Mensagem de marcação enviada no grupo {group_name} para {responsible_name}.",
     }
 
 
@@ -1399,10 +1417,9 @@ def build_reminder_batches(
             if not member:
                 missing.append(f"{company_name} | {title}: responsável não cadastrado")
                 continue
-            try:
-                phone = normalize_test_phone(normalize_text(member.get("phone")))
-            except SetupRequired:
-                missing.append(f"{company_name} | {title}: WhatsApp inválido para {normalize_text(member.get('name'))}")
+            group_name = normalize_text(member.get("whatsappGroup"))
+            if not group_name:
+                missing.append(f"{company_name} | {title}: grupo de WhatsApp não cadastrado para {normalize_text(member.get('name'))}")
                 continue
             candidates.append({
                 "company_id": company_id,
@@ -1410,7 +1427,7 @@ def build_reminder_batches(
                 "event_id": event_id,
                 "title": title,
                 "responsible": normalize_text(member.get("name")) or "Responsável",
-                "phone": phone,
+                "group_name": group_name,
                 "status": normalize_text(event.get("status")),
                 "due_date": due_date,
                 "days_until": days_until,
@@ -1437,14 +1454,14 @@ def build_reminder_batches(
     }
     grouped: dict[str, list[dict[str, Any]]] = {}
     for candidate in candidates:
-        grouped.setdefault(candidate["phone"], []).append(candidate)
+        grouped.setdefault(candidate["group_name"], []).append(candidate)
 
     batches: list[dict[str, Any]] = []
-    for phone, items in sorted(grouped.items()):
+    for group_name, items in sorted(grouped.items()):
         items.sort(key=lambda item: (item["due_date"], item["company_name"].casefold(), item["title"].casefold()))
         # Identify the batch, not only the recipient. An exact rerun keeps the
         # marker, while a newly added event on the same day produces a new one.
-        marker_source = "|".join([phone, *sorted(item["delivery_key"] for item in items)])
+        marker_source = "|".join([group_name.casefold(), *sorted(item["delivery_key"] for item in items)])
         marker_hash = hashlib.sha256(marker_source.encode("utf-8")).hexdigest()[:10].upper()
         marker = f"[UPLI-LEM-{today:%Y%m%d}-{marker_hash}]"
         responsible = items[0]["responsible"]
@@ -1502,7 +1519,7 @@ def build_reminder_batches(
                 marker,
             ])
         batches.append({
-            "phone": phone,
+            "group_name": group_name,
             "responsible": items[0]["responsible"],
             "message": "\n".join(lines),
             "marker": marker,
@@ -1924,7 +1941,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             preview_sections = []
             for batch in batches:
                 preview_sections.extend([
-                    f"DESTINO: {batch['responsible']} (final {batch['phone'][-4:]})",
+                    f"DESTINO: grupo {batch['group_name']} ({batch['responsible']})",
                     redact_reminder_token(batch["message"]),
                     "",
                 ])
@@ -1943,7 +1960,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "reminderDeliveries": state.get("reminder_deliveries") or {},
                 })
                 if missing:
-                    log(f"Lembretes não enviados: {len(missing)} post(s) sem responsável com WhatsApp válido.")
+                    log(f"Lembretes não enviados: {len(missing)} post(s) sem responsável ou grupo de WhatsApp configurado.")
                 else:
                     log("Lembretes verificados: nenhum post precisa de aviso hoje.")
                 return {
@@ -1979,9 +1996,9 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     paused_during_send = bool(cluster.get("paused"))
                     break
                 try:
-                    send_whatsapp_to_phone(
+                    send_whatsapp(
                         whatsapp_page,
-                        batch["phone"],
+                        batch["group_name"],
                         batch["message"],
                         batch["marker"],
                     )
@@ -1999,11 +2016,11 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     update_cluster_state(page, {"reminderDeliveries": deliveries})
                     log(
                         f"Lembrete confirmado para {batch['responsible']} "
-                        f"(número final {batch['phone'][-4:]}), com {batch['event_count']} post(s)."
+                        f"no grupo '{batch['group_name']}', com {batch['event_count']} post(s)."
                     )
                 except Exception as error:
                     failures.append(
-                        f"{batch['responsible']} (final {batch['phone'][-4:]}): {error}"
+                        f"{batch['responsible']} (grupo {batch['group_name']}): {error}"
                     )
 
             cutoff = datetime.now().astimezone() - timedelta(days=90)
@@ -2048,8 +2065,8 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                 "reminderDeliveries": deliveries,
             })
             log(
-                f"Lembretes privados concluídos: {sent_events} post(s) "
-                f"para {sent_recipients} pessoa(s)."
+                f"Lembretes em grupos individuais concluídos: {sent_events} post(s) "
+                f"para {sent_recipients} grupo(s)."
             )
             return {
                 "sent": sent_recipients > 0,
