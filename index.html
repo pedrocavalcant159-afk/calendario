@@ -1063,7 +1063,7 @@
               const nextPaused = !automationPaused;
               const question = nextPaused
                   ? 'Pausar todos os envios da automação? Relatórios, lembretes e avisos deixarão de ser enviados.'
-                  : 'Retomar a automação? Os envios pendentes poderão ser processados.';
+                  : 'Retomar a automação? Os lembretes automáticos voltarão no próximo ciclo agendado.';
               if (!confirm(question)) return;
               setAutomationPauseBusy(true);
               setAutomationPauseFeedback(nextPaused ? 'Pausando automação...' : 'Retomando automação...');
@@ -1082,10 +1082,7 @@
                   if (nextPaused) {
                       // Compatibilidade com agentes antigos, que ainda não leem
                       // o campo `paused`: encerra imediatamente o ciclo de hoje.
-                      pauseUpdate.pausePreviousReminderCheckDate = automationCluster.lastReminderCheckDate || '';
                       pauseUpdate.lastReminderCheckDate = todayKey;
-                  } else {
-                      pauseUpdate.lastReminderCheckDate = automationCluster.pausePreviousReminderCheckDate || '';
                   }
                   await db.collection('system').doc('automationCluster').set(pauseUpdate, { merge: true });
                   setAutomationPauseFeedback(nextPaused ? 'Automação pausada.' : 'Automação retomada.');

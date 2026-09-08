@@ -58,7 +58,7 @@ Depois da confirmação, o painel aceita um número com DDD para receber o teste
 
 A automação usa os posts atuais do calendário no momento de cada envio. Não é necessário concluir ou liberar o mês. Em semanas que atravessam dois meses, o relatório inclui normalmente todos os posts de segunda-feira a domingo.
 
-Administradores podem abrir **Automação** no calendário e usar **Pausar automação**. A pausa vale para todos os computadores e bloqueia relatórios, lembretes, avisos de atribuição e pedidos manuais. O heartbeat e a sincronização das respostas já recebidas continuam ativos. Ao retomar, os envios que permaneceram pendentes voltam a ser processados.
+Administradores podem abrir **Automação** no calendário e usar **Pausar automação**. A pausa vale para todos os computadores e bloqueia relatórios, lembretes, avisos de atribuição e pedidos manuais. O heartbeat e a sincronização das respostas já recebidas continuam ativos. Ao retomar, os lembretes automáticos voltam no próximo ciclo agendado, sem reabrir o ciclo interrompido no mesmo dia.
 
 ## Primeira configuração
 
