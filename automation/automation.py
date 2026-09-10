@@ -34,7 +34,7 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 5
+AUTOMATION_AGENT_VERSION = 6
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -245,6 +245,65 @@ def update_cluster_state(page, updates: dict[str, Any]) -> None:
         }""",
         updates,
     )
+
+
+def reserve_reminder_batch(
+    page,
+    delivery_keys: list[str],
+    marker: str,
+    responsible: str,
+    group_name: str,
+    force: bool = False,
+) -> str:
+    """Reserve a batch before WhatsApp is touched so ambiguous sends cannot repeat."""
+    attempted_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    cutoff_ms = int(
+        (datetime.now().astimezone() - timedelta(days=90)).timestamp() * 1000
+    )
+    reserved = page.evaluate(
+        """async input => {
+            const ref = db.collection('system').doc('automationCluster');
+            return db.runTransaction(async transaction => {
+                const snapshot = await transaction.get(ref);
+                const data = snapshot.exists ? (snapshot.data() || {}) : {};
+                const deliveries = { ...(data.reminderDeliveries || {}) };
+                for (const [key, value] of Object.entries(deliveries)) {
+                    const timestamp = Date.parse(value);
+                    if (Number.isFinite(timestamp) && timestamp < input.cutoffMs) {
+                        delete deliveries[key];
+                    }
+                }
+                const exists = input.deliveryKeys.some(key =>
+                    Object.prototype.hasOwnProperty.call(deliveries, key)
+                );
+                if (exists && !input.force) return false;
+                for (const key of input.deliveryKeys) {
+                    deliveries[key] = input.attemptedAt;
+                }
+                transaction.set(ref, {
+                    reminderDeliveries: deliveries,
+                    lastReminderReservation: {
+                        marker: input.marker,
+                        responsible: input.responsible,
+                        groupName: input.groupName,
+                        attemptedAt: input.attemptedAt
+                    },
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                return true;
+            });
+        }""",
+        {
+            "deliveryKeys": delivery_keys,
+            "marker": marker,
+            "responsible": responsible,
+            "groupName": group_name,
+            "attemptedAt": attempted_at,
+            "cutoffMs": cutoff_ms,
+            "force": force,
+        },
+    )
+    return attempted_at if reserved else ""
 
 
 def event_id_matches(stored_id: Any, requested_id: Any) -> bool:
@@ -2014,6 +2073,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             failures: list[str] = []
             sent_events = 0
             sent_recipients = 0
+            skipped_reserved = 0
             interrupted_during_send = False
             paused_during_send = False
             for batch in batches:
@@ -2022,7 +2082,30 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     interrupted_during_send = True
                     paused_during_send = bool(cluster.get("paused"))
                     break
+                attempted_at = ""
                 try:
+                    attempted_at = reserve_reminder_batch(
+                        page,
+                        batch["delivery_keys"],
+                        batch["marker"],
+                        batch["responsible"],
+                        batch["group_name"],
+                        force=force,
+                    )
+                    if not attempted_at:
+                        skipped_reserved += 1
+                        log(
+                            f"Lembrete {batch['marker']} ignorado para {batch['responsible']}: "
+                            "o lote já foi reservado por outro ciclo ou computador."
+                        )
+                        continue
+                    deliveries.update({key: attempted_at for key in batch["delivery_keys"]})
+                    state.update({
+                        "reminder_deliveries": deliveries,
+                        "last_reminder_attempt_at": attempted_at,
+                        "last_reminder_attempt_marker": batch["marker"],
+                    })
+                    save_json(STATE_PATH, state)
                     send_whatsapp(
                         whatsapp_page,
                         batch["group_name"],
@@ -2040,7 +2123,6 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                         "last_reminder_recipients": sent_recipients,
                     })
                     save_json(STATE_PATH, state)
-                    update_cluster_state(page, {"reminderDeliveries": deliveries})
                     log(
                         f"Lembrete confirmado para {batch['responsible']} "
                         f"no grupo '{batch['group_name']}', com {batch['event_count']} post(s)."
@@ -2049,6 +2131,16 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     failures.append(
                         f"{batch['responsible']} (grupo {batch['group_name']}): {error}"
                     )
+                    if attempted_at:
+                        log(
+                            f"Lembrete {batch['marker']} falhou para {batch['responsible']} e foi "
+                            f"bloqueado contra repetição automática: {error}"
+                        )
+                    else:
+                        log(
+                            f"Lembrete {batch['marker']} falhou antes do envio para "
+                            f"{batch['responsible']}: {error}"
+                        )
 
             cutoff = datetime.now().astimezone() - timedelta(days=90)
             deliveries = {
@@ -2079,21 +2171,22 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "missing_recipients": len(missing),
                     "marker": marker,
                 }
-            if failures:
-                raise AutomationError(
-                    f"{len(failures)} destinatário(s) falharam. "
-                    f"{sent_recipients} destinatário(s) foram confirmados."
-                )
             update_cluster_state(page, {
                 "lastReminderCheckDate": today_key,
                 "lastReminderCheckAt": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "lastReminderMachineId": cluster.get("machineId", ""),
                 "lastReminderMachineName": cluster.get("machineName", ""),
-                "reminderDeliveries": deliveries,
             })
+            if failures:
+                raise AutomationError(
+                    f"{len(failures)} destinatário(s) falharam. "
+                    f"{sent_recipients} destinatário(s) foram confirmados. "
+                    "Os lotes com falha foram bloqueados contra repetição automática; "
+                    "revise o diagnóstico antes de reenviar manualmente."
+                )
             log(
                 f"Lembretes em grupos individuais concluídos: {sent_events} post(s) "
-                f"para {sent_recipients} grupo(s)."
+                f"para {sent_recipients} grupo(s); {skipped_reserved} lote(s) já reservado(s)."
             )
             return {
                 "sent": sent_recipients > 0,

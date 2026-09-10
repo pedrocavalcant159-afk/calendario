@@ -13,3 +13,10 @@ espera e um deles assume automaticamente se o lider ficar offline.
 
 Nao copie nem reutilize a pasta runtime de outro PC. O pacote oficial nao inclui
 essa pasta, porque cada computador precisa de uma sessao propria do WhatsApp.
+
+PARA DESINSTALAR
+
+Clique duas vezes em DESINSTALAR-AUTOMACAO-UPLI.bat e digite DESINSTALAR para
+confirmar. Isso remove deste PC as tarefas, os atalhos, a sessao local do
+WhatsApp e os registros da automacao. O calendario online, os posts, o Chrome e
+o Python nao sao removidos.

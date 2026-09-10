@@ -38,6 +38,7 @@ Por padrão, um post ainda não publicado pode gerar avisos 3 dias antes, 1 dia 
 - Alterar a data do post gera novas chaves de lembrete para o novo prazo.
 - Posts com status **Publicado** não geram lembretes.
 - Cada combinação de post, prazo e antecedência é enviada uma única vez.
+- Antes de abrir o WhatsApp, cada lote é reservado no estado compartilhado. Se o navegador travar ou a confirmação do WhatsApp ficar ambígua, o lote não é tentado novamente de forma automática; a falha fica no diagnóstico para revisão e eventual reenvio manual.
 - O histórico das últimas 20 alterações feitas pelo formulário fica armazenado no próprio post.
 
 Os dias podem ser alterados em `reminder_days_before` no arquivo `config.json`.
@@ -92,7 +93,7 @@ O verificador confere internet, Chrome, sessões do calendário e WhatsApp e tod
 - `runtime/last-error.png`: captura da tela quando um envio falha.
 - `test_free_form.py`: teste sintético do formulário, das regras e da fila; não altera demandas reais.
 
-Execute `setup.ps1` para trocar o grupo ou reconectar as contas. Execute `uninstall.ps1` para remover apenas as tarefas agendadas; sessões e registros são preservados.
+Execute `setup.ps1` para trocar o grupo ou reconectar as contas. Para remover a automação deste computador, use `DESINSTALAR-AUTOMACAO-UPLI.bat` na raiz do pacote ou o atalho **Desinstalar Automacao UPLI** criado na Área de Trabalho. O desinstalador exige a confirmação `DESINSTALAR`, remove tarefas, atalhos, sessão e registros locais, mas preserva o calendário online, os posts, o Chrome e o Python. Para remover somente as tarefas e preservar os dados locais, execute `uninstall.ps1 -KeepLocalData`.
 
 ## Limitação
 

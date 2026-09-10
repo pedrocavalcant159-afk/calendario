@@ -13,6 +13,7 @@ $requiredFiles = @(
     'install.ps1',
     'setup.ps1',
     'test.ps1',
+    'uninstall.ps1',
     'verify.py',
     'verify-on-login.ps1'
 )
@@ -118,6 +119,14 @@ try {
     $setupShortcut.WorkingDirectory = $targetAutomation
     $setupShortcut.Description = 'Conecta novamente o calendario e o WhatsApp da Automacao UPLI'
     $setupShortcut.Save()
+
+    $uninstallShortcutPath = Join-Path $desktop 'Desinstalar Automacao UPLI.lnk'
+    $uninstallShortcut = $shell.CreateShortcut($uninstallShortcutPath)
+    $uninstallShortcut.TargetPath = 'powershell.exe'
+    $uninstallShortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $targetAutomation 'uninstall.ps1') + '"'
+    $uninstallShortcut.WorkingDirectory = [IO.Path]::GetTempPath()
+    $uninstallShortcut.Description = 'Remove as tarefas e os arquivos locais da Automacao UPLI'
+    $uninstallShortcut.Save()
 
     if (-not $SkipSetup) {
         Write-Step 'Conectando calendario e WhatsApp'
