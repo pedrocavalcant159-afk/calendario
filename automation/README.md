@@ -72,7 +72,7 @@ Enquanto estiver pausada, a tela mostra quantos computadores ativos estão na **
 2. Informe o nome exato do grupo.
 3. Na janela do Chrome aberta pelo assistente, conecte a conta do calendário.
 4. Abra o WhatsApp Web e leia o QR Code.
-5. Feche todas as janelas desse perfil e volte ao assistente para validar.
+5. Deixe o Chrome da automação aberto e volte ao assistente para validar. A janela pode ficar minimizada; os próximos ciclos reutilizam a aba do WhatsApp e não a fecham depois de enviar.
 
 O instalador cria estas tarefas no Agendador do Windows:
 
@@ -92,11 +92,14 @@ O verificador confere internet, Chrome, sessões do calendário e WhatsApp e tod
 - `runtime/last-test.txt`: última mensagem de teste gerada.
 - `runtime/last-error.png`: captura da tela quando um envio falha.
 - `runtime/last-whatsapp-delivery.json`: resultado da última tentativa de envio, usado pelo diagnóstico para distinguir sessão conectada de envio confirmado.
+- `runtime/browser-host.json`: porta local e perfil da janela do Chrome mantida aberta para a automação.
 - `test_free_form.py`: teste sintético do formulário, das regras e da fila; não altera demandas reais.
 
 Execute `setup.ps1` para trocar o grupo ou reconectar as contas. Para remover a automação deste computador, use `DESINSTALAR-AUTOMACAO-UPLI.bat` na raiz do pacote ou o atalho **Desinstalar Automacao UPLI** criado na Área de Trabalho. O desinstalador exige a confirmação `DESINSTALAR`, remove tarefas, atalhos, sessão e registros locais, mas preserva o calendário online, os posts, o Chrome e o Python. Para remover somente as tarefas e preservar os dados locais, execute `uninstall.ps1 -KeepLocalData`.
 
-Para atualizar uma instalação existente na pasta padrão, extraia o pacote atualizado e execute `ATUALIZAR-AUTOMACAO-UPLI.bat`. As configurações, sessões e o histórico local são preservados. O envio prefere o botão **Enviar**, e mensagens sem confirmação ficam como falha no diagnóstico, com captura da conversa antes de a aba ser fechada. O diagnóstico sem envio verifica a conexão e a última tentativa registrada; ele não comprova uma nova entrega.
+Para atualizar uma instalação existente na pasta padrão, extraia o pacote atualizado e execute `ATUALIZAR-AUTOMACAO-UPLI.bat`. As configurações, sessões e o histórico local são preservados. O envio prefere o botão **Enviar**, e mensagens sem confirmação ficam como falha no diagnóstico, com captura da conversa no momento da falha. O diagnóstico sem envio verifica a conexão e a última tentativa registrada; ele não comprova uma nova entrega.
+
+A partir da versão 8, o Chrome e a aba do WhatsApp ficam abertos entre execuções. Somente a aba temporária usada para consultar o calendário é fechada. O próximo ciclo tenta reabrir o Chrome caso a janela tenha sido fechada. Uma falha de envio interrompe o restante do lote; mensagens ainda não submetidas permanecem pendentes. Para usar o comportamento anterior, configure `keep_whatsapp_open` como `false` em `config.json`.
 
 ## Limitação
 

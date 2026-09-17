@@ -5,6 +5,7 @@ $runtimeDir = Join-Path $automationDir 'runtime'
 $profileDir = Join-Path $runtimeDir 'browser-profile'
 $bridgePath = Join-Path $automationDir 'firebase-bridge.html'
 $verifyScript = Join-Path $automationDir 'verify.py'
+$automationScript = Join-Path $automationDir 'automation.py'
 $chromeCandidates = @(
     'C:\Program Files\Google\Chrome\Application\chrome.exe',
     'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
@@ -43,10 +44,11 @@ Write-Host 'O Chrome da automacao sera aberto agora.' -ForegroundColor Yellow
 Write-Host '1. Entre com a mesma conta usada no calendario.'
 Write-Host '2. Abra o WhatsApp Web e conecte o numero pelo QR Code.'
 Write-Host '3. Confirme que o grupo aparece na lista.'
-Write-Host '4. Feche TODAS as janelas desse Chrome e volte aqui.'
+Write-Host '4. Deixe o Chrome da automacao aberto e volte aqui.'
 Write-Host ''
-Start-Process -FilePath $chrome -ArgumentList @("--user-data-dir=$profileDir", '--no-first-run', $bridgeUri, 'https://web.whatsapp.com/')
-Read-Host 'Depois de fechar o Chrome, pressione ENTER para verificar'
+& py -3.14 $automationScript --open-browser
+if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel abrir o Chrome da automacao.' }
+Read-Host 'Depois de conectar as contas, pressione ENTER para verificar (deixe o Chrome aberto)'
 
 & py -3.14 $verifyScript --skip-catchup | Out-Null
 $exitCode = $LASTEXITCODE

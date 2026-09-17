@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import socket
+import subprocess
 import sys
 import time
 import uuid
@@ -31,11 +32,12 @@ STATE_PATH = RUNTIME_DIR / "state.json"
 MACHINE_PATH = RUNTIME_DIR / "machine.json"
 LOG_PATH = RUNTIME_DIR / "automation.log"
 WHATSAPP_STATUS_PATH = RUNTIME_DIR / "last-whatsapp-delivery.json"
+BROWSER_HOST_PATH = RUNTIME_DIR / "browser-host.json"
 LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 7
+AUTOMATION_AGENT_VERSION = 8
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -51,6 +53,10 @@ class AutomationError(RuntimeError):
 
 
 class SetupRequired(AutomationError):
+    pass
+
+
+class WhatsAppDeliveryError(AutomationError):
     pass
 
 
@@ -928,11 +934,11 @@ def send_manual_weekly_report(
     manual_marker = f"[UPLI-MAN-REL-{marker_token}]"
     message = message.replace(weekly_marker, manual_marker)
     (RUNTIME_DIR / "last-report.txt").write_text(message, encoding="utf-8")
-    whatsapp_page = page.context.new_page()
+    whatsapp_page = whatsapp_page_for_context(page.context)
     try:
         send_whatsapp(whatsapp_page, group_name, message, manual_marker)
     finally:
-        whatsapp_page.close()
+        close_whatsapp_page(whatsapp_page)
     monday, _, _ = week_context()
     state = load_json(STATE_PATH, {})
     state.update({
@@ -993,11 +999,11 @@ def send_manual_event_reminder(
         update_url,
         marker,
     )
-    whatsapp_page = page.context.new_page()
+    whatsapp_page = whatsapp_page_for_context(page.context)
     try:
         send_whatsapp(whatsapp_page, group_name, message, marker)
     finally:
-        whatsapp_page.close()
+        close_whatsapp_page(whatsapp_page)
     (RUNTIME_DIR / "last-reminders.txt").write_text(
         "\n".join([
             f"DESTINO: grupo {group_name} ({responsible_name})",
@@ -1044,11 +1050,11 @@ def send_assignment_notice(
         responsible_name,
         marker,
     )
-    whatsapp_page = page.context.new_page()
+    whatsapp_page = whatsapp_page_for_context(page.context)
     try:
         send_whatsapp(whatsapp_page, group_name, message, marker)
     finally:
-        whatsapp_page.close()
+        close_whatsapp_page(whatsapp_page)
     (RUNTIME_DIR / "last-assignment-notices.txt").write_text(
         "\n".join([
             f"DESTINO: grupo {group_name} ({responsible_name})",
@@ -1101,6 +1107,9 @@ def process_pending_manual_commands(
             finish_manual_command(page, command_id, "failed", error=str(error))
             failed += 1
             log(f"Pedido manual {command_id} falhou: {error}")
+            if isinstance(error, WhatsAppDeliveryError):
+                log('Fila manual interrompida apos falha no WhatsApp; demais pedidos continuam pendentes.')
+                break
     return {
         "queued": len(commands),
         "completed": completed,
@@ -1672,7 +1681,8 @@ def build_report(
 
 
 def whatsapp_is_ready(page, timeout_ms: int = 60_000) -> bool:
-    page.goto("https://web.whatsapp.com/", wait_until="domcontentloaded", timeout=timeout_ms)
+    if not page.url.startswith('https://web.whatsapp.com/'):
+        page.goto("https://web.whatsapp.com/", wait_until="domcontentloaded", timeout=timeout_ms)
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
         pane = page.locator("#pane-side")
@@ -1835,13 +1845,13 @@ def submit_whatsapp_message(page, input_box, message: str, marker: str) -> None:
         record_whatsapp_delivery('confirmed', marker)
     except Exception as error:
         record_whatsapp_delivery('failed', marker, str(error))
-        # Manual commands close this tab immediately after an error. Save the
-        # evidence here, while the affected WhatsApp conversation is open.
+        # Save the affected conversation now, before cleanup or a later cycle
+        # changes the selected chat.
         try:
             page.screenshot(path=str(RUNTIME_DIR / 'last-error.png'), full_page=True)
         except Exception:
             pass
-        raise
+        raise WhatsAppDeliveryError(str(error)) from error
 
 
 def send_whatsapp(page, group_name: str, message: str, marker: str) -> None:
@@ -1909,7 +1919,88 @@ def send_whatsapp_to_phone(page, phone: str, message: str, marker: str) -> str:
     return normalized_phone
 
 
+class AttachedBrowserContext:
+    """One cycle owns its bridge tab; Chrome and WhatsApp outlive the cycle."""
+    def __init__(self, browser):
+        self.browser = browser
+        self.context = browser.contexts[0]
+        self.context._upli_keep_open = True
+        self.worker_page = self.context.new_page()
+
+    @property
+    def pages(self):
+        workers = [self.worker_page] if not self.worker_page.is_closed() else []
+        whatsapp = [page for page in self.context.pages
+                    if not page.is_closed() and page.url.startswith('https://web.whatsapp.com/')]
+        return workers + whatsapp
+
+    def new_page(self):
+        return self.context.new_page()
+
+    def close(self):
+        if not self.worker_page.is_closed() and 'mode=setup' not in self.worker_page.url:
+            self.worker_page.close()
+
+    def __getattr__(self, name):
+        return getattr(self.context, name)
+
+
+def whatsapp_page_for_context(context):
+    actual = context.context if isinstance(context, AttachedBrowserContext) else context
+    if getattr(actual, '_upli_keep_open', False):
+        for page in actual.pages:
+            if not page.is_closed() and page.url.startswith('https://web.whatsapp.com/'):
+                return page
+    return actual.new_page()
+
+
+def close_whatsapp_page(page):
+    if not getattr(page.context, '_upli_keep_open', False):
+        page.close()
+
+
+def attach_open_chrome(playwright):
+    ensure_runtime()
+    host = load_json(BROWSER_HOST_PATH, {})
+    profile = str(PROFILE_DIR.resolve())
+    if isinstance(host, dict) and host.get('profile') == profile:
+        port = host.get('port')
+        if isinstance(port, int) and 1024 <= port <= 65535:
+            try:
+                return playwright.chromium.connect_over_cdp(f'http://127.0.0.1:{port}', timeout=3000)
+            except PlaywrightError:
+                pass
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        port = listener.getsockname()[1]
+    # Chrome is an independent, visible process. Disconnecting Playwright at
+    # the end of a scheduled cycle cannot terminate it.
+    subprocess.Popen([
+        str(chrome_path()), f'--user-data-dir={profile}',
+        f'--remote-debugging-port={port}', '--remote-debugging-address=127.0.0.1',
+        '--no-first-run', '--no-default-browser-check',
+        '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
+        'https://web.whatsapp.com/',
+    ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        close_fds=True, creationflags=(
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_BREAKAWAY_FROM_JOB
+        ) if os.name == 'nt' else 0)
+    save_json(BROWSER_HOST_PATH, {'profile': profile, 'port': port})
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            return playwright.chromium.connect_over_cdp(f'http://127.0.0.1:{port}', timeout=1000)
+        except PlaywrightError:
+            time.sleep(0.25)
+    raise SetupRequired(
+        'Nao foi possivel conectar ao Chrome da automacao. Se uma janela antiga desse '
+        'perfil estiver aberta, feche somente essa janela e tente novamente.'
+    )
+
+
 def browser_context(playwright, config: dict[str, Any], headless: bool | None = None):
+    if config.get('keep_whatsapp_open', True):
+        return AttachedBrowserContext(attach_open_chrome(playwright))
     use_headless = bool(config.get("headless", True)) if headless is None else headless
     return playwright.chromium.launch_persistent_context(
         user_data_dir=str(PROFILE_DIR),
@@ -1919,6 +2010,18 @@ def browser_context(playwright, config: dict[str, Any], headless: bool | None = 
         locale="pt-BR",
         timezone_id="America/Sao_Paulo",
     )
+
+
+def open_browser_for_setup() -> dict[str, Any]:
+    config = load_config()
+    config['keep_whatsapp_open'] = True
+    save_json(CONFIG_PATH, config)
+    with automation_lock(), sync_playwright() as playwright:
+        context = browser_context(playwright, config)
+        page = context.pages[0]
+        page.goto(BRIDGE_PATH.as_uri() + '?mode=setup', wait_until='domcontentloaded')
+        whatsapp_page_for_context(context)
+        return {'opened': True, 'keep_whatsapp_open': True}
 
 
 def verify_sessions(config: dict[str, Any]) -> dict[str, Any]:
@@ -1938,7 +2041,7 @@ def verify_sessions(config: dict[str, Any]) -> dict[str, Any]:
             result["calendar_user"] = payload.get("user", "")
             result["active_month"] = calendar_month_is_active(payload)
             result["form_url"] = bool(form_base_url(payload, config))
-            whatsapp_page = context.new_page()
+            whatsapp_page = whatsapp_page_for_context(context)
             result["whatsapp"] = whatsapp_is_ready(whatsapp_page, timeout_ms=45_000)
         finally:
             context.close()
@@ -1997,7 +2100,7 @@ def run_send(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             if not cluster.get("isLeader"):
                 log("Relatorio cancelado antes do envio: este PC deixou de ser o lider.")
                 return {"sent": False, "standby": True, "marker": marker}
-            whatsapp_page = context.new_page()
+            whatsapp_page = whatsapp_page_for_context(context)
             send_whatsapp(whatsapp_page, group_name, message, marker)
             state.update({
                 "last_success_marker": marker,
@@ -2117,7 +2220,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "marker": marker,
                 }
 
-            whatsapp_page = context.new_page()
+            whatsapp_page = whatsapp_page_for_context(context)
             deliveries = dict(state.get("reminder_deliveries") or {})
             failures: list[str] = []
             sent_events = 0
@@ -2190,6 +2293,9 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                             f"Lembrete {batch['marker']} falhou antes do envio para "
                             f"{batch['responsible']}: {error}"
                         )
+                    if attempted_at:
+                        log('Lote interrompido apos falha de envio; demais lembretes nao foram submetidos.')
+                        break
 
             cutoff = datetime.now().astimezone() - timedelta(days=90)
             deliveries = {
@@ -2220,12 +2326,6 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "missing_recipients": len(missing),
                     "marker": marker,
                 }
-            update_cluster_state(page, {
-                "lastReminderCheckDate": today_key,
-                "lastReminderCheckAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "lastReminderMachineId": cluster.get("machineId", ""),
-                "lastReminderMachineName": cluster.get("machineName", ""),
-            })
             if failures:
                 raise AutomationError(
                     f"{len(failures)} destinatário(s) falharam. "
@@ -2233,6 +2333,12 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                     "Os lotes com falha foram bloqueados contra repetição automática; "
                     "revise o diagnóstico antes de reenviar manualmente."
                 )
+            update_cluster_state(page, {
+                "lastReminderCheckDate": today_key,
+                "lastReminderCheckAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "lastReminderMachineId": cluster.get("machineId", ""),
+                "lastReminderMachineName": cluster.get("machineName", ""),
+            })
             log(
                 f"Lembretes em grupos individuais concluídos: {sent_events} post(s) "
                 f"para {sent_recipients} grupo(s); {skipped_reserved} lote(s) já reservado(s)."
@@ -2428,7 +2534,7 @@ def run_test(
                     "events": event_count,
                     "marker": marker,
                 }
-            whatsapp_page = context.new_page()
+            whatsapp_page = whatsapp_page_for_context(context)
             if normalize_text(test_phone):
                 normalized_phone = send_whatsapp_to_phone(
                     whatsapp_page,
@@ -2465,6 +2571,7 @@ def main() -> int:
     parser.add_argument("--verify", action="store_true", help="Verifica as sessões do calendário e WhatsApp")
     parser.add_argument("--reminders", action="store_true", help="Envia os lembretes de prazo com links de atualização")
     parser.add_argument("--sync-responses", action="store_true", help="Aplica as respostas dos formulários")
+    parser.add_argument("--open-browser", action="store_true", help="Abre o Chrome da automacao e mantem o WhatsApp aberto")
     parser.add_argument("--test-mode", choices=("message", "weekly", "reminder"), help="Executa um envio de teste isolado")
     parser.add_argument("--test-company", default="", help="Calendário usado no relatório ou lembrete de teste")
     parser.add_argument("--test-phone", default="", help="Número opcional para receber o envio de teste")
@@ -2472,7 +2579,9 @@ def main() -> int:
     ensure_runtime()
     try:
         config = load_config()
-        if args.sync_responses:
+        if args.open_browser:
+            print(json.dumps(open_browser_for_setup(), ensure_ascii=True))
+        elif args.sync_responses:
             print(json.dumps(run_supervisor(), ensure_ascii=False))
         elif args.verify:
             print(json.dumps(verify_sessions(config), ensure_ascii=False))

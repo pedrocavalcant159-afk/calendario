@@ -12,6 +12,7 @@
     "calendar_url":  "https://pedrocavalcant159-afk.github.io/calendario/",
     "lookahead_days":  7,
     "headless":  true,
+    "keep_whatsapp_open": true,
     "catch_up_missed_send":  true,
     "company_ids":  [
 
