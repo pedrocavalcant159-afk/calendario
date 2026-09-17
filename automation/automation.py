@@ -33,11 +33,12 @@ MACHINE_PATH = RUNTIME_DIR / "machine.json"
 LOG_PATH = RUNTIME_DIR / "automation.log"
 WHATSAPP_STATUS_PATH = RUNTIME_DIR / "last-whatsapp-delivery.json"
 BROWSER_HOST_PATH = RUNTIME_DIR / "browser-host.json"
+WEEKLY_GUARD_PATH = RUNTIME_DIR / "weekly-deliveries.json"
 LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 9
+AUTOMATION_AGENT_VERSION = 10
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -197,6 +198,8 @@ def claim_cluster_leadership(
                     updatedAt: now,
                     machines: { [input.id]: machineRecord }
                 };
+                const weeklyDeliveries = { ...(input.weeklyDeliveries || {}), ...(data.weeklyDeliveries || {}) };
+                update.weeklyDeliveries = weeklyDeliveries;
                 if (canLead) {
                     update.leaderMachineId = input.id;
                     update.leaderMachineName = input.name;
@@ -216,6 +219,7 @@ def claim_cluster_leadership(
                     leaderMachineName: canLead ? input.name : String(data.leaderMachineName || ''),
                     lastWeeklyMarker: String(data.lastWeeklyMarker || ''),
                     lastWeeklyFingerprint: String(data.lastWeeklyFingerprint || ''),
+                    weeklyDeliveries,
                     lastReminderCheckDate: String(data.lastReminderCheckDate || ''),
                     reminderDeliveries: data.reminderDeliveries || {},
                     paused: data.paused === true,
@@ -238,6 +242,7 @@ def claim_cluster_leadership(
             "name": identity["name"],
             "leaseSeconds": lease_seconds,
             "agentVersion": AUTOMATION_AGENT_VERSION,
+            "weeklyDeliveries": load_json(WEEKLY_GUARD_PATH, {}),
         },
     )
 
@@ -252,6 +257,54 @@ def update_cluster_state(page, updates: dict[str, Any]) -> None:
         }""",
         updates,
     )
+
+
+def migrate_weekly_delivery_guard() -> None:
+    """Preserve an older ambiguous attempt when updating the agent."""
+    delivery = load_json(WHATSAPP_STATUS_PATH, {})
+    marker = str(delivery.get('marker') or '')
+    if re.fullmatch(r'\[UPLI-\d{4}-S\d{2}\]', marker):
+        guards = load_json(WEEKLY_GUARD_PATH, {})
+        if marker not in guards:
+            guards[marker] = {'status': 'legacy-attempt', 'attemptedAt': delivery.get('checked_at', '')}
+            save_json(WEEKLY_GUARD_PATH, guards)
+
+
+def reserve_weekly_report(page, marker: str, group_name: str, force: bool = False) -> bool:
+    migrate_weekly_delivery_guard()
+    guards = load_json(WEEKLY_GUARD_PATH, {})
+    if marker in guards and not force:
+        return False
+    identity = machine_identity()
+    attempted_at = datetime.now().astimezone().isoformat(timespec='seconds')
+    reserved = page.evaluate(
+        """async input => {
+            const ref = db.collection('system').doc('automationCluster');
+            return db.runTransaction(async transaction => {
+                const snapshot = await transaction.get(ref);
+                const data = snapshot.exists ? snapshot.data() : {};
+                if (data.paused === true || data.leaderMachineId !== input.machineId) return false;
+                const deliveries = { ...(data.weeklyDeliveries || {}) };
+                if (!input.force && (data.lastWeeklyMarker === input.marker ||
+                    Object.prototype.hasOwnProperty.call(deliveries, input.marker))) return false;
+                deliveries[input.marker] = {
+                    status: 'reserved', attemptedAt: input.attemptedAt,
+                    machineId: input.machineId, groupName: input.groupName
+                };
+                transaction.set(ref, {
+                    weeklyDeliveries: deliveries,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                return true;
+            });
+        }""",
+        {'marker': marker, 'groupName': group_name, 'machineId': identity['id'],
+         'attemptedAt': attempted_at, 'force': force},
+    )
+    if reserved:
+        guards[marker] = {'status': 'reserved', 'attemptedAt': attempted_at, 'groupName': group_name}
+        save_json(WEEKLY_GUARD_PATH, guards)
+    return bool(reserved)
 
 
 def reserve_reminder_batch(
@@ -933,6 +986,9 @@ def send_manual_weekly_report(
     marker_token = re.sub(r"[^A-Za-z0-9]", "", command_id)[:10].upper()
     manual_marker = f"[UPLI-MAN-REL-{marker_token}]"
     message = message.replace(weekly_marker, manual_marker)
+    if not reserve_weekly_report(page, weekly_marker, group_name):
+        return {'sent': False, 'duplicate': True, 'destination': group_name,
+                'message': 'O relatório desta semana já tem envio ou tentativa registrada. Não foi reenviado.'}
     (RUNTIME_DIR / "last-report.txt").write_text(message, encoding="utf-8")
     whatsapp_page = whatsapp_page_for_context(page.context)
     try:
@@ -1176,7 +1232,9 @@ def configured_time_has_passed(config: dict[str, Any], key: str, default: str) -
 
 def weekly_supervisor_due(config: dict[str, Any], cluster: dict[str, Any]) -> bool:
     monday, _, marker = week_context()
-    if cluster.get("lastWeeklyMarker") == marker:
+    if (cluster.get("lastWeeklyMarker") == marker or
+            marker in (cluster.get('weeklyDeliveries') or {}) or
+            marker in load_json(WEEKLY_GUARD_PATH, {})):
         return False
     not_before = normalize_text(config.get("first_send_not_before"))
     if not_before:
@@ -1648,6 +1706,7 @@ def build_report(
     rows.sort(key=lambda row: (row[0], row[1].casefold(), row[2].casefold()))
     title = normalize_text(config.get("report_title")) or "PLANEJAMENTO DE CONTEÚDO DA SEMANA"
     lines = [
+        marker,
         "Olá, pessoal! Bom dia.",
         "",
         "Estava analisando as demandas da semana e preparei este resumo para alinharmos o que está previsto:",
@@ -1812,6 +1871,8 @@ def submit_whatsapp_message(page, input_box, message: str, marker: str) -> None:
     """Submit once; an ambiguous result must never trigger a second click."""
     record_whatsapp_delivery('pending', marker)
     try:
+        if not message.startswith(marker):
+            message = marker + '\n\n' + message
         existing = outgoing_marker_state(page, marker)
         if existing not in ('submitted', 'confirmed'):
             input_box.click()
@@ -2036,6 +2097,7 @@ def open_browser_for_setup() -> dict[str, Any]:
 
 
 def open_whatsapp_window() -> dict[str, Any]:
+    migrate_weekly_delivery_guard()
     config = load_config()
     config['keep_whatsapp_open'] = True
     save_json(CONFIG_PATH, config)
@@ -2127,6 +2189,9 @@ def run_send(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             if not cluster.get("isLeader"):
                 log("Relatorio cancelado antes do envio: este PC deixou de ser o lider.")
                 return {"sent": False, "standby": True, "marker": marker}
+            if not reserve_weekly_report(page, marker, group_name, force=force):
+                log(f'Relatorio {marker} bloqueado: ja existe envio ou tentativa registrada.')
+                return {'sent': False, 'duplicate': True, 'reserved': True, 'marker': marker}
             whatsapp_page = whatsapp_page_for_context(context)
             send_whatsapp(whatsapp_page, group_name, message, marker)
             state.update({

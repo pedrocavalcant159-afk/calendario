@@ -17,6 +17,7 @@ from automation import (
     RUNTIME_DIR,
     STATE_PATH,
     WHATSAPP_STATUS_PATH,
+    WEEKLY_GUARD_PATH,
     SetupRequired,
     chrome_path,
     load_config,
@@ -98,7 +99,7 @@ def scheduled_due(config: dict[str, Any], state: dict[str, Any]) -> bool:
     if not config.get("catch_up_missed_send", True):
         return False
     monday, _, marker = week_context()
-    if state.get("last_success_marker") == marker:
+    if state.get("last_success_marker") == marker or marker in load_json(WEEKLY_GUARD_PATH, {}):
         return False
     not_before_text = normalize_text(config.get("first_send_not_before"))
     if not not_before_text:

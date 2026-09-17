@@ -90,6 +90,25 @@ class WhatsAppDeliveryTests(unittest.TestCase):
         agent.submit_whatsapp_message(self.page, self.editor, '[UPLI-TEST]', '[UPLI-TEST]')
         self.assertEqual(self.page.evaluate('window.clicks'), 1)
 
+    def test_long_collapsed_report_keeps_marker_visible_and_does_not_send_twice(self):
+        self.page.evaluate('''() => {
+            document.querySelector('button').onclick = () => {
+                window.clicks++;
+                const bubble = document.createElement('div');
+                bubble.dataset.id = 'true_long';
+                // Simulate WhatsApp omitting the tail behind Read more.
+                bubble.textContent = document.querySelector('[contenteditable]').textContent.slice(0, 100);
+                const check = document.createElement('span');
+                check.dataset.icon = 'msg-check';
+                bubble.append(check);
+                document.querySelector('#messages').append(bubble);
+            };
+        }''')
+        message = 'Weekly report\n' + ('Demand details\n' * 100) + '[UPLI-TEST]'
+        agent.submit_whatsapp_message(self.page, self.editor, message, '[UPLI-TEST]')
+        agent.submit_whatsapp_message(self.page, self.editor, message, '[UPLI-TEST]')
+        self.assertEqual(self.page.evaluate('window.clicks'), 1)
+
     def test_unconfirmed_existing_message_fails_without_resending_and_saves_evidence(self):
         self.page.locator('#messages').evaluate('''node => {
             node.innerHTML = '<div data-id="true_pending">[UPLI-TEST]<span data-icon="msg-time"></span></div>';

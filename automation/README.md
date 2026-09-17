@@ -93,6 +93,7 @@ O verificador confere internet, Chrome, sessões do calendário e WhatsApp e tod
 - `runtime/last-error.png`: captura da tela quando um envio falha.
 - `runtime/last-whatsapp-delivery.json`: resultado da última tentativa de envio, usado pelo diagnóstico para distinguir sessão conectada de envio confirmado.
 - `runtime/browser-host.json`: porta local e perfil da janela do Chrome mantida aberta para a automação.
+- `runtime/weekly-deliveries.json`: reservas locais de relatórios semanais, gravadas antes do envio e compartilhadas no heartbeat.
 - `test_free_form.py`: teste sintético do formulário, das regras e da fila; não altera demandas reais.
 
 Execute `setup.ps1` para trocar o grupo ou reconectar as contas. Para remover a automação deste computador, use `DESINSTALAR-AUTOMACAO-UPLI.bat` na raiz do pacote ou o atalho **Desinstalar Automacao UPLI** criado na Área de Trabalho. O desinstalador exige a confirmação `DESINSTALAR`, remove tarefas, atalhos, sessão e registros locais, mas preserva o calendário online, os posts, o Chrome e o Python. Para remover somente as tarefas e preservar os dados locais, execute `uninstall.ps1 -KeepLocalData`.
@@ -102,6 +103,8 @@ Para atualizar uma instalação existente na pasta padrão, extraia o pacote atu
 A partir da versão 8, o Chrome e a aba do WhatsApp ficam abertos entre execuções. Somente a aba temporária usada para consultar o calendário é fechada. O próximo ciclo tenta reabrir o Chrome caso a janela tenha sido fechada. Uma falha de envio interrompe o restante do lote; mensagens ainda não submetidas permanecem pendentes. Para usar o comportamento anterior, configure `keep_whatsapp_open` como `false` em `config.json`.
 
 A versão 9 abre o WhatsApp diretamente ao concluir a instalação ou atualização e exibe qualquer falha de abertura no assistente. O atalho **Abrir WhatsApp da Automação** permite abrir essa janela sem enviar mensagens nem consultar os posts do calendário.
+
+A versão 10 reserva o relatório semanal antes de enviar, tanto no registro local quanto em uma transação compartilhada. O relatório da mesma semana não é submetido novamente após uma falha, confirmação incerta ou troca de PC líder. Uma tentativa semanal registrada pela versão anterior é preservada na atualização. Relatórios manuais também respeitam a reserva semanal; `--force` é uma exceção explícita de linha de comando. O identificador passa a aparecer no início da mensagem para permanecer visível quando o WhatsApp encurta textos longos. Atualize todos os PCs ativos antes de retomar a automação; o painel exige a versão 10.
 
 ## Limitação
 

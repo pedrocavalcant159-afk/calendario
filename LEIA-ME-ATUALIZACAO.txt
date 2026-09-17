@@ -1,5 +1,14 @@
 ATUALIZACAO DA AUTOMACAO UPLI - WHATSAPP ABERTO
 
+VERSAO 10 - PROTECAO CONTRA RELATORIO REPETIDO
+
+Pause a automacao no calendario antes de atualizar todos os PCs ativos.
+Depois de atualizar, retome pelo calendario. O painel exige a versao 10.
+O relatorio da semana e reservado antes do envio, com trava local e compartilhada.
+Uma falha ou confirmacao incerta nao libera outro envio automatico do mesmo relatorio.
+Tentativas registradas pela versao anterior tambem sao preservadas nesta atualizacao.
+O identificador fica no inicio da mensagem para nao ficar oculto por Ler mais.
+
 NO PC ONDE A AUTOMACAO JA ESTA INSTALADA:
 
 1. Extraia todo o ZIP para uma pasta.
