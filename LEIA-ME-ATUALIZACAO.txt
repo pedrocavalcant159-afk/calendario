@@ -1,0 +1,30 @@
+ATUALIZACAO DA AUTOMACAO UPLI - CONFIRMACAO DO WHATSAPP
+
+NO PC ONDE A AUTOMACAO JA ESTA INSTALADA:
+
+1. Extraia todo o ZIP para uma pasta.
+2. Clique duas vezes em ATUALIZAR-AUTOMACAO-UPLI.bat.
+3. Aguarde a mensagem de instalacao concluida.
+4. No calendario, selecione uma demanda e envie uma mensagem de marcacao.
+5. Confira se a mensagem apareceu no grupo correto.
+
+O atualizador usa a pasta padrao da instalacao e preserva o config.json,
+a sessao do calendario, a sessao do WhatsApp e o historico local de envios.
+Se a instalacao original usou uma pasta personalizada, atualize pelo PowerShell
+informando o mesmo caminho:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\automation\install-new-pc.ps1 -SkipSetup -InstallRoot "CAMINHO DA INSTALACAO ORIGINAL"
+
+Esta versao prefere clicar no botao Enviar, verifica a bolha de saida e
+so informa sucesso quando encontra confirmacao do WhatsApp.
+Uma mensagem com resultado ambiguo nao e reenviada automaticamente.
+
+SE O ENVIO AINDA FALHAR:
+
+Abra Testar Automacao UPLI e escolha 1 (diagnostico sem envio).
+O painel passa a considerar a ultima tentativa de envio alem da conexao.
+Na instalacao padrao, os arquivos para investigar ficam em:
+%LOCALAPPDATA%\UPLI\CalendarioAutomation\automation\runtime\automation.log
+%LOCALAPPDATA%\UPLI\CalendarioAutomation\automation\runtime\last-error.png
+
+A captura mostra a conversa no momento da falha.
+Confira o grupo antes de tentar reenviar uma mensagem.

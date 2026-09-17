@@ -30,11 +30,12 @@ CONFIG_PATH = BASE_DIR / "config.json"
 STATE_PATH = RUNTIME_DIR / "state.json"
 MACHINE_PATH = RUNTIME_DIR / "machine.json"
 LOG_PATH = RUNTIME_DIR / "automation.log"
+WHATSAPP_STATUS_PATH = RUNTIME_DIR / "last-whatsapp-delivery.json"
 LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 6
+AUTOMATION_AGENT_VERSION = 7
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -1698,26 +1699,31 @@ def first_visible(locator):
 def outgoing_marker_state(page, marker: str) -> str:
     """Inspect whether this exact delivery batch already exists in the chat."""
     state = page.evaluate(
-        """marker => {
-            const root = document.querySelector('#main');
+        r"""marker => {
+            const root = document.querySelector('#main') || document.querySelector('[role="main"]');
             if (!root) return 'missing';
             const selectors = [
                 "[data-testid='msg-container']",
                 '.message-out',
-                '[data-id]',
-                "[role='row']"
+                '[data-id]'
             ].join(',');
             const candidates = [...root.querySelectorAll(selectors)]
                 .filter(element => String(element.textContent || '').includes(marker));
             let submitted = false;
             let failed = false;
             for (const candidate of candidates) {
-                const container = candidate.closest(selectors) || candidate;
+                if (candidate.closest('footer, [contenteditable="true"]')) continue;
+                // Status icons may be siblings of the text container. Inspect
+                // the complete bubble, never the entire conversation row.
+                const container = candidate.closest('.message-out, .message-in') ||
+                    candidate.closest('[data-id]') || candidate;
+                if (container.closest('.message-in')) continue;
                 const signalElements = [container, ...container.querySelectorAll(
                     '[data-icon], [data-testid], [aria-label], [title]'
                 )];
                 const iconNames = signalElements
-                    .map(element => String(element.getAttribute?.('data-icon') || '').toLowerCase())
+                    .flatMap(element => [element.getAttribute?.('data-icon'), element.getAttribute?.('data-testid')])
+                    .map(value => String(value || '').toLowerCase())
                     .filter(Boolean);
                 const labels = signalElements.map(element => [
                     element.getAttribute?.('aria-label'),
@@ -1729,12 +1735,18 @@ def outgoing_marker_state(page, marker: str) -> str:
                 const hasCheckIcon = iconNames.some(icon =>
                     icon === 'msg-check' || icon === 'msg-dblcheck' || icon === 'msg-dblcheck-ack'
                 );
-                const confirmed = hasCheckIcon || /enviad|sent|entreg|deliver|lida|read/.test(labels);
+                const hasStatusLabel = signalElements.some(element =>
+                    ['aria-label', 'title'].some(attribute =>
+                        /^(?:mensagem\s+|message\s+)?(?:enviad[ao]|sent|entregue|delivered|lid[ao]|read)$/i
+                            .test(String(element.getAttribute?.(attribute) || '').trim())
+                    )
+                );
+                const confirmed = hasCheckIcon || hasStatusLabel;
                 const error = iconNames.some(icon => /msg-error|alert|failed/.test(icon)) ||
                     /erro|error|falha|failed/.test(labels);
                 const outgoing = Boolean(container.closest('.message-out')) ||
                     Boolean(container.querySelector('.message-out')) ||
-                    dataIds.some(value => value.startsWith('true_')) || confirmed || error;
+                    dataIds.some(value => value.startsWith('true_'));
                 if (!outgoing) continue;
                 if (error) {
                     failed = true;
@@ -1768,14 +1780,68 @@ def wait_for_outgoing_confirmation(page, marker: str, timeout_ms: int = 30_000) 
             found_submitted = True
         page.wait_for_timeout(500)
     if found_submitted:
-        log(
-            f"Envio {marker} apareceu como mensagem de saída, mas o WhatsApp "
-            "não expôs o ícone de confirmação. O lote será preservado para evitar reenvio."
+        raise AutomationError(
+            "A mensagem apareceu na conversa, mas o WhatsApp não confirmou o envio. "
+            "Confira o grupo antes de reenviar para evitar duplicidade."
         )
-        return
     raise AutomationError(
         "O WhatsApp não confirmou a mensagem como enviada ou entregue dentro do tempo esperado."
     )
+
+
+def record_whatsapp_delivery(status: str, marker: str, error: str = "") -> None:
+    save_json(WHATSAPP_STATUS_PATH, {
+        'status': status,
+        'marker': marker,
+        'checked_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+        'error': normalize_text(error)[:500],
+    })
+
+
+def submit_whatsapp_message(page, input_box, message: str, marker: str) -> None:
+    """Submit once; an ambiguous result must never trigger a second click."""
+    record_whatsapp_delivery('pending', marker)
+    try:
+        existing = outgoing_marker_state(page, marker)
+        if existing not in ('submitted', 'confirmed'):
+            input_box.click()
+            input_box.fill(message)
+            # Prefer the actual Send button, including when Enter inserts a
+            # newline in the user's WhatsApp settings.
+            send_selector = (
+                'footer button[aria-label="Enviar"], footer button[aria-label="Send"], '
+                'footer [aria-label="Enviar mensagem"], footer [aria-label="Send message"], '
+                'footer [role="button"][aria-label="Enviar"], '
+                'footer [role="button"][aria-label="Send"], '
+                'footer button:has([data-icon="send"]), '
+                'footer [role="button"]:has([data-icon="send"]), '
+                'footer [data-testid="send"], '
+                'footer [data-icon="send"]'
+            )
+            deadline = time.monotonic() + 5
+            send_button = None
+            while time.monotonic() < deadline:
+                send_button = first_visible(page.locator(send_selector))
+                if send_button is not None:
+                    break
+                page.wait_for_timeout(100)
+            if send_button is not None:
+                send_button.click()
+            else:
+                input_box.press('Enter')
+        else:
+            log(f'Envio {marker} já aparece na conversa; verificando a confirmação sem reenviar.')
+        wait_for_outgoing_confirmation(page, marker)
+        record_whatsapp_delivery('confirmed', marker)
+    except Exception as error:
+        record_whatsapp_delivery('failed', marker, str(error))
+        # Manual commands close this tab immediately after an error. Save the
+        # evidence here, while the affected WhatsApp conversation is open.
+        try:
+            page.screenshot(path=str(RUNTIME_DIR / 'last-error.png'), full_page=True)
+        except Exception:
+            pass
+        raise
 
 
 def send_whatsapp(page, group_name: str, message: str, marker: str) -> None:
@@ -1804,16 +1870,7 @@ def send_whatsapp(page, group_name: str, message: str, marker: str) -> None:
     input_box = first_visible(composer)
     if input_box is None:
         raise AutomationError("Não encontrei a caixa de mensagem do grupo.")
-    if outgoing_marker_state(page, marker) in ("submitted", "confirmed"):
-        log(f"Envio {marker} recuperado da conversa; nenhuma nova mensagem foi criada.")
-        return
-    input_box.click()
-    input_box.fill(message)
-    input_box.press("Enter")
-    page.wait_for_timeout(500)
-    if normalize_text(input_box.text_content()):
-        raise AutomationError("O WhatsApp não confirmou o envio da mensagem.")
-    wait_for_outgoing_confirmation(page, marker)
+    submit_whatsapp_message(page, input_box, message, marker)
 
 
 def normalize_test_phone(value: str) -> str:
@@ -1848,15 +1905,7 @@ def send_whatsapp_to_phone(page, phone: str, message: str, marker: str) -> str:
         page.wait_for_timeout(500)
     if input_box is None:
         raise AutomationError("Não encontrei a caixa de mensagem para o número de teste.")
-    if outgoing_marker_state(page, marker) in ("submitted", "confirmed"):
-        log(f"Envio {marker} recuperado da conversa; nenhuma nova mensagem foi criada.")
-        return normalized_phone
-    if not normalize_text(input_box.text_content()):
-        input_box.fill(message)
-    input_box.click()
-    input_box.press("Enter")
-    page.wait_for_timeout(500)
-    wait_for_outgoing_confirmation(page, marker)
+    submit_whatsapp_message(page, input_box, message, marker)
     return normalized_phone
 
 

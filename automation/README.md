@@ -91,9 +91,12 @@ O verificador confere internet, Chrome, sessões do calendário e WhatsApp e tod
 - `runtime/last-reminders.txt`: última mensagem de lembretes gerada.
 - `runtime/last-test.txt`: última mensagem de teste gerada.
 - `runtime/last-error.png`: captura da tela quando um envio falha.
+- `runtime/last-whatsapp-delivery.json`: resultado da última tentativa de envio, usado pelo diagnóstico para distinguir sessão conectada de envio confirmado.
 - `test_free_form.py`: teste sintético do formulário, das regras e da fila; não altera demandas reais.
 
 Execute `setup.ps1` para trocar o grupo ou reconectar as contas. Para remover a automação deste computador, use `DESINSTALAR-AUTOMACAO-UPLI.bat` na raiz do pacote ou o atalho **Desinstalar Automacao UPLI** criado na Área de Trabalho. O desinstalador exige a confirmação `DESINSTALAR`, remove tarefas, atalhos, sessão e registros locais, mas preserva o calendário online, os posts, o Chrome e o Python. Para remover somente as tarefas e preservar os dados locais, execute `uninstall.ps1 -KeepLocalData`.
+
+Para atualizar uma instalação existente na pasta padrão, extraia o pacote atualizado e execute `ATUALIZAR-AUTOMACAO-UPLI.bat`. As configurações, sessões e o histórico local são preservados. O envio prefere o botão **Enviar**, e mensagens sem confirmação ficam como falha no diagnóstico, com captura da conversa antes de a aba ser fechada. O diagnóstico sem envio verifica a conexão e a última tentativa registrada; ele não comprova uma nova entrega.
 
 ## Limitação
 

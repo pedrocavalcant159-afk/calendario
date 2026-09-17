@@ -1003,6 +1003,9 @@
           const [globalRoles, setGlobalRoles] = useState({});
           const [globalUserCompanies, setGlobalUserCompanies] = useState({});
           const [showRolesModal, setShowRolesModal] = useState(false);
+          const [resettingUserEmail, setResettingUserEmail] = useState('');
+          const [userPasswordFeedback, setUserPasswordFeedback] = useState(null);
+          const passwordResetPending = React.useRef(false);
           const [teamMembers, setTeamMembers] = useState([]);
           const [showTeamModal, setShowTeamModal] = useState(false);
           const [editingTeamMemberId, setEditingTeamMemberId] = useState(null);
@@ -1239,6 +1242,30 @@
               db.collection('system').doc('roles').set({ 
                   userCompanies: updatedCompanies
               }, { merge: true });
+          };
+
+          const handleResetUserPassword = async (targetEmail) => {
+              if (!user || !rolesReady || userRole !== 'master' || passwordResetPending.current) return;
+              const emailToReset = String(targetEmail || '').trim().toLowerCase();
+              if (emailToReset !== MEU_EMAIL_MASTER && !Object.prototype.hasOwnProperty.call(globalRoles, emailToReset)) return;
+
+              passwordResetPending.current = true;
+              setResettingUserEmail(emailToReset);
+              setUserPasswordFeedback(null);
+              try {
+                  await auth.sendPasswordResetEmail(emailToReset);
+                  setUserPasswordFeedback({ type: 'success', message: `Redefinição solicitada para ${emailToReset}. O usuário deve verificar a caixa de entrada e o spam e escolher a nova senha pelo link recebido.` });
+              } catch (error) {
+                  const message = error.code === 'auth/too-many-requests'
+                      ? 'Muitas solicitações de redefinição. Aguarde alguns minutos e tente novamente.'
+                      : error.code === 'auth/network-request-failed'
+                          ? 'Não foi possível enviar o link. Verifique a conexão e tente novamente.'
+                          : 'Não foi possível solicitar a redefinição. Confira o e-mail cadastrado e tente novamente.';
+                  setUserPasswordFeedback({ type: 'error', message });
+              } finally {
+                  passwordResetPending.current = false;
+                  setResettingUserEmail('');
+              }
           };
 
           const handleRemoveRole = (emailToRemove) => {
@@ -4312,14 +4339,20 @@
 
                           <div className="mt-4">
                               <h4 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2 border-b dark:border-gray-700 pb-1">Lista de Acessos:</h4>
+                              <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">Qualquer master pode solicitar a redefinição de senha de qualquer conta, inclusive de outros masters. A senha atual não pode ser consultada. O usuário escolhe a nova senha pelo link enviado ao próprio e-mail.</p>
+                              {userPasswordFeedback && (
+                                  <p role={userPasswordFeedback.type === 'error' ? 'alert' : 'status'} className={`text-sm mb-3 ${userPasswordFeedback.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}>
+                                      {userPasswordFeedback.message}
+                                  </p>
+                              )}
                               <div className="space-y-2 mt-2">
-                                  {Object.keys(globalRoles).map(email => (
+                                  {Object.keys({ ...globalRoles, [MEU_EMAIL_MASTER]: 'master' }).map(email => (
                                       <div key={email} className="flex flex-col bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border dark:border-gray-700 shadow-sm gap-2">
                                           <div className="flex justify-between items-center w-full">
                                               <div className="flex flex-col">
                                                   <span className="font-bold text-sm dark:text-gray-200">{email}</span>
-                                                  <span className={`text-[10px] font-black uppercase ${globalRoles[email] === 'master' ? 'text-yellow-600' : globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>
-                                                      {globalRoles[email] === 'master' ? '👑 Master' : globalRoles[email] === 'admin' ? '🛡️ Admin' : '👤 Cliente'}
+                                                  <span className={`text-[10px] font-black uppercase ${email === MEU_EMAIL_MASTER || globalRoles[email] === 'master' ? 'text-yellow-600' : globalRoles[email] === 'admin' ? 'text-blue-500' : 'text-green-500'}`}>
+                                                      {email === MEU_EMAIL_MASTER || globalRoles[email] === 'master' ? '👑 Master' : globalRoles[email] === 'admin' ? '🛡️ Admin' : '👤 Cliente'}
                                                   </span>
                                               </div>
                                               {email !== MEU_EMAIL_MASTER && (
@@ -4328,6 +4361,10 @@
                                                   </button>
                                               )}
                                           </div>
+
+                                          <button type="button" onClick={() => handleResetUserPassword(email)} disabled={!!resettingUserEmail} className="self-start text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-200 dark:border-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-wait">
+                                              {resettingUserEmail === email ? 'Enviando link...' : 'Redefinir senha por e-mail'}
+                                          </button>
 
                                           {globalRoles[email] === 'cliente' && (
                                               <div className="mt-1 pt-2 border-t border-gray-200 dark:border-gray-700 w-full">

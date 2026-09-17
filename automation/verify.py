@@ -16,6 +16,7 @@ from automation import (
     CONFIG_PATH,
     RUNTIME_DIR,
     STATE_PATH,
+    WHATSAPP_STATUS_PATH,
     SetupRequired,
     chrome_path,
     load_config,
@@ -153,6 +154,7 @@ h1{{margin-top:0}}table{{width:100%;border-collapse:collapse;margin:20px 0}}td{{
 <body><main><h1>Automação UPLI</h1><p>Verificação: {html.escape(str(status.get('checked_at', '')))}</p>
 <table>{''.join(rows)}</table><div class="box"><strong>Diagnóstico</strong><ul>{issue_html}{note_html}</ul></div>
 <p><strong>Último envio:</strong> {last_success}</p>
+<p><strong>Confirmação no WhatsApp:</strong> {html.escape(str(status.get('whatsapp_delivery_summary') or 'Nenhum envio confirmado por esta versão. A sessão conectada não comprova o envio de mensagens.'))}</p>
 <p><a href="../setup.ps1">Abrir arquivo de configuração</a> · <a href="automation.log">Ver registro técnico</a> · <a href="last-report.txt">Ver último relatório</a> · <a href="last-reminders.txt">Ver últimos lembretes</a> · <a href="last-test.txt">Ver último teste</a></p>
 <small>Para reconfigurar, execute setup.ps1 pelo Explorador de Arquivos.</small></main></body></html>"""
     STATUS_HTML_PATH.write_text(content, encoding="utf-8")
@@ -235,6 +237,17 @@ def verify(allow_catchup: bool = True) -> dict[str, Any]:
     essential = all(checks.get(key) for key in ("config", "chrome", "internet", "calendar", "whatsapp"))
     essential = essential and checks["secure_form"]
     state = load_json(STATE_PATH, {})
+    delivery = load_json(WHATSAPP_STATUS_PATH, {})
+    if delivery:
+        delivery_status = delivery.get('status')
+        delivery_time = delivery.get('checked_at', '')
+        if delivery_status == 'confirmed':
+            status['whatsapp_delivery_summary'] = f'Última tentativa confirmada em {delivery_time}.'
+        else:
+            status['whatsapp_delivery_summary'] = f'Última tentativa sem confirmação em {delivery_time}.'
+            issues.append('O último envio pelo WhatsApp não foi confirmado. ' + str(delivery.get('error') or 'Confira a conversa e o registro técnico antes de reenviar.'))
+    else:
+        notes.append('WhatsApp conectado. O diagnóstico sem envio não testa a entrega de mensagens.')
     status["last_success_at"] = state.get("last_success_at")
     reminder_issues = state.get("last_reminder_issues") or []
     if reminder_issues:
