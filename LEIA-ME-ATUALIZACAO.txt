@@ -10,6 +10,9 @@ NO PC ONDE A AUTOMACAO JA ESTA INSTALADA:
 
 O Chrome da automacao permanece aberto entre os ciclos, inclusive quando uma
 mensagem demora para confirmar o envio. Pode minimizar a janela.
+O atualizador agora abre a janela diretamente antes de informar concluido.
+Se a abertura falhar, a mensagem de erro fica visivel no atualizador.
+Tambem e criado o atalho Abrir WhatsApp da Automacao na Area de Trabalho.
 Se fechar essa janela, a automacao tenta abrir novamente no proximo ciclo.
 Somente na primeira atualizacao: se aparecer o aviso sobre uma janela antiga,
 feche o Chrome do perfil da automacao uma vez e aguarde o proximo ciclo.

@@ -101,6 +101,8 @@ Para atualizar uma instalação existente na pasta padrão, extraia o pacote atu
 
 A partir da versão 8, o Chrome e a aba do WhatsApp ficam abertos entre execuções. Somente a aba temporária usada para consultar o calendário é fechada. O próximo ciclo tenta reabrir o Chrome caso a janela tenha sido fechada. Uma falha de envio interrompe o restante do lote; mensagens ainda não submetidas permanecem pendentes. Para usar o comportamento anterior, configure `keep_whatsapp_open` como `false` em `config.json`.
 
+A versão 9 abre o WhatsApp diretamente ao concluir a instalação ou atualização e exibe qualquer falha de abertura no assistente. O atalho **Abrir WhatsApp da Automação** permite abrir essa janela sem enviar mensagens nem consultar os posts do calendário.
+
 ## Limitação
 
 Esta integração controla o WhatsApp Web sem usar a API oficial. Mudanças na interface do WhatsApp podem exigir manutenção, e automação não oficial pode sofrer restrições da plataforma. Para reduzir o risco, o agente envia somente o relatório semanal e os lembretes previstos no calendário; ele não tenta ler conversas.

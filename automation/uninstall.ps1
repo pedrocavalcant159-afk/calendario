@@ -13,6 +13,7 @@ $taskNames = @(
     'Calendario UPLI - Verificacao ao Entrar'
 )
 $shortcutNames = @(
+    'Abrir WhatsApp da Automacao.lnk',
     'Testar Automacao UPLI.lnk',
     'Reconfigurar Automacao UPLI.lnk',
     'Desinstalar Automacao UPLI.lnk'

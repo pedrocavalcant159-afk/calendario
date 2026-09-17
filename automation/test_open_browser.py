@@ -14,6 +14,40 @@ import automation as agent
 
 
 class OpenBrowserTests(unittest.TestCase):
+    def test_open_whatsapp_brings_window_forward_without_reading_calendar_or_sending(self):
+        context = MagicMock()
+        page = MagicMock()
+        page.url = 'https://web.whatsapp.com/'
+        with patch.object(agent, 'load_config', return_value={'keep_whatsapp_open': False}), \
+             patch.object(agent, 'save_json'), \
+             patch.object(agent, 'automation_lock', return_value=nullcontext()), \
+             patch.object(agent, 'sync_playwright'), \
+             patch.object(agent, 'browser_context', return_value=context) as connect, \
+             patch.object(agent, 'whatsapp_page_for_context', return_value=page), \
+             patch.object(agent, 'read_calendar') as calendar, \
+             patch.object(agent, 'send_whatsapp') as send:
+            result = agent.open_whatsapp_window()
+        self.assertTrue(result['opened'])
+        self.assertTrue(connect.call_args.args[1]['keep_whatsapp_open'])
+        page.bring_to_front.assert_called_once()
+        context.close.assert_called_once()
+        calendar.assert_not_called()
+        send.assert_not_called()
+
+    @unittest.skipUnless(agent.os.name == 'nt', 'Windows process flags')
+    def test_chrome_launch_retries_without_breakaway_when_windows_denies_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            playwright = MagicMock()
+            with patch.object(agent, 'RUNTIME_DIR', runtime), \
+                 patch.object(agent, 'PROFILE_DIR', runtime / 'profile'), \
+                 patch.object(agent, 'BROWSER_HOST_PATH', runtime / 'host.json'), \
+                 patch.object(agent.subprocess, 'Popen', side_effect=[PermissionError('Job restriction'), MagicMock()]) as launch:
+                agent.attach_open_chrome(playwright)
+            self.assertEqual(launch.call_count, 2)
+            self.assertTrue(launch.call_args_list[0].kwargs['creationflags'] & subprocess.CREATE_BREAKAWAY_FROM_JOB)
+            self.assertFalse(launch.call_args_list[1].kwargs['creationflags'] & subprocess.CREATE_BREAKAWAY_FROM_JOB)
+
     def test_chrome_and_whatsapp_survive_two_separate_automation_cycles(self):
         real_popen = subprocess.Popen
         processes = []

@@ -37,7 +37,7 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 8
+AUTOMATION_AGENT_VERSION = 9
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -1975,16 +1975,27 @@ def attach_open_chrome(playwright):
         port = listener.getsockname()[1]
     # Chrome is an independent, visible process. Disconnecting Playwright at
     # the end of a scheduled cycle cannot terminate it.
-    subprocess.Popen([
+    chrome_arguments = [
         str(chrome_path()), f'--user-data-dir={profile}',
         f'--remote-debugging-port={port}', '--remote-debugging-address=127.0.0.1',
         '--no-first-run', '--no-default-browser-check',
         '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
         'https://web.whatsapp.com/',
-    ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        close_fds=True, creationflags=(
+    ]
+    launch_options = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, close_fds=True)
+    creation_flags = (
             subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_BREAKAWAY_FROM_JOB
-        ) if os.name == 'nt' else 0)
+        ) if os.name == 'nt' else 0
+    try:
+        subprocess.Popen(chrome_arguments, creationflags=creation_flags, **launch_options)
+    except PermissionError:
+        if os.name != 'nt':
+            raise
+        # Some Windows hosts forbid leaving the parent job. An interactive
+        # launcher can still open Chrome without that flag; show any failure.
+        subprocess.Popen(chrome_arguments, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                         **launch_options)
     save_json(BROWSER_HOST_PATH, {'profile': profile, 'port': port})
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
@@ -2022,6 +2033,22 @@ def open_browser_for_setup() -> dict[str, Any]:
         page.goto(BRIDGE_PATH.as_uri() + '?mode=setup', wait_until='domcontentloaded')
         whatsapp_page_for_context(context)
         return {'opened': True, 'keep_whatsapp_open': True}
+
+
+def open_whatsapp_window() -> dict[str, Any]:
+    config = load_config()
+    config['keep_whatsapp_open'] = True
+    save_json(CONFIG_PATH, config)
+    with automation_lock(), sync_playwright() as playwright:
+        context = browser_context(playwright, config)
+        try:
+            page = whatsapp_page_for_context(context)
+            if not page.url.startswith('https://web.whatsapp.com/'):
+                page.goto('https://web.whatsapp.com/', wait_until='domcontentloaded', timeout=45_000)
+            page.bring_to_front()
+            return {'opened': True, 'keep_whatsapp_open': True}
+        finally:
+            context.close()
 
 
 def verify_sessions(config: dict[str, Any]) -> dict[str, Any]:
@@ -2572,6 +2599,7 @@ def main() -> int:
     parser.add_argument("--reminders", action="store_true", help="Envia os lembretes de prazo com links de atualização")
     parser.add_argument("--sync-responses", action="store_true", help="Aplica as respostas dos formulários")
     parser.add_argument("--open-browser", action="store_true", help="Abre o Chrome da automacao e mantem o WhatsApp aberto")
+    parser.add_argument("--open-whatsapp", action="store_true", help="Abre a janela do WhatsApp sem enviar mensagens")
     parser.add_argument("--test-mode", choices=("message", "weekly", "reminder"), help="Executa um envio de teste isolado")
     parser.add_argument("--test-company", default="", help="Calendário usado no relatório ou lembrete de teste")
     parser.add_argument("--test-phone", default="", help="Número opcional para receber o envio de teste")
@@ -2579,7 +2607,9 @@ def main() -> int:
     ensure_runtime()
     try:
         config = load_config()
-        if args.open_browser:
+        if args.open_whatsapp:
+            print(json.dumps(open_whatsapp_window(), ensure_ascii=True))
+        elif args.open_browser:
             print(json.dumps(open_browser_for_setup(), ensure_ascii=True))
         elif args.sync_responses:
             print(json.dumps(run_supervisor(), ensure_ascii=False))

@@ -12,6 +12,7 @@ $requiredFiles = @(
     'firebase-bridge.html',
     'install.ps1',
     'setup.ps1',
+    'open-whatsapp.ps1',
     'test.ps1',
     'uninstall.ps1',
     'verify.py',
@@ -120,6 +121,13 @@ try {
     $setupShortcut.Description = 'Conecta novamente o calendario e o WhatsApp da Automacao UPLI'
     $setupShortcut.Save()
 
+    $openShortcut = $shell.CreateShortcut((Join-Path $desktop 'Abrir WhatsApp da Automacao.lnk'))
+    $openShortcut.TargetPath = 'powershell.exe'
+    $openShortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $targetAutomation 'open-whatsapp.ps1') + '"'
+    $openShortcut.WorkingDirectory = $targetAutomation
+    $openShortcut.Description = 'Abre o WhatsApp da automacao sem enviar mensagens'
+    $openShortcut.Save()
+
     $uninstallShortcutPath = Join-Path $desktop 'Desinstalar Automacao UPLI.lnk'
     $uninstallShortcut = $shell.CreateShortcut($uninstallShortcutPath)
     $uninstallShortcut.TargetPath = 'powershell.exe'
@@ -134,10 +142,15 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'A configuracao das contas ainda possui pendencias.' }
     }
 
+    Write-Step 'Abrindo e verificando a janela do WhatsApp da automacao'
+    & py -3.14 (Join-Path $targetAutomation 'automation.py') --open-whatsapp
+    if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel abrir o WhatsApp. Consulte o erro acima; a atualizacao nao foi validada.' }
+
     Enable-ScheduledTask -TaskName 'Calendario UPLI - Sincronizar Respostas' | Out-Null
     Start-ScheduledTask -TaskName 'Calendario UPLI - Sincronizar Respostas'
     Write-Step 'Instalacao concluida'
     Write-Host "Arquivos instalados em: $installRootFull" -ForegroundColor Green
+    Write-Host 'O Chrome da automacao foi aberto. Deixe a janela aberta; pode minimizar.' -ForegroundColor Green
     Write-Host 'Este PC assumira como lider somente quando nenhum outro PC ativo estiver liderando.'
     Read-Host 'Pressione ENTER para fechar'
     exit 0
