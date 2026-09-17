@@ -428,7 +428,9 @@
         .precision-event-time { display: block; margin-bottom: 2px; color: var(--muted); font-size: 9px; font-weight: 400; letter-spacing: .04em; }
         .precision-event-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
         .precision-event-meta { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-        .precision-more { padding: 2px 5px; color: var(--work); font-size: 10px; font-weight: 700; }
+        .precision-more { padding: 2px 5px; color: var(--work); font-size: 10px; font-weight: 700; text-align: left; cursor: pointer; }
+        .precision-more:hover { text-decoration: underline; }
+        .precision-more:focus-visible { outline: 2px solid var(--work); outline-offset: 2px; }
         .precision-empty { color: #82909d; font-size: 11px; }
 
         .precision-week-scroll { overflow-x: auto; }
@@ -988,6 +990,9 @@
           const [email, setEmail] = useState('');
           const [password, setPassword] = useState('');
           const [loadingAuth, setLoadingAuth] = useState(true);
+          const [rolesReady, setRolesReady] = useState(false);
+          const [accessError, setAccessError] = useState('');
+          const [calendarSync, setCalendarSync] = useState({ state: 'loading', message: '' });
           const [isResetMode, setIsResetMode] = useState(false); 
           
           const [currentUserName, setCurrentUserName] = useState('');
@@ -1027,12 +1032,24 @@
                  if (savedTheme === 'dark') { setDarkMode(true); document.documentElement.classList.add('dark'); }
              } catch(e) {}
 
+             let unsubscribeRoles = () => {};
              const unsubscribe = auth.onAuthStateChanged(u => {
+                 unsubscribeRoles();
+                 unsubscribeRoles = () => {};
+                 setRolesReady(false);
+                 setAccessError('');
+                 setGlobalRoles({});
+                 setGlobalUserCompanies({});
+                 setUserRole('cliente');
+                 setCompanies([]);
+                 setSelectedCompany(null);
+                 setEvents([]);
                  if (u) {
+                     setLoadingAuth(true);
                      setUser(u);
                      setCurrentUserName(u.displayName || u.email);
 
-                     db.collection('system').doc('roles').onSnapshot(doc => {
+                     unsubscribeRoles = db.collection('system').doc('roles').onSnapshot(doc => {
                          if (doc.exists) {
                              const rolesData = doc.data().userRoles || {};
                              const companiesData = doc.data().userCompanies || {}; 
@@ -1045,17 +1062,27 @@
                              else setUserRole('cliente'); 
                          } else {
                              if (u.email.toLowerCase() === MEU_EMAIL_MASTER) {
-                                 db.collection('system').doc('roles').set({ userRoles: {}, userCompanies: {} });
+                                 db.collection('system').doc('roles').set({ userRoles: {}, userCompanies: {} }, { merge: true }).catch(() => {
+                                     setAccessError('Não foi possível inicializar as permissões de acesso. Recarregue a página para tentar novamente.');
+                                 });
                                  setUserRole('master');
                              } else setUserRole('cliente');
                          }
+                         setRolesReady(true);
+                         setLoadingAuth(false);
+                     }, error => {
+                         console.error('Erro ao carregar permissões do calendário:', error);
+                         setRolesReady(false);
+                         setAccessError(error.code === 'permission-denied'
+                             ? 'Sua conta não tem permissão para consultar os acessos do calendário. Peça ao administrador para verificar as permissões no Firebase.'
+                             : 'Não foi possível carregar seus acessos. Verifique a conexão e recarregue a página.');
                          setLoadingAuth(false);
                      });
                  } else {
                      setUser(null); setLoadingAuth(false);
                  }
              });
-             return () => unsubscribe();
+             return () => { unsubscribe(); unsubscribeRoles(); };
           }, []);
 
           const isAdmin = userRole === 'master' || userRole === 'admin';
@@ -1275,6 +1302,7 @@
           
           const [calendarFilter, setCalendarFilter] = useState('ALL'); 
           const [calendarView, setCalendarView] = useState('month');
+          const [expandedCalendarDate, setExpandedCalendarDate] = useState(null);
           const [selectedDay, setSelectedDay] = useState(new Date().getDate());
           const [automationSettings, setAutomationSettings] = useState({});
           const [automationCluster, setAutomationCluster] = useState({});
@@ -1329,12 +1357,26 @@
           const [trelloSuccess, setTrelloSuccess] = useState('');
 
           useEffect(() => {
-            if (!user) return;
-            const unsubscribe = db.collection('companies').onSnapshot(snapshot => {
+            if (!user || !rolesReady) return;
+            const myCompanyId = globalUserCompanies[user.email.toLowerCase()];
+            setCompanies([]);
+            setEvents([]);
+            setCalendarSync({ state: 'loading', message: 'Carregando eventos compartilhados...' });
+            if (userRole === 'cliente' && !myCompanyId) {
+                setSelectedCompany(null);
+                setCalendarSync({ state: 'empty', message: 'Sua conta ainda não está vinculada a uma empresa. Peça ao administrador para configurar seu acesso em Gerenciar Acessos.' });
+                return;
+            }
+            // Clientes consultam somente o documento autorizado, sem listar todas as empresas.
+            const source = userRole === 'cliente'
+                ? db.collection('companies').doc(myCompanyId)
+                : db.collection('companies');
+            const unsubscribe = source.onSnapshot({ includeMetadataChanges: true }, snapshot => {
+                const docs = userRole === 'cliente' ? (snapshot.exists ? [snapshot] : []) : snapshot.docs;
                 let fetchedCompanies = [];
                 let hasUpliGeral = false;
                 
-                snapshot.forEach(doc => {
+                docs.forEach(doc => {
                     // 🔥 IGNORAMOS TOTALMENTE O CALENDÁRIO BUGADO ANTIGO
                     if (doc.id === "upli_geral_master") return; 
 
@@ -1354,7 +1396,6 @@
                     }
 
                     if (userRole === 'cliente') {
-                        const myCompanyId = globalUserCompanies[user.email.toLowerCase()];
                         if (doc.id !== myCompanyId) {
                             return; 
                         }
@@ -1373,10 +1414,13 @@
                 });
 
                 // SE O NOVO COFRE V2 NÃO EXISTIR, NÓS O CRIAMOS SEGURO
-                if (!hasUpliGeral && (userRole === 'master' || userRole === 'admin') && snapshot.docs.length > 0) {
+                if (!snapshot.metadata.fromCache && !hasUpliGeral && (userRole === 'master' || userRole === 'admin') && docs.length > 0) {
                     db.collection('companies').doc(UPLI_GERAL_ID).set({
                         name: 'UPLI Geral', categories: STANDARD_CATEGORIES, statusPipeline: DEFAULT_STATUS_PIPELINE
-                    }, { merge: true });
+                    }, { merge: true }).catch(error => {
+                        console.error('Erro ao inicializar calendário central:', error);
+                        setCalendarSync({ state: 'error', message: 'Não foi possível preparar o UPLI Geral. Peça ao administrador para verificar as permissões no Firebase.' });
+                    });
                 }
 
                 fetchedCompanies.sort((a,b) => {
@@ -1386,16 +1430,34 @@
                 });
                 
                 setCompanies(fetchedCompanies);
+                setCalendarSync(snapshot.metadata.hasPendingWrites
+                    ? { state: 'pending', message: 'Há alterações aguardando envio. Elas aparecerão nos outros computadores após a confirmação do servidor.' }
+                    : snapshot.metadata.fromCache
+                        ? { state: 'offline', message: 'Aguardando conexão com o servidor. Os eventos exibidos podem estar desatualizados.' }
+                        : fetchedCompanies.length === 0
+                            ? { state: 'empty', message: userRole === 'cliente'
+                                ? 'O calendário vinculado à sua conta não está disponível. Peça ao administrador para verificar a empresa e seu acesso.'
+                                : 'Nenhum calendário disponível para esta conta.' }
+                            : { state: 'ready', message: '' });
 
                 setSelectedCompany(prev => {
+                    if (fetchedCompanies.length === 0) return null;
                     if (!prev && fetchedCompanies.length > 0) return fetchedCompanies[0].id;
                     if (prev && !fetchedCompanies.find(c => c.id === prev) && fetchedCompanies.length > 0) return fetchedCompanies[0].id;
                     return prev;
                 });
 
+            }, error => {
+                console.error('Erro ao carregar eventos compartilhados:', error);
+                setCompanies([]);
+                setSelectedCompany(null);
+                setEvents([]);
+                setCalendarSync({ state: 'error', message: error.code === 'permission-denied'
+                    ? 'O Firebase bloqueou a leitura dos eventos para sua conta. Peça ao administrador para verificar as permissões de acesso.'
+                    : 'Não foi possível carregar os eventos compartilhados. Verifique a conexão e recarregue a página.' });
             });
             return () => unsubscribe();
-          }, [user, userRole, globalUserCompanies]);
+          }, [user, rolesReady, userRole, globalUserCompanies]);
 
           useEffect(() => {
               if (!user) return;
@@ -2046,7 +2108,7 @@
 
           const currentViewEvents = safeEvents
               .map((e, index) => ({ ...e, _origIdx: index, _key: e.id || `legacy_${index}` }))
-              .filter(e => e.month === month && e.year === year);
+              .filter(e => Number(e.month) === month && Number(e.year) === year);
           const trelloExportEvents = trelloSingleEventKey
               ? currentViewEvents.filter(event => event._key === trelloSingleEventKey)
               : currentViewEvents;
@@ -2060,7 +2122,7 @@
           };
 
           const filteredViewEvents = getFilteredEvents();
-          const getCalendarEventsForDay = (day) => filteredViewEvents.filter(e => e.day === day);
+          const getCalendarEventsForDay = (day) => filteredViewEvents.filter(e => Number(e.day) === day);
 
           const allIndexedEvents = safeEvents.map((event, index) => ({
               ...event,
@@ -4584,6 +4646,14 @@
                 )}
 
                 <div data-tutorial="calendar" className="precision-calendar">
+                  {(accessError || calendarSync.message) && (
+                      <div role={accessError || calendarSync.state === 'error' ? 'alert' : 'status'} className="m-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-gray-800 dark:text-amber-200">
+                          {accessError || calendarSync.message}
+                          {(accessError || calendarSync.state === 'error') && (
+                              <button type="button" onClick={() => window.location.reload()} className="ml-3 font-bold underline">Tentar novamente</button>
+                          )}
+                      </div>
+                  )}
                   <div className="precision-commandbar" data-tutorial="calendar-controls">
                       <div className="precision-brand">
                           <span className="precision-eyebrow">Agenda de precisão</span>
@@ -4694,6 +4764,7 @@
                                   <div className="precision-month-grid" role="grid" aria-label={`Calendário de ${periodLabel}`}>
                                       {monthGridDates.map(date => {
                                           const dateEvents = getCalendarEventsForDate(date);
+                                          const expanded = expandedCalendarDate === date.getTime();
                                           const outside = date.getMonth() !== month;
                                           const selected = isSameDate(date, activeDate);
                                           const dateIsToday = isSameDate(date, todayDate);
@@ -4706,6 +4777,7 @@
                                                   onClick={() => selectCalendarDate(date)}
                                                   onDoubleClick={() => selectCalendarDate(date, true)}
                                                   onKeyDown={event => {
+                                                      if (event.target !== event.currentTarget) return;
                                                       if (event.key === 'Enter' || event.key === ' ') selectCalendarDate(date, event.key === 'Enter' && isAdmin);
                                                   }}
                                                   onDragOver={onDragOver}
@@ -4717,8 +4789,23 @@
                                                       {dateEvents.length === 0 && !outside && <span className="precision-empty">+</span>}
                                                   </div>
                                                   <div className="precision-event-stack">
-                                                      {dateEvents.slice(0, 3).map(event => renderPrecisionEvent(event, { hideTime: true }))}
-                                                      {dateEvents.length > 3 && <span className="precision-more">+ {dateEvents.length - 3} eventos</span>}
+                                                      {(expanded ? dateEvents : dateEvents.slice(0, 3)).map(event => renderPrecisionEvent(event, { hideTime: true }))}
+                                                      {dateEvents.length > 3 && (
+                                                          <button
+                                                              type="button"
+                                                              className="precision-more"
+                                                              aria-expanded={expanded}
+                                                              aria-label={expanded ? 'Mostrar menos eventos deste dia' : `Ver todos os ${dateEvents.length} eventos deste dia`}
+                                                              onDoubleClick={event => event.stopPropagation()}
+                                                              onClick={event => {
+                                                                  event.stopPropagation();
+                                                                  selectCalendarDate(date);
+                                                                  setExpandedCalendarDate(expanded ? null : date.getTime());
+                                                              }}
+                                                          >
+                                                              {expanded ? 'Mostrar menos' : `+ ${dateEvents.length - 3} evento${dateEvents.length - 3 === 1 ? '' : 's'} · Ver todos`}
+                                                          </button>
+                                                      )}
                                                   </div>
                                               </div>
                                           );
