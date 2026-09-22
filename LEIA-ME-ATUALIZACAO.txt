@@ -7,7 +7,7 @@ Depois de atualizar, retome pelo calendario. O painel exige a versao 13.
 Ao executar o atualizador, a versao anterior e desinstalada antes da instalacao nova.
 Tarefas, atalhos e arquivos antigos sao removidos para nao deixar componentes desatualizados.
 A configuracao, a sessao do WhatsApp, o login do calendario e o historico sao preservados.
-O WhatsApp fica realmente carregado em um Chrome persistente, mas sem janela visivel.
+O WhatsApp fica carregado em um Chrome persistente no modo headless, sem criar janela no desktop.
 Antes de cada envio, a automacao valida a aba e tenta recarrega-la se ela travar.
 O Chrome recebe configuracoes que evitam suspensao e economia de recursos em segundo plano.
 Para ler um novo QR Code, use o atalho Abrir WhatsApp da Automacao; depois ele volta a ficar oculto.
@@ -29,7 +29,8 @@ inclusive quando uma mensagem demora para confirmar o envio.
 O atualizador carrega e valida o WhatsApp em segundo plano antes de informar concluido.
 Se o carregamento falhar, a mensagem de erro fica visivel no atualizador.
 Tambem e criado o atalho Abrir WhatsApp da Automacao na Area de Trabalho.
-Esse atalho mostra a janela temporariamente apenas quando for preciso fazer manutencao.
+Esse atalho mostra uma janela temporaria apenas quando for preciso fazer manutencao.
+Ao terminar, pressione ENTER no assistente para encerrar a janela e voltar ao modo headless.
 Somente na primeira atualizacao: se aparecer o aviso sobre uma janela antiga,
 feche o Chrome do perfil da automacao uma vez e aguarde o proximo ciclo.
 

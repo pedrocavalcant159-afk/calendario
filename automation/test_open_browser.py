@@ -54,17 +54,86 @@ class OpenBrowserTests(unittest.TestCase):
         page.bring_to_front.assert_not_called()
         context.close.assert_called_once()
 
-    def test_existing_automation_chrome_is_hidden_during_normal_cycles(self):
+    def test_existing_headless_automation_chrome_is_reused_during_normal_cycles(self):
         playwright = MagicMock()
         browser = MagicMock()
         playwright.chromium.connect_over_cdp.return_value = browser
-        host = {'profile': str(agent.PROFILE_DIR.resolve()), 'port': 9222, 'pid': 321}
+        host = {'profile': str(agent.PROFILE_DIR.resolve()), 'port': 9222, 'pid': 321, 'headless': True}
         with patch.object(agent, 'load_json', return_value=host), \
              patch.object(agent, 'save_json'), \
+             patch.object(agent, 'chrome_pid_from_cdp', return_value=0), \
+             patch.object(agent, 'chrome_pid_for_debug_port', return_value=654), \
              patch.object(agent, 'set_chrome_window_visibility') as visibility:
             result = agent.attach_open_chrome(playwright)
         self.assertIs(result, browser)
-        visibility.assert_called_once_with(321, False)
+        visibility.assert_not_called()
+
+    def test_existing_automation_chrome_falls_back_to_stored_pid(self):
+        playwright = MagicMock()
+        browser = MagicMock()
+        playwright.chromium.connect_over_cdp.return_value = browser
+        host = {'profile': str(agent.PROFILE_DIR.resolve()), 'port': 9222, 'pid': 321, 'headless': True}
+        with patch.object(agent, 'load_json', return_value=host), \
+             patch.object(agent, 'save_json'), \
+             patch.object(agent, 'chrome_pid_from_cdp', return_value=0), \
+             patch.object(agent, 'chrome_pid_for_debug_port', return_value=0), \
+             patch.object(agent, 'set_chrome_window_visibility') as visibility:
+            result = agent.attach_open_chrome(playwright)
+        self.assertIs(result, browser)
+        visibility.assert_not_called()
+
+    def test_existing_automation_chrome_prefers_live_cdp_pid(self):
+        playwright = MagicMock()
+        browser = MagicMock()
+        playwright.chromium.connect_over_cdp.return_value = browser
+        host = {'profile': str(agent.PROFILE_DIR.resolve()), 'port': 9222, 'pid': 321, 'headless': True}
+        with patch.object(agent, 'load_json', return_value=host), \
+             patch.object(agent, 'save_json'), \
+             patch.object(agent, 'chrome_pid_from_cdp', return_value=987), \
+             patch.object(agent, 'chrome_pid_for_debug_port') as netstat_pid, \
+             patch.object(agent, 'set_chrome_window_visibility') as visibility:
+            result = agent.attach_open_chrome(playwright)
+        self.assertIs(result, browser)
+        visibility.assert_not_called()
+        netstat_pid.assert_not_called()
+
+    def test_background_mode_restarts_legacy_headed_chrome_as_headless(self):
+        playwright = MagicMock()
+        headed_browser = MagicMock()
+        headless_browser = MagicMock()
+        playwright.chromium.connect_over_cdp.side_effect = [headed_browser, headless_browser]
+        host = {'profile': str(agent.PROFILE_DIR.resolve()), 'port': 9222, 'pid': 321}
+        launched_process = MagicMock()
+        launched_process.pid = 456
+        with patch.object(agent, 'load_json', return_value=host), \
+             patch.object(agent, 'save_json'), \
+             patch.object(agent, 'chrome_pid_from_cdp', return_value=0), \
+             patch.object(agent, 'chrome_pid_for_debug_port', return_value=0), \
+             patch.object(agent.socket, 'create_connection', side_effect=OSError), \
+             patch.object(agent.subprocess, 'Popen', return_value=launched_process) as launch:
+            result = agent.attach_open_chrome(playwright)
+        self.assertIs(result, headless_browser)
+        headed_browser.close.assert_called_once()
+        self.assertIn('--headless=new', launch.call_args.args[0])
+
+    def test_cdp_minimizes_chrome_without_depending_on_windows_pid(self):
+        browser = MagicMock()
+        context = MagicMock()
+        page = MagicMock()
+        session = MagicMock()
+        browser.contexts = [context]
+        context.pages = [page]
+        context.new_cdp_session.return_value = session
+        session.send.side_effect = [
+            {'windowId': 42, 'bounds': {'windowState': 'normal'}},
+            {},
+        ]
+        self.assertTrue(agent.set_chrome_cdp_window_visibility(browser, False))
+        session.send.assert_any_call(
+            'Browser.setWindowBounds',
+            {'windowId': 42, 'bounds': {'windowState': 'minimized'}},
+        )
+        session.detach.assert_called_once()
 
     @unittest.skipUnless(agent.os.name == 'nt', 'Windows process flags')
     def test_chrome_launch_retries_without_breakaway_when_windows_denies_it(self):
@@ -74,9 +143,12 @@ class OpenBrowserTests(unittest.TestCase):
             with patch.object(agent, 'RUNTIME_DIR', runtime), \
                  patch.object(agent, 'PROFILE_DIR', runtime / 'profile'), \
                  patch.object(agent, 'BROWSER_HOST_PATH', runtime / 'host.json'), \
+                 patch.object(agent, 'chrome_pid_from_cdp', return_value=0), \
+                 patch.object(agent, 'chrome_pid_for_debug_port', return_value=0), \
                  patch.object(agent.subprocess, 'Popen', side_effect=[PermissionError('Job restriction'), MagicMock()]) as launch:
                 agent.attach_open_chrome(playwright)
             self.assertEqual(launch.call_count, 2)
+            self.assertIn('--headless=new', launch.call_args_list[0].args[0])
             self.assertTrue(launch.call_args_list[0].kwargs['creationflags'] & subprocess.CREATE_BREAKAWAY_FROM_JOB)
             self.assertFalse(launch.call_args_list[1].kwargs['creationflags'] & subprocess.CREATE_BREAKAWAY_FROM_JOB)
 
@@ -100,6 +172,8 @@ class OpenBrowserTests(unittest.TestCase):
             with patch.object(agent, 'RUNTIME_DIR', runtime), \
                  patch.object(agent, 'PROFILE_DIR', runtime / 'profile'), \
                  patch.object(agent, 'BROWSER_HOST_PATH', runtime / 'browser-host.json'), \
+                 patch.object(agent, 'chrome_pid_from_cdp', return_value=0), \
+                 patch.object(agent, 'chrome_pid_for_debug_port', return_value=0), \
                  patch.object(agent.subprocess, 'Popen', side_effect=launch_fixture):
                 try:
                     with sync_playwright() as playwright:

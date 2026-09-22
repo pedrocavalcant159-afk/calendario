@@ -2257,6 +2257,31 @@ def chrome_pid_for_debug_port(port: int) -> int:
     return 0
 
 
+def chrome_pid_from_cdp(browser) -> int:
+    """Ask Chrome for its live browser PID instead of trusting its launcher PID."""
+    session = None
+    try:
+        session = browser.new_browser_cdp_session()
+        payload = session.send('SystemInfo.getProcessInfo')
+        if not isinstance(payload, dict):
+            return 0
+        for process in payload.get('processInfo') or []:
+            if process.get('type') != 'browser':
+                continue
+            process_id = int(process.get('id') or 0)
+            if process_id > 0:
+                return process_id
+    except (AttributeError, TypeError, ValueError, PlaywrightError):
+        return 0
+    finally:
+        if session is not None:
+            try:
+                session.detach()
+            except (AttributeError, PlaywrightError):
+                pass
+    return 0
+
+
 def windows_process_tree(root_pid: int) -> set[int]:
     if os.name != 'nt' or not isinstance(root_pid, int) or root_pid <= 0:
         return set()
@@ -2343,11 +2368,8 @@ def set_chrome_window_visibility(root_pid: int, visible: bool) -> int:
         user32.GetWindowThreadProcessId(window_handle, ctypes.byref(process_id))
         class_name = ctypes.create_unicode_buffer(256)
         user32.GetClassNameW(window_handle, class_name, len(class_name))
-        is_main_chrome_window = (
-            class_name.value == 'Chrome_WidgetWin_1'
-            and not user32.GetWindow(window_handle, 4)  # GW_OWNER
-        )
-        if int(process_id.value) in process_ids and is_main_chrome_window:
+        is_chrome_window = class_name.value.startswith('Chrome_WidgetWin_')
+        if int(process_id.value) in process_ids and is_chrome_window:
             if visible or user32.IsWindowVisible(window_handle):
                 user32.ShowWindow(window_handle, show_command)
                 affected += 1
@@ -2355,6 +2377,34 @@ def set_chrome_window_visibility(root_pid: int, visible: bool) -> int:
 
     user32.EnumWindows(visit_window, 0)
     return affected
+
+
+def set_chrome_cdp_window_visibility(browser, visible: bool) -> bool:
+    """Restore or minimize Chrome through CDP, independently of Windows PIDs."""
+    session = None
+    try:
+        contexts = browser.contexts
+        if not contexts or not contexts[0].pages:
+            return False
+        page = contexts[0].pages[0]
+        session = contexts[0].new_cdp_session(page)
+        window = session.send('Browser.getWindowForTarget')
+        window_id = int(window.get('windowId') or 0)
+        if window_id <= 0:
+            return False
+        session.send('Browser.setWindowBounds', {
+            'windowId': window_id,
+            'bounds': {'windowState': 'normal' if visible else 'minimized'},
+        })
+        return True
+    except (AttributeError, TypeError, ValueError, PlaywrightError):
+        return False
+    finally:
+        if session is not None:
+            try:
+                session.detach()
+            except (AttributeError, PlaywrightError):
+                pass
 
 
 def attach_open_chrome(playwright, visible: bool = False):
@@ -2372,6 +2422,7 @@ def attach_open_chrome(playwright, visible: bool = False):
             keep_visible = now < datetime.fromisoformat(visible_until)
         except ValueError:
             visible_until = ''
+    requested_headless = not keep_visible
     profile = str(PROFILE_DIR.resolve())
     if host.get('profile') == profile:
         port = host.get('port')
@@ -2380,35 +2431,57 @@ def attach_open_chrome(playwright, visible: bool = False):
                 browser = playwright.chromium.connect_over_cdp(
                     f'http://127.0.0.1:{port}', timeout=3000
                 )
-                process_id = host.get('pid')
-                if not isinstance(process_id, int) or process_id <= 0:
-                    process_id = chrome_pid_for_debug_port(port)
-                    if process_id:
-                        host['pid'] = process_id
-                host.update({
-                    'profile': profile,
-                    'port': port,
-                    'visibleUntil': visible_until if keep_visible else '',
-                })
-                save_json(BROWSER_HOST_PATH, host)
-                set_chrome_window_visibility(process_id, keep_visible)
-                return browser
+                existing_headless = host.get('headless') is True
+                if existing_headless != requested_headless:
+                    # A Chrome profile cannot be open in headed and headless
+                    # processes simultaneously. Close it cleanly and relaunch
+                    # the same profile in the requested mode.
+                    browser.close()
+                    deadline = time.monotonic() + 10
+                    while time.monotonic() < deadline:
+                        try:
+                            with socket.create_connection(('127.0.0.1', port), timeout=0.2):
+                                time.sleep(0.1)
+                        except OSError:
+                            break
+                    host = {}
+                else:
+                    # Chrome can hand the browser process off and let the PID
+                    # returned by Popen exit. Resolve the live listener every
+                    # time; otherwise an old PID points to the wrong process.
+                    process_id = chrome_pid_from_cdp(browser) or chrome_pid_for_debug_port(port)
+                    if not process_id:
+                        stored_process_id = host.get('pid')
+                        process_id = stored_process_id if isinstance(stored_process_id, int) else 0
+                    host.update({
+                        'profile': profile,
+                        'port': port,
+                        'pid': process_id,
+                        'headless': requested_headless,
+                        'visibleUntil': visible_until if keep_visible else '',
+                    })
+                    save_json(BROWSER_HOST_PATH, host)
+                    if keep_visible:
+                        set_chrome_cdp_window_visibility(browser, True)
+                        set_chrome_window_visibility(process_id, True)
+                    return browser
             except PlaywrightError:
                 pass
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0))
         port = listener.getsockname()[1]
-    # Chrome is an independent process. Disconnecting Playwright at the end of
-    # a scheduled cycle cannot terminate it, and its own window can stay hidden.
+    # Chrome is independent from the scheduled Python process. In normal
+    # cycles it runs with the modern headless backend, so no desktop window is
+    # created at all. Maintenance and QR setup deliberately use headed mode.
     chrome_arguments = [
         str(chrome_path()), f'--user-data-dir={profile}',
         f'--remote-debugging-port={port}', '--remote-debugging-address=127.0.0.1',
         '--no-first-run', '--no-default-browser-check',
         '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding', '--disable-features=CalculateNativeWinOcclusion',
-        '--start-minimized',
-        'https://web.whatsapp.com/',
     ]
+    chrome_arguments.append('--headless=new' if requested_headless else '--start-maximized')
+    chrome_arguments.append('https://web.whatsapp.com/')
     launch_options = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL, close_fds=True)
     if os.name == 'nt' and not keep_visible:
@@ -2436,6 +2509,7 @@ def attach_open_chrome(playwright, visible: bool = False):
         'profile': profile,
         'port': port,
         'pid': process_id,
+        'headless': requested_headless,
         'visibleUntil': visible_until if keep_visible else '',
     })
     deadline = time.monotonic() + 30
@@ -2444,7 +2518,21 @@ def attach_open_chrome(playwright, visible: bool = False):
             browser = playwright.chromium.connect_over_cdp(
                 f'http://127.0.0.1:{port}', timeout=1000
             )
-            set_chrome_window_visibility(process_id, keep_visible)
+            listener_process_id = (
+                chrome_pid_from_cdp(browser) or chrome_pid_for_debug_port(port)
+            )
+            if listener_process_id:
+                process_id = listener_process_id
+                save_json(BROWSER_HOST_PATH, {
+                    'profile': profile,
+                    'port': port,
+                    'pid': process_id,
+                    'headless': requested_headless,
+                    'visibleUntil': visible_until if keep_visible else '',
+                })
+            if keep_visible:
+                set_chrome_cdp_window_visibility(browser, True)
+                set_chrome_window_visibility(process_id, True)
             return browser
         except PlaywrightError:
             time.sleep(0.25)

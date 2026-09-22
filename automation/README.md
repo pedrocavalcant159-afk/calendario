@@ -108,7 +108,7 @@ A versão 9 abre o WhatsApp diretamente ao concluir a instalação ou atualizaç
 
 A versão 11 mantém a reserva segura do relatório semanal e adiciona ciclos independentes para lembretes e marcações agrupadas.
 
-A versão 12 mantém o WhatsApp carregado em um Chrome persistente com a janela oculta. O Chrome não reduz os temporizadores da aba em segundo plano, e a automação tenta uma recarga controlada quando o WhatsApp não termina de carregar. O atalho **Abrir WhatsApp da Automação** torna a janela visível temporariamente para manutenção ou leitura do QR Code.
+A versão atual mantém o WhatsApp carregado em um Chrome persistente no modo headless, sem criar janela no desktop. O Chrome não reduz os temporizadores da aba em segundo plano, e a automação tenta uma recarga controlada quando o WhatsApp não termina de carregar. O atalho **Abrir WhatsApp da Automação** troca temporariamente para uma instância visível para manutenção ou leitura do QR Code; ao finalizar, ela é encerrada e a mesma sessão volta ao modo headless.
 
 A versão 13 transforma toda atualização em uma reinstalação limpa. A versão anterior é removida, mas a sessão do WhatsApp, o login do calendário, as configurações e o histórico são preservados e restaurados automaticamente. O painel exige a versão 13.
 
