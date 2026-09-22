@@ -1167,6 +1167,26 @@ def build_assignment_notice_batch_message(
     return "\n".join(lines)
 
 
+def assignment_command_is_due(command: dict[str, Any], slot: str) -> bool:
+    """Only include assignments that already existed when this slot became due."""
+    created_at = normalize_text(command.get("createdAt"))
+    if not created_at:
+        # Legacy commands did not always expose a timestamp. They are safe to
+        # include here because this function is only called from a due cycle.
+        return True
+    try:
+        slot_date, slot_time = slot.split("|", 1)
+        due_at = datetime.fromisoformat(f"{slot_date}T{slot_time}:00").astimezone()
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        if created.tzinfo is None:
+            created = created.astimezone()
+        return created <= due_at
+    except (TypeError, ValueError):
+        # Do not lose a queued assignment because an old client used a
+        # non-standard timestamp. It will still only run inside a due cycle.
+        return True
+
+
 def run_assignment_notices(slot: str) -> dict[str, Any]:
     config = load_config()
     with automation_lock(), sync_playwright() as playwright:
@@ -1185,7 +1205,10 @@ def run_assignment_notices(slot: str) -> dict[str, Any]:
             commands = [
                 command for command in load_pending_manual_commands(page)
                 if command.get("type") == "assignment_notice"
-                and command.get("deliveryMode") == "scheduled"
+                # Safe default for old/cached pages: only an explicit
+                # `immediate` request may bypass the 12h/17h batches.
+                and command.get("deliveryMode") != "immediate"
+                and assignment_command_is_due(command, slot)
             ]
             prepared: dict[str, dict[str, Any]] = {}
             invalid: list[tuple[dict[str, Any], str]] = []
@@ -1314,7 +1337,7 @@ def process_pending_manual_commands(
         command for command in load_pending_manual_commands(page)
         if not (
             command.get("type") == "assignment_notice"
-            and command.get("deliveryMode") == "scheduled"
+            and command.get("deliveryMode") != "immediate"
         )
     ][:3]
     completed = 0

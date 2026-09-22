@@ -211,7 +211,10 @@ class OpenBrowserTests(unittest.TestCase):
                             process.wait(timeout=5)
 
     def test_manual_queue_stops_after_transport_failure(self):
-        commands = [{'id': 'first', 'type': 'assignment_notice'}, {'id': 'second', 'type': 'assignment_notice'}]
+        commands = [
+            {'id': 'first', 'type': 'assignment_notice', 'deliveryMode': 'immediate'},
+            {'id': 'second', 'type': 'assignment_notice', 'deliveryMode': 'immediate'},
+        ]
         with patch.object(agent, 'load_pending_manual_commands', return_value=commands), \
              patch.object(agent, 'claim_cluster_leadership', return_value={'isLeader': True}), \
              patch.object(agent, 'claim_manual_command', return_value=True), \
