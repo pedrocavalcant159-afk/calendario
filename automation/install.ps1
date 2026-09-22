@@ -29,14 +29,17 @@ $reminderAction = New-ScheduledTaskAction -Execute $pythonwExe -Argument $remind
 $syncAction = New-ScheduledTaskAction -Execute $pythonwExe -Argument $syncArguments
 $loginAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $loginArguments
 $weeklyTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At '09:00'
-$reminderTrigger = New-ScheduledTaskTrigger -Daily -At '09:05'
+$reminderTriggers = @(
+    New-ScheduledTaskTrigger -Daily -At '09:00'
+    New-ScheduledTaskTrigger -Daily -At '17:00'
+)
 $syncTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
 $loginTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
 $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Minutes 20) -MultipleInstances IgnoreNew
 
 Register-ScheduledTask -TaskName $taskWeekly -Action $weeklyAction -Trigger $weeklyTrigger -Principal $principal -Settings $settings -Description 'Envia no WhatsApp o relatorio semanal do Calendario UPLI.' -Force | Out-Null
-Register-ScheduledTask -TaskName $taskReminders -Action $reminderAction -Trigger $reminderTrigger -Principal $principal -Settings $settings -Description 'Envia no WhatsApp lembretes de prazo com links para atualizar os posts.' -Force | Out-Null
+Register-ScheduledTask -TaskName $taskReminders -Action $reminderAction -Trigger $reminderTriggers -Principal $principal -Settings $settings -Description 'Envia no WhatsApp lembretes das demandas atrasadas e do dia, as 9h e 17h.' -Force | Out-Null
 Register-ScheduledTask -TaskName $taskSync -Action $syncAction -Trigger $syncTrigger -Principal $principal -Settings $settings -Description 'Mantem o heartbeat, elege o PC lider e processa a fila da Automacao UPLI.' -Force | Out-Null
 Register-ScheduledTask -TaskName $taskLogin -Action $loginAction -Trigger $loginTrigger -Principal $principal -Settings $settings -Description 'Verifica calendario, internet, WhatsApp e recupera envios perdidos.' -Force | Out-Null
 
@@ -52,7 +55,8 @@ $shortcut.Save()
 
 Write-Host 'Tarefas da Automacao UPLI instaladas.' -ForegroundColor Green
 Write-Host 'Relatorio semanal: segunda-feira as 9h.'
-Write-Host 'Lembretes de prazo: todos os dias as 9h05.'
+Write-Host 'Lembretes de demandas atrasadas e do dia: todos os dias as 9h e 17h.'
+Write-Host 'Marcacoes agrupadas: todos os dias as 12h e 17h.'
 Write-Host 'Respostas dos formularios: sincronizadas a cada minuto.'
 Write-Host 'Verificacao: sempre que este usuario entrar no Windows.'
 Write-Host 'Testes: atalho Testar Automacao UPLI na Area de Trabalho.'

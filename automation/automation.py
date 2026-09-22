@@ -38,7 +38,7 @@ LOCK_PATH = RUNTIME_DIR / "automation.lock"
 BRIDGE_PATH = BASE_DIR / "firebase-bridge.html"
 DEFAULT_PUBLIC_CALENDAR_URL = "https://pedrocavalcant159-afk.github.io/calendario/"
 UPLI_GERAL_ID = "upli_geral_v2"
-AUTOMATION_AGENT_VERSION = 10
+AUTOMATION_AGENT_VERSION = 13
 # The scheduled task may remain active for up to 20 minutes. Keep leadership
 # longer than the whole task so another PC cannot take over halfway through a
 # recipient list and send the same batches again.
@@ -221,6 +221,8 @@ def claim_cluster_leadership(
                     lastWeeklyFingerprint: String(data.lastWeeklyFingerprint || ''),
                     weeklyDeliveries,
                     lastReminderCheckDate: String(data.lastReminderCheckDate || ''),
+                    lastReminderSlot: String(data.lastReminderSlot || ''),
+                    lastAssignmentNoticeSlot: String(data.lastAssignmentNoticeSlot || ''),
                     reminderDeliveries: data.reminderDeliveries || {},
                     paused: data.paused === true,
                     pauseChangedBy: String(data.pauseChangedBy || ''),
@@ -826,7 +828,7 @@ def sync_pending_reminder_responses(
     return result
 
 
-def load_pending_manual_commands(page, limit: int = 3) -> list[dict[str, Any]]:
+def load_pending_manual_commands(page, limit: int = 100) -> list[dict[str, Any]]:
     return page.evaluate(
         """async commandLimit => {
             const snapshot = await db.collection('automationCommands')
@@ -840,9 +842,12 @@ def load_pending_manual_commands(page, limit: int = 3) -> list[dict[str, Any]]:
                     type: String(data.type || ''),
                     companyId: String(data.companyId || ''),
                     eventId: String(data.eventId || ''),
+                    deliveryMode: String(data.deliveryMode || ''),
                     requestedBy: String(data.requestedBy || ''),
                     companyName: String(data.companyName || ''),
-                    eventTitle: String(data.eventTitle || '')
+                    eventTitle: String(data.eventTitle || ''),
+                    createdAt: data.createdAt?.toDate
+                        ? data.createdAt.toDate().toISOString() : ''
                 };
             });
         }""",
@@ -1131,12 +1136,187 @@ def send_assignment_notice(
     }
 
 
+def build_assignment_notice_batch_message(
+    responsible_name: str,
+    items: list[dict[str, Any]],
+    marker: str,
+) -> str:
+    greeting = f"Oi, {responsible_name}! Tudo bem? 😊"
+    if len(items) == 1:
+        introduction = "Seu nome foi colocado como responsável por esta nova demanda:"
+    else:
+        introduction = "Seu nome foi colocado como responsável por estas novas demandas:"
+    lines = [greeting, "", introduction, ""]
+    for index, item in enumerate(items):
+        lines.extend([
+            f"*{item['company_name']} | {item['title']}*",
+            f"Data prevista: {item['due_date']:%d/%m/%Y}",
+        ])
+        if item["notes"]:
+            lines.extend(["*Anotações / comentários:*", item["notes"]])
+        if item["demand_link"]:
+            lines.extend(["*Link da demanda / arte:*", item["demand_link"]])
+        if index != len(items) - 1:
+            lines.append("")
+    lines.extend([
+        "",
+        "Quando puder, dá uma olhadinha no calendário. Qualquer coisa, estamos por aqui!",
+        "",
+        marker,
+    ])
+    return "\n".join(lines)
+
+
+def run_assignment_notices(slot: str) -> dict[str, Any]:
+    config = load_config()
+    with automation_lock(), sync_playwright() as playwright:
+        context = browser_context(playwright, config)
+        try:
+            page = context.pages[0] if context.pages else context.new_page()
+            payload = read_calendar(page)
+            cluster = claim_cluster_leadership(page)
+            if not cluster.get("isLeader"):
+                return {"sent": False, "standby": True, "slot": slot}
+            if cluster.get("paused"):
+                return {"sent": False, "paused": True, "slot": slot}
+            if cluster.get("lastAssignmentNoticeSlot") == slot:
+                return {"sent": False, "duplicate": True, "slot": slot}
+
+            commands = [
+                command for command in load_pending_manual_commands(page)
+                if command.get("type") == "assignment_notice"
+                and command.get("deliveryMode") == "scheduled"
+            ]
+            prepared: dict[str, dict[str, Any]] = {}
+            invalid: list[tuple[dict[str, Any], str]] = []
+            for command in sorted(commands, key=lambda item: item.get("createdAt") or ""):
+                found = find_event(
+                    payload,
+                    normalize_text(command.get("companyId")),
+                    normalize_text(command.get("eventId")),
+                )
+                if not found:
+                    invalid.append((command, "A demanda atribuída não foi encontrada no calendário."))
+                    continue
+                company, event = found
+                member = find_responsible_member(payload, event)
+                if not member:
+                    invalid.append((command, "O responsável atual não está cadastrado na equipe."))
+                    continue
+                group_name = normalize_text(member.get("whatsappGroup"))
+                if not group_name:
+                    invalid.append((command, "O responsável atual está sem grupo de WhatsApp."))
+                    continue
+                try:
+                    due_date = date(int(event["year"]), int(event["month"]) + 1, int(event["day"]))
+                except (KeyError, TypeError, ValueError):
+                    invalid.append((command, "A demanda atribuída está sem uma data válida."))
+                    continue
+                event_key = "|".join([
+                    normalize_text(command.get("companyId")),
+                    canonical_event_id(event),
+                ])
+                item = prepared.setdefault(event_key, {
+                    "company_name": normalize_text(company.get("name")) or "Empresa",
+                    "title": normalize_text(event.get("text")) or "Post sem título",
+                    "due_date": due_date,
+                    "notes": str(event.get("notes") or "").strip(),
+                    "demand_link": normalize_text(event.get("imageUrl")),
+                    "responsible": normalize_text(member.get("name")) or "Responsável",
+                    "group_name": group_name,
+                    "command_ids": [],
+                })
+                item["command_ids"].append(normalize_text(command.get("id")))
+
+            for command, error in invalid:
+                command_id = normalize_text(command.get("id"))
+                if command_id and claim_manual_command(page, command_id):
+                    finish_manual_command(page, command_id, "failed", error=error)
+
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for item in prepared.values():
+                grouped.setdefault(item["group_name"], []).append(item)
+
+            previews: list[str] = []
+            sent_events = 0
+            sent_recipients = 0
+            whatsapp_page = None
+            for group_name, items in sorted(grouped.items()):
+                claimed_ids = [
+                    command_id
+                    for item in items
+                    for command_id in item["command_ids"]
+                    if command_id and claim_manual_command(page, command_id)
+                ]
+                if not claimed_ids:
+                    continue
+                active_items = [
+                    item for item in items
+                    if any(command_id in claimed_ids for command_id in item["command_ids"])
+                ]
+                active_items.sort(key=lambda item: (item["due_date"], item["company_name"].casefold(), item["title"].casefold()))
+                marker_source = "|".join([slot, group_name.casefold(), *sorted(claimed_ids)])
+                marker_hash = hashlib.sha256(marker_source.encode("utf-8")).hexdigest()[:10].upper()
+                marker = f"[UPLI-ATR-{slot.replace('-', '').replace('|', '-').replace(':', '')}-{marker_hash}]"
+                message = build_assignment_notice_batch_message(
+                    active_items[0]["responsible"], active_items, marker
+                )
+                previews.extend([
+                    f"DESTINO: grupo {group_name} ({active_items[0]['responsible']})",
+                    message,
+                    "",
+                ])
+                try:
+                    whatsapp_page = whatsapp_page or whatsapp_page_for_context(context)
+                    send_whatsapp(whatsapp_page, group_name, message, marker)
+                    result = {
+                        "sent": True,
+                        "events": len(active_items),
+                        "responsible": active_items[0]["responsible"],
+                        "group": group_name,
+                        "message": f"Marcações enviadas em conjunto para {active_items[0]['responsible']}.",
+                    }
+                    for command_id in claimed_ids:
+                        finish_manual_command(page, command_id, "completed", result=result)
+                    sent_events += len(active_items)
+                    sent_recipients += 1
+                except Exception as error:
+                    for command_id in claimed_ids:
+                        finish_manual_command(page, command_id, "failed", error=str(error))
+                    raise
+
+            preview = "\n".join(previews).strip() or "Nenhuma marcação nova neste horário."
+            (RUNTIME_DIR / "last-assignment-notices.txt").write_text(preview, encoding="utf-8")
+            update_cluster_state(page, {
+                "lastAssignmentNoticeSlot": slot,
+                "lastAssignmentNoticeCheckAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+            })
+            if sent_recipients:
+                log(f"Marcações agrupadas: {sent_events} demanda(s) para {sent_recipients} grupo(s) no ciclo {slot}.")
+            else:
+                log(f"Marcações verificadas no ciclo {slot}: nenhuma marcação nova.")
+            return {
+                "sent": sent_recipients > 0,
+                "events": sent_events,
+                "recipients": sent_recipients,
+                "slot": slot,
+            }
+        finally:
+            context.close()
+
+
 def process_pending_manual_commands(
     page,
     payload: dict[str, Any],
     config: dict[str, Any],
 ) -> dict[str, Any]:
-    commands = load_pending_manual_commands(page)
+    commands = [
+        command for command in load_pending_manual_commands(page)
+        if not (
+            command.get("type") == "assignment_notice"
+            and command.get("deliveryMode") == "scheduled"
+        )
+    ][:3]
     completed = 0
     failed = 0
     paused = False
@@ -1230,6 +1410,34 @@ def configured_time_has_passed(config: dict[str, Any], key: str, default: str) -
     return datetime.now().astimezone() >= due_at
 
 
+def configured_times(config: dict[str, Any], key: str, defaults: tuple[str, ...]) -> list[str]:
+    values = config.get(key, list(defaults))
+    if not isinstance(values, list):
+        values = list(defaults)
+    valid: set[str] = set()
+    for value in values:
+        text_value = normalize_text(value)
+        try:
+            hour, minute = (int(part) for part in text_value.split(":", 1))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                continue
+        except (TypeError, ValueError):
+            continue
+        valid.add(f"{hour:02d}:{minute:02d}")
+    return sorted(valid) or list(defaults)
+
+
+def latest_due_slot(
+    config: dict[str, Any],
+    key: str,
+    defaults: tuple[str, ...],
+    reference: datetime | None = None,
+) -> str:
+    now = reference or datetime.now().astimezone()
+    due = [value for value in configured_times(config, key, defaults) if value <= now.strftime("%H:%M")]
+    return f"{now.date().isoformat()}|{due[-1]}" if due else ""
+
+
 def weekly_supervisor_due(config: dict[str, Any], cluster: dict[str, Any]) -> bool:
     monday, _, marker = week_context()
     if (cluster.get("lastWeeklyMarker") == marker or
@@ -1270,12 +1478,14 @@ def run_supervisor() -> dict[str, Any]:
     config = load_config()
     if weekly_supervisor_due(config, cluster):
         result["weeklyCatchup"] = run_send()
-    today_key = date.today().isoformat()
-    if (
-        cluster.get("lastReminderCheckDate") != today_key
-        and configured_time_has_passed(config, "reminder_time", "09:05")
-    ):
-        result["reminderCatchup"] = run_reminders()
+    assignment_slot = latest_due_slot(
+        config, "assignment_notice_times", ("12:00", "17:00")
+    )
+    if assignment_slot and cluster.get("lastAssignmentNoticeSlot") != assignment_slot:
+        result["assignmentNoticeCatchup"] = run_assignment_notices(assignment_slot)
+    reminder_slot = latest_due_slot(config, "reminder_times", ("09:00", "17:00"))
+    if reminder_slot and cluster.get("lastReminderSlot") != reminder_slot:
+        result["reminderCatchup"] = run_reminders(cycle_slot=reminder_slot)
     return result
 
 
@@ -1320,27 +1530,20 @@ def status_update_url(base_url: str, company_id: str, event_id: str) -> str:
     return f"{base_url}?{query}"
 
 
-def reminder_offsets(config: dict[str, Any]) -> list[int]:
-    configured = config.get("reminder_days_before", [3, 1, 0])
-    if not isinstance(configured, list):
-        configured = [3, 1, 0]
-    values = set()
-    for item in configured:
-        try:
-            value = int(item)
-        except (TypeError, ValueError):
-            continue
-        if 0 <= value <= 30:
-            values.add(value)
-    return sorted(values, reverse=True) or [3, 1, 0]
-
-
 def human_deadline(due_date: date, days_until: int) -> str:
     if days_until == 0:
         return f"para hoje, dia {due_date:%d/%m}"
     if days_until == 1:
         return f"para amanhã, dia {due_date:%d/%m}"
     return f"para o dia {due_date:%d/%m}"
+
+
+def reminder_deadline(due_date: date, days_until: int) -> str:
+    if days_until == 0:
+        return f"Vence hoje, dia {due_date:%d/%m/%Y}."
+    overdue_days = abs(days_until)
+    suffix = "dia" if overdue_days == 1 else "dias"
+    return f"Está atrasada desde {due_date:%d/%m/%Y} (há {overdue_days} {suffix})."
 
 
 def build_reminders(
@@ -1356,7 +1559,6 @@ def build_reminders(
     company_by_id = {str(company.get("id")): company for company in companies}
     selected_ids = {str(item) for item in (config.get("company_ids") or []) if item}
     deliveries = (state or {}).get("reminder_deliveries") or {}
-    offsets = reminder_offsets(config)
 
     if selected_ids:
         sources = [company for company in companies if str(company.get("id")) in selected_ids]
@@ -1376,10 +1578,8 @@ def build_reminders(
             except (KeyError, TypeError, ValueError):
                 continue
             days_until = (due_date - today).days
-            eligible_offsets = [offset for offset in offsets if days_until <= offset]
-            if days_until < 0 or not eligible_offsets:
+            if days_until > 0:
                 continue
-            chosen_offset = min(eligible_offsets)
             if is_terminal_status(event.get("status")):
                 continue
 
@@ -1399,7 +1599,7 @@ def build_reminders(
             if unique_event in seen_events:
                 continue
             seen_events.add(unique_event)
-            delivery_key = f"{unique_event}|D{chosen_offset}"
+            delivery_key = f"{unique_event}|R{today:%Y%m%d}-0900"
             if not force and delivery_key in deliveries:
                 continue
 
@@ -1439,14 +1639,14 @@ def build_reminders(
     lines = [
         "Olá, pessoal! Bom dia.",
         "",
-        "Estava conferindo as próximas demandas e queria saber como está o andamento delas:",
+        "Estava conferindo as demandas atrasadas e as de hoje e queria saber como está o andamento delas:",
         "",
     ]
     for index, item in enumerate(candidates):
         status_label = status_labels.get(item["status"], "Sem status")
         lines.extend([
             f"*{item['company_name']} | {item['title']}*",
-            f"Programada {human_deadline(item['due_date'], item['days_until'])}.",
+            reminder_deadline(item["due_date"], item["days_until"]),
             f"Responsável: {item['responsible']}",
             f"No calendário está como *{status_label}*.",
             f"Atualizar por aqui: {status_update_url(base_url, item['company_id'], item['event_id'])}",
@@ -1464,14 +1664,16 @@ def build_reminder_batches(
     reference: date | None = None,
     force: bool = False,
     update_url_factory: Callable[[str, str], str] | None = None,
+    cycle_slot: str = "",
 ) -> tuple[list[dict[str, Any]], list[str], str]:
     today = reference or date.today()
-    day_marker = f"[UPLI-LEM-{today:%Y%m%d}]"
+    cycle_time = normalize_text(cycle_slot).split("|")[-1] or "09:00"
+    cycle_token = re.sub(r"\D", "", cycle_time) or "0900"
+    day_marker = f"[UPLI-LEM-{today:%Y%m%d}-{cycle_token}]"
     companies = payload.get("companies") or []
     company_by_id = {str(company.get("id")): company for company in companies}
     selected_ids = {str(item) for item in (config.get("company_ids") or []) if item}
     deliveries = (state or {}).get("reminder_deliveries") or {}
-    offsets = reminder_offsets(config)
     members = [
         member for member in ((payload.get("team") or {}).get("members") or [])
         if isinstance(member, dict) and member.get("active", True)
@@ -1505,10 +1707,8 @@ def build_reminder_batches(
             except (KeyError, TypeError, ValueError):
                 continue
             days_until = (due_date - today).days
-            eligible_offsets = [offset for offset in offsets if days_until <= offset]
-            if days_until < 0 or not eligible_offsets:
+            if days_until > 0:
                 continue
-            chosen_offset = min(eligible_offsets)
             if is_terminal_status(event.get("status")):
                 continue
 
@@ -1528,7 +1728,7 @@ def build_reminder_batches(
             if unique_event in seen_events:
                 continue
             seen_events.add(unique_event)
-            delivery_key = f"{unique_event}|D{chosen_offset}"
+            delivery_key = f"{unique_event}|R{today:%Y%m%d}-{cycle_token}"
             if not force and delivery_key in deliveries:
                 continue
 
@@ -1590,8 +1790,9 @@ def build_reminder_batches(
         # marker, while a newly added event on the same day produces a new one.
         marker_source = "|".join([group_name.casefold(), *sorted(item["delivery_key"] for item in items)])
         marker_hash = hashlib.sha256(marker_source.encode("utf-8")).hexdigest()[:10].upper()
-        marker = f"[UPLI-LEM-{today:%Y%m%d}-{marker_hash}]"
+        marker = f"[UPLI-LEM-{today:%Y%m%d}-{cycle_token}-{marker_hash}]"
         responsible = items[0]["responsible"]
+        greeting = "Boa tarde" if int(cycle_time.split(":", 1)[0]) >= 12 else "Bom dia"
         if len(items) == 1:
             item = items[0]
             status_label = status_labels.get(item["status"], "Sem status")
@@ -1601,12 +1802,10 @@ def build_reminder_batches(
                 else status_update_url(base_url, item["company_id"], item["event_id"])
             )
             lines = [
-                f"Olá, {responsible}! Bom dia.",
+                f"Olá, {responsible}! {greeting}.",
                 "",
-                (
-                    f"Passando para lembrar da demanda *{item['company_name']} | {item['title']}*, "
-                    f"que está programada {human_deadline(item['due_date'], item['days_until'])}."
-                ),
+                f"Passando para lembrar da demanda *{item['company_name']} | {item['title']}*.",
+                reminder_deadline(item["due_date"], item["days_until"]),
                 "",
                 f"No calendário, o status atual é *{status_label}*. Como está o andamento por aí?",
                 "",
@@ -1617,10 +1816,10 @@ def build_reminder_batches(
             ]
         else:
             lines = [
-                f"Olá, {responsible}! Bom dia.",
+                f"Olá, {responsible}! {greeting}.",
                 "",
                 (
-                    "Estava conferindo suas próximas demandas e passei para saber "
+                    "Estava conferindo suas demandas atrasadas e as de hoje e passei para saber "
                     "como está o andamento delas:"
                 ),
                 "",
@@ -1633,7 +1832,7 @@ def build_reminder_batches(
                 )
                 lines.extend([
                     f"*{item['company_name']} | {item['title']}*",
-                    f"Programada {human_deadline(item['due_date'], item['days_until'])}.",
+                    reminder_deadline(item["due_date"], item["days_until"]),
                     f"No calendário está como *{status_labels.get(item['status'], 'Sem status')}*.",
                     f"Atualizar por aqui: {update_url}",
                 ])
@@ -1740,20 +1939,34 @@ def build_report(
 
 
 def whatsapp_is_ready(page, timeout_ms: int = 60_000) -> bool:
-    if not page.url.startswith('https://web.whatsapp.com/'):
-        page.goto("https://web.whatsapp.com/", wait_until="domcontentloaded", timeout=timeout_ms)
-    deadline = time.monotonic() + timeout_ms / 1000
-    while time.monotonic() < deadline:
-        pane = page.locator("#pane-side")
-        if pane.count() and pane.first.is_visible():
-            return True
-        qr = page.locator("canvas[aria-label*='QR'], canvas[aria-label*='qr']")
-        if first_visible(qr) is not None:
-            return False
-        login_prompt = page.get_by_text(re.compile("Use o WhatsApp no seu computador|Link with phone number|Conectar com número"))
-        if first_visible(login_prompt) is not None:
-            return False
-        page.wait_for_timeout(1000)
+    """Wait for WhatsApp and make one reload attempt if its background tab stalled."""
+    attempt_timeout_ms = max(1000, timeout_ms // 2)
+    for attempt in range(2):
+        if not page.url.startswith('https://web.whatsapp.com/'):
+            page.goto(
+                "https://web.whatsapp.com/",
+                wait_until="domcontentloaded",
+                timeout=attempt_timeout_ms,
+            )
+        deadline = time.monotonic() + attempt_timeout_ms / 1000
+        while time.monotonic() < deadline:
+            pane = page.locator("#pane-side")
+            if pane.count() and pane.first.is_visible():
+                return True
+            qr = page.locator("canvas[aria-label*='QR'], canvas[aria-label*='qr']")
+            if first_visible(qr) is not None:
+                return False
+            login_prompt = page.get_by_text(re.compile(
+                "Use o WhatsApp no seu computador|Link with phone number|Conectar com número"
+            ))
+            if first_visible(login_prompt) is not None:
+                return False
+            page.wait_for_timeout(1000)
+        if attempt == 0:
+            try:
+                page.reload(wait_until="domcontentloaded", timeout=attempt_timeout_ms)
+            except (PlaywrightError, PlaywrightTimeout):
+                pass
     return False
 
 
@@ -2020,48 +2233,219 @@ def close_whatsapp_page(page):
         page.close()
 
 
-def attach_open_chrome(playwright):
+def chrome_pid_for_debug_port(port: int) -> int:
+    if os.name != 'nt':
+        return 0
+    try:
+        completed = subprocess.run(
+            ['netstat.exe', '-ano', '-p', 'tcp'],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    pattern = re.compile(rf"^\s*TCP\s+127\.0\.0\.1:{port}\s+\S+\s+LISTENING\s+(\d+)\s*$", re.I)
+    for line in completed.stdout.splitlines():
+        match = pattern.match(line)
+        if match:
+            return int(match.group(1))
+    return 0
+
+
+def windows_process_tree(root_pid: int) -> set[int]:
+    if os.name != 'nt' or not isinstance(root_pid, int) or root_pid <= 0:
+        return set()
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessEntry32(ctypes.Structure):
+        _fields_ = [
+            ('dwSize', wintypes.DWORD),
+            ('cntUsage', wintypes.DWORD),
+            ('th32ProcessID', wintypes.DWORD),
+            ('th32DefaultHeapID', ctypes.c_size_t),
+            ('th32ModuleID', wintypes.DWORD),
+            ('cntThreads', wintypes.DWORD),
+            ('th32ParentProcessID', wintypes.DWORD),
+            ('pcPriClassBase', wintypes.LONG),
+            ('dwFlags', wintypes.DWORD),
+            ('szExeFile', wintypes.WCHAR * 260),
+        ]
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry32)]
+    kernel32.Process32FirstW.restype = wintypes.BOOL
+    kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry32)]
+    kernel32.Process32NextW.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+    invalid_handle = ctypes.c_void_p(-1).value
+    if snapshot == invalid_handle:
+        return {root_pid}
+    parents: dict[int, int] = {}
+    entry = ProcessEntry32()
+    entry.dwSize = ctypes.sizeof(ProcessEntry32)
+    try:
+        success = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+        while success:
+            parents[int(entry.th32ProcessID)] = int(entry.th32ParentProcessID)
+            success = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+    finally:
+        kernel32.CloseHandle(snapshot)
+    tree = {root_pid}
+    changed = True
+    while changed:
+        changed = False
+        for process_id, parent_id in parents.items():
+            if parent_id in tree and process_id not in tree:
+                tree.add(process_id)
+                changed = True
+    return tree
+
+
+def set_chrome_window_visibility(root_pid: int, visible: bool) -> int:
+    """Show or hide only windows that belong to this automation Chrome tree."""
+    process_ids = windows_process_tree(root_pid)
+    if not process_ids:
+        return 0
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    affected = 0
+    show_command = 9 if visible else 0  # SW_RESTORE / SW_HIDE
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+    user32.EnumWindows.restype = wintypes.BOOL
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.ShowWindow.restype = wintypes.BOOL
+    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetClassNameW.restype = ctypes.c_int
+    user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetWindow.restype = wintypes.HWND
+
+    @callback_type
+    def visit_window(window_handle, _extra):
+        nonlocal affected
+        process_id = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(window_handle, ctypes.byref(process_id))
+        class_name = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(window_handle, class_name, len(class_name))
+        is_main_chrome_window = (
+            class_name.value == 'Chrome_WidgetWin_1'
+            and not user32.GetWindow(window_handle, 4)  # GW_OWNER
+        )
+        if int(process_id.value) in process_ids and is_main_chrome_window:
+            if visible or user32.IsWindowVisible(window_handle):
+                user32.ShowWindow(window_handle, show_command)
+                affected += 1
+        return True
+
+    user32.EnumWindows(visit_window, 0)
+    return affected
+
+
+def attach_open_chrome(playwright, visible: bool = False):
     ensure_runtime()
     host = load_json(BROWSER_HOST_PATH, {})
+    if not isinstance(host, dict):
+        host = {}
+    now = datetime.now().astimezone()
+    visible_until = normalize_text(host.get('visibleUntil'))
+    if visible:
+        visible_until = (now + timedelta(minutes=15)).isoformat(timespec='seconds')
+    keep_visible = visible
+    if not keep_visible and visible_until:
+        try:
+            keep_visible = now < datetime.fromisoformat(visible_until)
+        except ValueError:
+            visible_until = ''
     profile = str(PROFILE_DIR.resolve())
-    if isinstance(host, dict) and host.get('profile') == profile:
+    if host.get('profile') == profile:
         port = host.get('port')
         if isinstance(port, int) and 1024 <= port <= 65535:
             try:
-                return playwright.chromium.connect_over_cdp(f'http://127.0.0.1:{port}', timeout=3000)
+                browser = playwright.chromium.connect_over_cdp(
+                    f'http://127.0.0.1:{port}', timeout=3000
+                )
+                process_id = host.get('pid')
+                if not isinstance(process_id, int) or process_id <= 0:
+                    process_id = chrome_pid_for_debug_port(port)
+                    if process_id:
+                        host['pid'] = process_id
+                host.update({
+                    'profile': profile,
+                    'port': port,
+                    'visibleUntil': visible_until if keep_visible else '',
+                })
+                save_json(BROWSER_HOST_PATH, host)
+                set_chrome_window_visibility(process_id, keep_visible)
+                return browser
             except PlaywrightError:
                 pass
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0))
         port = listener.getsockname()[1]
-    # Chrome is an independent, visible process. Disconnecting Playwright at
-    # the end of a scheduled cycle cannot terminate it.
+    # Chrome is an independent process. Disconnecting Playwright at the end of
+    # a scheduled cycle cannot terminate it, and its own window can stay hidden.
     chrome_arguments = [
         str(chrome_path()), f'--user-data-dir={profile}',
         f'--remote-debugging-port={port}', '--remote-debugging-address=127.0.0.1',
         '--no-first-run', '--no-default-browser-check',
         '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding', '--disable-features=CalculateNativeWinOcclusion',
+        '--start-minimized',
         'https://web.whatsapp.com/',
     ]
     launch_options = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL, close_fds=True)
+    if os.name == 'nt' and not keep_visible:
+        startup_info = subprocess.STARTUPINFO()
+        startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup_info.wShowWindow = 0  # SW_HIDE, avoids even a brief window flash.
+        launch_options['startupinfo'] = startup_info
     creation_flags = (
             subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_BREAKAWAY_FROM_JOB
-        ) if os.name == 'nt' else 0
+    ) if os.name == 'nt' else 0
     try:
-        subprocess.Popen(chrome_arguments, creationflags=creation_flags, **launch_options)
+        process = subprocess.Popen(chrome_arguments, creationflags=creation_flags, **launch_options)
     except PermissionError:
         if os.name != 'nt':
             raise
         # Some Windows hosts forbid leaving the parent job. An interactive
         # launcher can still open Chrome without that flag; show any failure.
-        subprocess.Popen(chrome_arguments, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                         **launch_options)
-    save_json(BROWSER_HOST_PATH, {'profile': profile, 'port': port})
+        process = subprocess.Popen(
+            chrome_arguments,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            **launch_options,
+        )
+    process_id = process.pid if isinstance(process.pid, int) else 0
+    save_json(BROWSER_HOST_PATH, {
+        'profile': profile,
+        'port': port,
+        'pid': process_id,
+        'visibleUntil': visible_until if keep_visible else '',
+    })
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
-            return playwright.chromium.connect_over_cdp(f'http://127.0.0.1:{port}', timeout=1000)
+            browser = playwright.chromium.connect_over_cdp(
+                f'http://127.0.0.1:{port}', timeout=1000
+            )
+            set_chrome_window_visibility(process_id, keep_visible)
+            return browser
         except PlaywrightError:
             time.sleep(0.25)
     raise SetupRequired(
@@ -2070,9 +2454,14 @@ def attach_open_chrome(playwright):
     )
 
 
-def browser_context(playwright, config: dict[str, Any], headless: bool | None = None):
+def browser_context(
+    playwright,
+    config: dict[str, Any],
+    headless: bool | None = None,
+    show_browser: bool = False,
+):
     if config.get('keep_whatsapp_open', True):
-        return AttachedBrowserContext(attach_open_chrome(playwright))
+        return AttachedBrowserContext(attach_open_chrome(playwright, visible=show_browser))
     use_headless = bool(config.get("headless", True)) if headless is None else headless
     return playwright.chromium.launch_persistent_context(
         user_data_dir=str(PROFILE_DIR),
@@ -2089,7 +2478,7 @@ def open_browser_for_setup() -> dict[str, Any]:
     config['keep_whatsapp_open'] = True
     save_json(CONFIG_PATH, config)
     with automation_lock(), sync_playwright() as playwright:
-        context = browser_context(playwright, config)
+        context = browser_context(playwright, config, show_browser=True)
         page = context.pages[0]
         page.goto(BRIDGE_PATH.as_uri() + '?mode=setup', wait_until='domcontentloaded')
         whatsapp_page_for_context(context)
@@ -2102,13 +2491,40 @@ def open_whatsapp_window() -> dict[str, Any]:
     config['keep_whatsapp_open'] = True
     save_json(CONFIG_PATH, config)
     with automation_lock(), sync_playwright() as playwright:
-        context = browser_context(playwright, config)
+        context = browser_context(playwright, config, show_browser=True)
         try:
             page = whatsapp_page_for_context(context)
             if not page.url.startswith('https://web.whatsapp.com/'):
                 page.goto('https://web.whatsapp.com/', wait_until='domcontentloaded', timeout=45_000)
             page.bring_to_front()
             return {'opened': True, 'keep_whatsapp_open': True}
+        finally:
+            context.close()
+
+
+def keep_whatsapp_in_background() -> dict[str, Any]:
+    """Keep a loaded WhatsApp tab alive while the Chrome window stays hidden."""
+    config = load_config()
+    config['keep_whatsapp_open'] = True
+    save_json(CONFIG_PATH, config)
+    host = load_json(BROWSER_HOST_PATH, {})
+    if isinstance(host, dict) and host:
+        host['visibleUntil'] = ''
+        save_json(BROWSER_HOST_PATH, host)
+    with automation_lock(), sync_playwright() as playwright:
+        context = browser_context(playwright, config)
+        try:
+            page = whatsapp_page_for_context(context)
+            if not whatsapp_is_ready(page, timeout_ms=90_000):
+                raise SetupRequired(
+                    "O WhatsApp Web precisa ser reconectado. Use o atalho "
+                    "'Abrir WhatsApp da Automação' para ler o QR Code."
+                )
+            return {
+                'running': True,
+                'background': True,
+                'keep_whatsapp_open': True,
+            }
         finally:
             context.close()
 
@@ -2222,9 +2638,16 @@ def run_send(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
             context.close()
 
 
-def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
+def run_reminders(
+    force: bool = False,
+    dry_run: bool = False,
+    cycle_slot: str = "",
+) -> dict[str, Any]:
     config = load_config()
     state = load_json(STATE_PATH, {})
+    slot = cycle_slot or latest_due_slot(config, "reminder_times", ("09:00", "17:00"))
+    if not slot:
+        slot = f"{date.today().isoformat()}|09:00"
     with automation_lock(), sync_playwright() as playwright:
         context = browser_context(playwright, config)
         try:
@@ -2245,8 +2668,8 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                 log("Lembretes ignorados: a automacao esta pausada.")
                 return {"sent": False, "paused": True, "events": 0, "recipients": 0}
             today_key = date.today().isoformat()
-            if not force and cluster.get("lastReminderCheckDate") == today_key:
-                log("Lembretes ignorados: a verificacao diaria ja foi concluida por outro PC.")
+            if not force and cluster.get("lastReminderSlot") == slot:
+                log(f"Lembretes ignorados: o ciclo {slot} já foi concluído por outro PC.")
                 return {"sent": False, "duplicate": True, "events": 0, "recipients": 0}
             state["reminder_deliveries"] = {
                 **dict(cluster.get("reminderDeliveries") or {}),
@@ -2266,6 +2689,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                 state=state,
                 force=force,
                 update_url_factory=update_url_factory,
+                cycle_slot=slot,
             )
             event_count = sum(batch["event_count"] for batch in batches)
             preview_sections = []
@@ -2284,6 +2708,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                 save_json(STATE_PATH, state)
                 update_cluster_state(page, {
                     "lastReminderCheckDate": today_key,
+                    "lastReminderSlot": slot,
                     "lastReminderCheckAt": datetime.now().astimezone().isoformat(timespec="seconds"),
                     "lastReminderMachineId": cluster.get("machineId", ""),
                     "lastReminderMachineName": cluster.get("machineName", ""),
@@ -2427,6 +2852,7 @@ def run_reminders(force: bool = False, dry_run: bool = False) -> dict[str, Any]:
                 )
             update_cluster_state(page, {
                 "lastReminderCheckDate": today_key,
+                "lastReminderSlot": slot,
                 "lastReminderCheckAt": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "lastReminderMachineId": cluster.get("machineId", ""),
                 "lastReminderMachineName": cluster.get("machineName", ""),
@@ -2521,7 +2947,7 @@ def build_test_message(
                 event_date = date(int(event["year"]), int(event["month"]) + 1, int(event["day"]))
             except (KeyError, TypeError, ValueError):
                 continue
-            if event_date < today or is_terminal_status(event.get("status")):
+            if event_date > today or is_terminal_status(event.get("status")):
                 continue
             event_id = canonical_event_id(event)
             if not event_id:
@@ -2536,7 +2962,7 @@ def build_test_message(
                 target_company_id = source_id
             candidates.append((event_date, normalize_text(event.get("text")), event, target_company_id, event_id))
         if not candidates:
-            raise SetupRequired("Não há post futuro e não publicado neste calendário para testar o lembrete.")
+            raise SetupRequired("Não há demanda atrasada ou do dia neste calendário para testar o lembrete.")
         event_date, title, event, target_company_id, event_id = min(
             candidates,
             key=lambda item: (item[0], item[1].casefold()),
@@ -2567,8 +2993,8 @@ def build_test_message(
             f"Olá, {responsible}! Bom dia.",
             "",
             (
-                f"Passando para lembrar da demanda *{company_name} | {title or 'Post sem título'}*, "
-                f"que está programada {human_deadline(event_date, days_until)}."
+                f"Passando para lembrar da demanda *{company_name} | {title or 'Post sem título'}*. "
+                f"{reminder_deadline(event_date, days_until)}"
             ),
             "",
             f"No calendário, o status atual é *{status_label}*. Como está o andamento por aí?",
@@ -2665,6 +3091,7 @@ def main() -> int:
     parser.add_argument("--sync-responses", action="store_true", help="Aplica as respostas dos formulários")
     parser.add_argument("--open-browser", action="store_true", help="Abre o Chrome da automacao e mantem o WhatsApp aberto")
     parser.add_argument("--open-whatsapp", action="store_true", help="Abre a janela do WhatsApp sem enviar mensagens")
+    parser.add_argument("--background-whatsapp", action="store_true", help="Mantem o WhatsApp carregado com a janela oculta")
     parser.add_argument("--test-mode", choices=("message", "weekly", "reminder"), help="Executa um envio de teste isolado")
     parser.add_argument("--test-company", default="", help="Calendário usado no relatório ou lembrete de teste")
     parser.add_argument("--test-phone", default="", help="Número opcional para receber o envio de teste")
@@ -2672,7 +3099,9 @@ def main() -> int:
     ensure_runtime()
     try:
         config = load_config()
-        if args.open_whatsapp:
+        if args.background_whatsapp:
+            print(json.dumps(keep_whatsapp_in_background(), ensure_ascii=True))
+        elif args.open_whatsapp:
             print(json.dumps(open_whatsapp_window(), ensure_ascii=True))
         elif args.open_browser:
             print(json.dumps(open_browser_for_setup(), ensure_ascii=True))

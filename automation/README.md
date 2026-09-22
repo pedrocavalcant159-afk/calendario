@@ -1,14 +1,15 @@
 # Automação local UPLI
 
-Esta pasta envia o relatório do calendário para um grupo do WhatsApp toda segunda-feira às 9h e verifica lembretes de prazo diariamente às 9h05, usando um perfil local e separado do Chrome. O relatório semanal vai para o grupo geral; os lembretes de prazo e as mensagens de marcação vão para o grupo específico cadastrado para cada responsável. Quando uma demanda recebe responsável, a automação envia também um aviso de atribuição com as anotações, os comentários e o link da demanda quando essas informações estiverem preenchidas no calendário.
+Esta pasta envia o relatório do calendário para um grupo do WhatsApp toda segunda-feira às 9h. Diariamente, envia às 9h e às 17h lembretes somente das demandas atrasadas e das demandas do dia. As novas marcações são consolidadas às 12h e às 17h. O relatório semanal vai para o grupo geral; lembretes e marcações vão para o grupo específico cadastrado para cada responsável.
 
 ## Equipe e responsáveis
 
 Administradores podem abrir **Equipe** no calendário para cadastrar, editar e remover funcionários ou membros da equipe. Cada cadastro contém nome, nome exato do grupo individual de WhatsApp e, opcionalmente, o telefone e o e-mail da conta que acessa o formulário.
 
 - Ao criar ou editar um post, o responsável é escolhido entre os membros cadastrados.
-- Os lembretes do dia são agrupados por responsável e enviados ao grupo específico cadastrado para essa pessoa.
-- Um responsável com várias demandas recebe uma única mensagem contendo todos os posts daquele dia.
+- Os lembretes de demandas atrasadas e do dia são agrupados por responsável e enviados às 9h e às 17h.
+- Um responsável com várias demandas recebe uma única mensagem contendo todos os posts daquele ciclo.
+- Novas marcações são agrupadas por responsável às 12h e às 17h. O lote das 17h não repete as marcações já enviadas às 12h.
 - Uma demanda sem responsável cadastrado ou sem grupo configurado não é enviada. Ela fica registrada como pendência no diagnóstico e em \`runtime/last-reminders.txt\`.
 - Alterar o nome ou o grupo no cadastro vale para os próximos lembretes, porque a automação consulta a equipe novamente antes de cada execução.
 - Ao remover um membro, os posts já atribuídos a ele permanecem no calendário, mas deixam de gerar lembretes até receberem outro responsável.
@@ -27,7 +28,7 @@ Quando o responsável escolher o status **Concluído** no formulário, a automa�
 
 ## Lembretes e atualização pelo celular
 
-Por padrão, um post ainda não publicado pode gerar avisos 3 dias antes, 1 dia antes e no próprio prazo. Cada aviso individual contém um link temporário exclusivo. O formulário já identifica o responsável, permite escolher o andamento e salva a alteração no calendário da empresa e no UPLI Geral.
+Um post ainda não publicado gera lembretes quando está atrasado ou quando vence no dia. A verificação ocorre às 9h e às 17h; cada ciclo tem controle próprio para não duplicar a mesma mensagem. Cada demanda contém um link temporário exclusivo. O formulário já identifica o responsável, permite escolher o andamento e salva a alteração no calendário da empresa e no UPLI Geral.
 
 - O link é criado pela automação autenticada e usa o calendário hospedado no GitHub Pages.
 - O endereço contém um token aleatório de 256 bits e expira três dias depois do prazo.
@@ -37,11 +38,11 @@ Por padrão, um post ainda não publicado pode gerar avisos 3 dias antes, 1 dia 
 - Trocar o responsável, remover o post ou marcá-lo como **Publicado** invalida o link.
 - Alterar a data do post gera novas chaves de lembrete para o novo prazo.
 - Posts com status **Publicado** não geram lembretes.
-- Cada combinação de post, prazo e antecedência é enviada uma única vez.
+- Cada combinação de post e ciclo (9h ou 17h) é enviada uma única vez.
 - Antes de abrir o WhatsApp, cada lote é reservado no estado compartilhado. Se o navegador travar ou a confirmação do WhatsApp ficar ambígua, o lote não é tentado novamente de forma automática; a falha fica no diagnóstico para revisão e eventual reenvio manual.
 - O histórico das últimas 20 alterações feitas pelo formulário fica armazenado no próprio post.
 
-Os dias podem ser alterados em `reminder_days_before` no arquivo `config.json`.
+Os horários podem ser alterados em `reminder_times` e `assignment_notice_times` no arquivo `config.json`.
 
 ## Testes manuais
 
@@ -50,7 +51,7 @@ O instalador cria o atalho **Testar Automacao UPLI** na Área de Trabalho deste 
 - diagnóstico completo sem enviar mensagem;
 - mensagem simples para confirmar o grupo;
 - relatório semanal marcado como teste;
-- lembrete do próximo post com um link real do formulário.
+- lembrete de uma demanda atrasada ou do dia com um link real do formulário.
 
 Além desse painel local, administradores podem abrir **Automação** no calendário, selecionar uma demanda e usar **Enviar lembrete agora** ou **Enviar mensagem de marcação**. Ambos os envios usam o grupo específico do responsável cadastrado em **Equipe**.
 
@@ -72,12 +73,12 @@ Enquanto estiver pausada, a tela mostra quantos computadores ativos estão na **
 2. Informe o nome exato do grupo.
 3. Na janela do Chrome aberta pelo assistente, conecte a conta do calendário.
 4. Abra o WhatsApp Web e leia o QR Code.
-5. Deixe o Chrome da automação aberto e volte ao assistente para validar. A janela pode ficar minimizada; os próximos ciclos reutilizam a aba do WhatsApp e não a fecham depois de enviar.
+5. Durante a configuração, deixe o Chrome aberto e volte ao assistente para validar. Depois da validação, a janela é ocultada automaticamente e a aba do WhatsApp continua carregada em segundo plano.
 
 O instalador cria estas tarefas no Agendador do Windows:
 
 - `Calendario UPLI - Relatorio Semanal`: segunda-feira às 9h.
-- `Calendario UPLI - Lembretes Diarios`: todos os dias às 9h05.
+- `Calendario UPLI - Lembretes Diarios`: todos os dias às 9h e às 17h.
 - `Calendario UPLI - Sincronizar Respostas`: verifica a fila a cada minuto.
 - `Calendario UPLI - Verificacao ao Entrar`: sempre que o usuário entrar no Windows.
 
@@ -89,23 +90,28 @@ O verificador confere internet, Chrome, sessões do calendário e WhatsApp e tod
 - `runtime/automation.log`: histórico técnico.
 - `runtime/last-report.txt`: último relatório gerado.
 - `runtime/last-reminders.txt`: última mensagem de lembretes gerada.
+- `runtime/last-assignment-notices.txt`: último lote de novas marcações gerado.
 - `runtime/last-test.txt`: última mensagem de teste gerada.
 - `runtime/last-error.png`: captura da tela quando um envio falha.
 - `runtime/last-whatsapp-delivery.json`: resultado da última tentativa de envio, usado pelo diagnóstico para distinguir sessão conectada de envio confirmado.
-- `runtime/browser-host.json`: porta local e perfil da janela do Chrome mantida aberta para a automação.
+- `runtime/browser-host.json`: porta, processo e perfil do Chrome persistente mantido em segundo plano.
 - `runtime/weekly-deliveries.json`: reservas locais de relatórios semanais, gravadas antes do envio e compartilhadas no heartbeat.
 - `test_free_form.py`: teste sintético do formulário, das regras e da fila; não altera demandas reais.
 
 Execute `setup.ps1` para trocar o grupo ou reconectar as contas. Para remover a automação deste computador, use `DESINSTALAR-AUTOMACAO-UPLI.bat` na raiz do pacote ou o atalho **Desinstalar Automacao UPLI** criado na Área de Trabalho. O desinstalador exige a confirmação `DESINSTALAR`, remove tarefas, atalhos, sessão e registros locais, mas preserva o calendário online, os posts, o Chrome e o Python. Para remover somente as tarefas e preservar os dados locais, execute `uninstall.ps1 -KeepLocalData`.
 
-Para atualizar uma instalação existente na pasta padrão, extraia o pacote atualizado e execute `ATUALIZAR-AUTOMACAO-UPLI.bat`. As configurações, sessões e o histórico local são preservados. O envio prefere o botão **Enviar**, e mensagens sem confirmação ficam como falha no diagnóstico, com captura da conversa no momento da falha. O diagnóstico sem envio verifica a conexão e a última tentativa registrada; ele não comprova uma nova entrega.
+Para atualizar uma instalação existente na pasta padrão, extraia o pacote atualizado e execute `ATUALIZAR-AUTOMACAO-UPLI.bat`. O atualizador interrompe e remove as tarefas, atalhos e arquivos da versão anterior antes de instalar a nova. Configurações, sessões e histórico local são guardados temporariamente e restaurados após a reinstalação. O envio prefere o botão **Enviar**, e mensagens sem confirmação ficam como falha no diagnóstico, com captura da conversa no momento da falha. O diagnóstico sem envio verifica a conexão e a última tentativa registrada; ele não comprova uma nova entrega.
 
-A partir da versão 8, o Chrome e a aba do WhatsApp ficam abertos entre execuções. Somente a aba temporária usada para consultar o calendário é fechada. O próximo ciclo tenta reabrir o Chrome caso a janela tenha sido fechada. Uma falha de envio interrompe o restante do lote; mensagens ainda não submetidas permanecem pendentes. Para usar o comportamento anterior, configure `keep_whatsapp_open` como `false` em `config.json`.
+A partir da versão 8, o Chrome e a aba do WhatsApp ficam ativos entre execuções. Somente a aba temporária usada para consultar o calendário é fechada. Uma falha de envio interrompe o restante do lote; mensagens ainda não submetidas permanecem pendentes. Para usar o comportamento anterior, configure `keep_whatsapp_open` como `false` em `config.json`.
 
 A versão 9 abre o WhatsApp diretamente ao concluir a instalação ou atualização e exibe qualquer falha de abertura no assistente. O atalho **Abrir WhatsApp da Automação** permite abrir essa janela sem enviar mensagens nem consultar os posts do calendário.
 
-A versão 10 reserva o relatório semanal antes de enviar, tanto no registro local quanto em uma transação compartilhada. O relatório da mesma semana não é submetido novamente após uma falha, confirmação incerta ou troca de PC líder. Uma tentativa semanal registrada pela versão anterior é preservada na atualização. Relatórios manuais também respeitam a reserva semanal; `--force` é uma exceção explícita de linha de comando. O identificador passa a aparecer no início da mensagem para permanecer visível quando o WhatsApp encurta textos longos. Atualize todos os PCs ativos antes de retomar a automação; o painel exige a versão 10.
+A versão 11 mantém a reserva segura do relatório semanal e adiciona ciclos independentes para lembretes e marcações agrupadas.
+
+A versão 12 mantém o WhatsApp carregado em um Chrome persistente com a janela oculta. O Chrome não reduz os temporizadores da aba em segundo plano, e a automação tenta uma recarga controlada quando o WhatsApp não termina de carregar. O atalho **Abrir WhatsApp da Automação** torna a janela visível temporariamente para manutenção ou leitura do QR Code.
+
+A versão 13 transforma toda atualização em uma reinstalação limpa. A versão anterior é removida, mas a sessão do WhatsApp, o login do calendário, as configurações e o histórico são preservados e restaurados automaticamente. O painel exige a versão 13.
 
 ## Limitação
 
-Esta integração controla o WhatsApp Web sem usar a API oficial. Mudanças na interface do WhatsApp podem exigir manutenção, e automação não oficial pode sofrer restrições da plataforma. Para reduzir o risco, o agente envia somente o relatório semanal e os lembretes previstos no calendário; ele não tenta ler conversas.
+Esta integração controla o WhatsApp Web sem usar a API oficial. Mudanças na interface do WhatsApp podem exigir manutenção, e automação não oficial pode sofrer restrições da plataforma. Para reduzir o risco, o agente envia somente o relatório semanal, os lembretes previstos e os lotes de marcações; ele não tenta ler conversas.

@@ -128,7 +128,7 @@ def render_status(status: dict[str, Any]) -> None:
         "chrome": "Google Chrome",
         "internet": "Internet",
         "weekly_task": "Agendamento de segunda às 9h",
-        "reminder_task": "Lembretes diários às 9h05",
+        "reminder_task": "Lembretes diários às 9h e 17h",
         "sync_task": "Sincronização das respostas",
         "login_task": "Verificação ao entrar no Windows",
         "test_shortcut": "Painel local de testes",

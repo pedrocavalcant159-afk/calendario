@@ -38,6 +38,64 @@ function Refresh-ProcessPath {
     $env:Path = "$machinePath;$userPath"
 }
 
+function Remove-PreviousScheduledTasks {
+    $taskNames = @(
+        'Calendario UPLI - Relatorio Semanal',
+        'Calendario UPLI - Lembretes Diarios',
+        'Calendario UPLI - Sincronizar Respostas',
+        'Calendario UPLI - Verificacao ao Entrar'
+    )
+    foreach ($taskName in $taskNames) {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($task) {
+            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+        }
+    }
+}
+
+function Remove-PreviousShortcuts {
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    $shortcutNames = @(
+        'Abrir WhatsApp da Automacao.lnk',
+        'Testar Automacao UPLI.lnk',
+        'Reconfigurar Automacao UPLI.lnk',
+        'Desinstalar Automacao UPLI.lnk'
+    )
+    foreach ($shortcutName in $shortcutNames) {
+        $shortcutPath = Join-Path $desktop $shortcutName
+        if (Test-Path -LiteralPath $shortcutPath) {
+            Remove-Item -LiteralPath $shortcutPath -Force
+        }
+    }
+}
+
+function Stop-AutomationChrome([string]$ProfilePath) {
+    if ([string]::IsNullOrWhiteSpace($ProfilePath)) { return }
+    try {
+        Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe'" -ErrorAction Stop |
+            Where-Object {
+                $_.CommandLine -and
+                $_.CommandLine.IndexOf($ProfilePath, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 500
+    } catch {
+        Write-Host 'Nao foi possivel confirmar o encerramento do Chrome antigo; continuando a atualizacao.' -ForegroundColor DarkYellow
+    }
+}
+
+function Merge-PreservedConfig([string]$NewConfigPath, [string]$OldConfigPath) {
+    if (-not (Test-Path -LiteralPath $OldConfigPath)) { return }
+    $newConfig = Get-Content -LiteralPath $NewConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $oldConfig = Get-Content -LiteralPath $OldConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($property in $oldConfig.PSObject.Properties) {
+        $newConfig | Add-Member -NotePropertyName $property.Name -NotePropertyValue $property.Value -Force
+    }
+    $newConfig | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $NewConfigPath -Encoding UTF8
+}
+
+$backupRoot = ''
 try {
     Clear-Host
     Write-Host 'INSTALADOR DA AUTOMACAO UPLI' -ForegroundColor Green
@@ -58,17 +116,75 @@ try {
     }
     $installRootFull = [IO.Path]::GetFullPath($InstallRoot)
     $targetAutomation = Join-Path $installRootFull 'automation'
+    $rootPath = [IO.Path]::GetPathRoot($installRootFull)
+    if ($installRootFull -eq $rootPath -or [IO.Path]::GetFileName($installRootFull) -eq '') {
+        throw 'O caminho da instalacao nao passou pela validacao de seguranca.'
+    }
+    $targetPrefix = $installRootFull.TrimEnd('\') + '\'
+    if (-not $targetAutomation.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A pasta da automacao ficou fora da instalacao informada.'
+    }
+    $sourcePrefix = $sourceAutomation.TrimEnd('\') + '\'
+    if ($sourceAutomation.Equals($installRootFull, [StringComparison]::OrdinalIgnoreCase) -or
+        $sourceAutomation.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Extraia o pacote novo em outra pasta antes de atualizar a instalacao existente.'
+    }
+
+    $isUpgrade = Test-Path -LiteralPath $targetAutomation
+    if ($isUpgrade) {
+        Write-Step 'Desinstalando os arquivos e agendamentos da versao anterior'
+        $backupRoot = Join-Path ([IO.Path]::GetTempPath()) ('UPLI-Upgrade-' + [Guid]::NewGuid().ToString('N'))
+        $backupRootFull = [IO.Path]::GetFullPath($backupRoot)
+        $tempRootFull = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+        if (-not $backupRootFull.StartsWith($tempRootFull, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'A pasta temporaria da atualizacao nao passou pela validacao de seguranca.'
+        }
+        New-Item -ItemType Directory -Path $backupRootFull -Force | Out-Null
+        $oldConfigPath = Join-Path $targetAutomation 'config.json'
+        $oldRuntimePath = Join-Path $targetAutomation 'runtime'
+        if (Test-Path -LiteralPath $oldConfigPath) {
+            Get-Content -LiteralPath $oldConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json | Out-Null
+        }
+        Remove-PreviousScheduledTasks
+        Remove-PreviousShortcuts
+        Stop-AutomationChrome (Join-Path $oldRuntimePath 'browser-profile')
+        if (Test-Path -LiteralPath $oldConfigPath) {
+            Copy-Item -LiteralPath $oldConfigPath -Destination (Join-Path $backupRootFull 'config.json') -Force
+        }
+        if (Test-Path -LiteralPath $oldRuntimePath) {
+            Copy-Item -LiteralPath $oldRuntimePath -Destination (Join-Path $backupRootFull 'runtime') -Recurse -Force
+        }
+        Set-Location $sourceAutomation
+        $resolvedInstallRoot = [IO.Path]::GetFullPath($installRootFull)
+        if (-not $resolvedInstallRoot.Equals($installRootFull, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'O destino mudou durante a validacao da atualizacao.'
+        }
+        Remove-Item -LiteralPath $installRootFull -Recurse -Force
+        Write-Host 'Versao anterior removida. Sessao e configuracoes foram preservadas temporariamente.' -ForegroundColor Green
+    }
+
     New-Item -ItemType Directory -Path $targetAutomation -Force | Out-Null
 
-    Write-Step 'Copiando os arquivos para uma pasta fixa do Windows'
+    Write-Step 'Instalando os arquivos da versao nova'
     $sourceFiles = Get-ChildItem -LiteralPath $sourceAutomation -File
     foreach ($sourceFile in $sourceFiles) {
-        if ($sourceFile.Name -eq 'config.json' -and (Test-Path -LiteralPath (Join-Path $targetAutomation 'config.json'))) {
-            continue
-        }
         Copy-Item -LiteralPath $sourceFile.FullName -Destination (Join-Path $targetAutomation $sourceFile.Name) -Force
     }
     New-Item -ItemType Directory -Path (Join-Path $targetAutomation 'runtime') -Force | Out-Null
+    if ($isUpgrade) {
+        $preservedConfig = Join-Path $backupRootFull 'config.json'
+        Merge-PreservedConfig (Join-Path $targetAutomation 'config.json') $preservedConfig
+        $preservedRuntime = Join-Path $backupRootFull 'runtime'
+        if (Test-Path -LiteralPath $preservedRuntime) {
+            Get-ChildItem -LiteralPath $preservedRuntime -Force | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $targetAutomation 'runtime') -Recurse -Force
+            }
+        }
+        $staleLock = Join-Path $targetAutomation 'runtime\automation.lock'
+        if (Test-Path -LiteralPath $staleLock) {
+            Remove-Item -LiteralPath $staleLock -Force
+        }
+    }
 
     if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
         throw 'O Windows Package Manager (winget) nao foi encontrado. Atualize o App Installer pela Microsoft Store.'
@@ -142,21 +258,32 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'A configuracao das contas ainda possui pendencias.' }
     }
 
-    Write-Step 'Abrindo e verificando a janela do WhatsApp da automacao'
-    & py -3.14 (Join-Path $targetAutomation 'automation.py') --open-whatsapp
-    if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel abrir o WhatsApp. Consulte o erro acima; a atualizacao nao foi validada.' }
+    Write-Step 'Carregando o WhatsApp da automacao em segundo plano'
+    & py -3.14 (Join-Path $targetAutomation 'automation.py') --background-whatsapp
+    if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel carregar o WhatsApp em segundo plano. Consulte o erro acima; a atualizacao nao foi validada.' }
 
     Enable-ScheduledTask -TaskName 'Calendario UPLI - Sincronizar Respostas' | Out-Null
     Start-ScheduledTask -TaskName 'Calendario UPLI - Sincronizar Respostas'
     Write-Step 'Instalacao concluida'
     Write-Host "Arquivos instalados em: $installRootFull" -ForegroundColor Green
-    Write-Host 'O Chrome da automacao foi aberto. Deixe a janela aberta; pode minimizar.' -ForegroundColor Green
+    Write-Host 'O WhatsApp da automacao esta carregado em segundo plano, sem janela aberta.' -ForegroundColor Green
     Write-Host 'Este PC assumira como lider somente quando nenhum outro PC ativo estiver liderando.'
+    if ($backupRoot) {
+        $backupRootFull = [IO.Path]::GetFullPath($backupRoot)
+        $tempRootFull = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+        if ($backupRootFull.StartsWith($tempRootFull, [StringComparison]::OrdinalIgnoreCase) -and
+            (Test-Path -LiteralPath $backupRootFull)) {
+            Remove-Item -LiteralPath $backupRootFull -Recurse -Force
+        }
+    }
     Read-Host 'Pressione ENTER para fechar'
     exit 0
 } catch {
     Write-Host ''
     Write-Host ('ERRO: ' + $_.Exception.Message) -ForegroundColor Red
+    if ($backupRoot -and (Test-Path -LiteralPath $backupRoot)) {
+        Write-Host ('Copia de seguranca preservada em: ' + $backupRoot) -ForegroundColor Yellow
+    }
     Read-Host 'Pressione ENTER para fechar'
     exit 1
 }

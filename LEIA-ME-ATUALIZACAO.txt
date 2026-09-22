@@ -1,33 +1,41 @@
-ATUALIZACAO DA AUTOMACAO UPLI - WHATSAPP ABERTO
+ATUALIZACAO DA AUTOMACAO UPLI - WHATSAPP EM SEGUNDO PLANO
 
-VERSAO 10 - PROTECAO CONTRA RELATORIO REPETIDO
+VERSAO 13 - ATUALIZACAO COM REINSTALACAO LIMPA
 
 Pause a automacao no calendario antes de atualizar todos os PCs ativos.
-Depois de atualizar, retome pelo calendario. O painel exige a versao 10.
-O relatorio da semana e reservado antes do envio, com trava local e compartilhada.
-Uma falha ou confirmacao incerta nao libera outro envio automatico do mesmo relatorio.
-Tentativas registradas pela versao anterior tambem sao preservadas nesta atualizacao.
-O identificador fica no inicio da mensagem para nao ficar oculto por Ler mais.
+Depois de atualizar, retome pelo calendario. O painel exige a versao 13.
+Ao executar o atualizador, a versao anterior e desinstalada antes da instalacao nova.
+Tarefas, atalhos e arquivos antigos sao removidos para nao deixar componentes desatualizados.
+A configuracao, a sessao do WhatsApp, o login do calendario e o historico sao preservados.
+O WhatsApp fica realmente carregado em um Chrome persistente, mas sem janela visivel.
+Antes de cada envio, a automacao valida a aba e tenta recarrega-la se ela travar.
+O Chrome recebe configuracoes que evitam suspensao e economia de recursos em segundo plano.
+Para ler um novo QR Code, use o atalho Abrir WhatsApp da Automacao; depois ele volta a ficar oculto.
+As novas marcacoes sao reunidas por responsavel e enviadas as 12h e 17h.
+O lote das 17h nao repete as marcacoes que ja foram enviadas as 12h.
+Os lembretes sao enviados as 9h e 17h apenas para demandas atrasadas e do dia.
+O planejamento semanal continua sendo enviado da mesma forma, segunda-feira as 9h.
 
 NO PC ONDE A AUTOMACAO JA ESTA INSTALADA:
 
 1. Extraia todo o ZIP para uma pasta.
 2. Clique duas vezes em ATUALIZAR-AUTOMACAO-UPLI.bat.
 3. Aguarde a mensagem de instalacao concluida.
-4. No calendario, selecione uma demanda e envie uma mensagem de marcacao.
-5. Confira se a mensagem apareceu no grupo correto.
+4. No calendario, confira no painel Automacao se aparecem os novos horarios.
+5. Se quiser validar o grupo, use o botao manual de mensagem de marcacao.
 
-O Chrome da automacao permanece aberto entre os ciclos, inclusive quando uma
-mensagem demora para confirmar o envio. Pode minimizar a janela.
-O atualizador agora abre a janela diretamente antes de informar concluido.
-Se a abertura falhar, a mensagem de erro fica visivel no atualizador.
+O Chrome da automacao permanece executando de forma oculta entre os ciclos,
+inclusive quando uma mensagem demora para confirmar o envio.
+O atualizador carrega e valida o WhatsApp em segundo plano antes de informar concluido.
+Se o carregamento falhar, a mensagem de erro fica visivel no atualizador.
 Tambem e criado o atalho Abrir WhatsApp da Automacao na Area de Trabalho.
-Se fechar essa janela, a automacao tenta abrir novamente no proximo ciclo.
+Esse atalho mostra a janela temporariamente apenas quando for preciso fazer manutencao.
 Somente na primeira atualizacao: se aparecer o aviso sobre uma janela antiga,
 feche o Chrome do perfil da automacao uma vez e aguarde o proximo ciclo.
 
-O atualizador usa a pasta padrao da instalacao e preserva o config.json,
-a sessao do calendario, a sessao do WhatsApp e o historico local de envios.
+O atualizador usa a pasta padrao da instalacao, guarda temporariamente o config.json,
+a sessao do calendario, a sessao do WhatsApp e o historico local de envios,
+remove a instalacao anterior e restaura esses dados na versao nova.
 Se a instalacao original usou uma pasta personalizada, atualize pelo PowerShell
 informando o mesmo caminho:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\automation\install-new-pc.ps1 -SkipSetup -InstallRoot "CAMINHO DA INSTALACAO ORIGINAL"

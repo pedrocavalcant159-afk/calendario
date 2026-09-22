@@ -586,7 +586,7 @@
         
         // 🔥 A GRANDE SACADA: Mudamos o ID do banco de dados para despistar o bug.
         const UPLI_GERAL_ID = "upli_geral_v2";
-        const REQUIRED_AUTOMATION_AGENT_VERSION = 10;
+        const REQUIRED_AUTOMATION_AGENT_VERSION = 13;
 
         const STANDARD_CATEGORIES = [
             { id: 'cat_reels', label: 'Reels', color: '#E1306C' },
@@ -1638,11 +1638,11 @@
               let unsubscribe = () => {};
               const responsibleName = event?.responsible || 'o responsável';
               unsubscribe = commandRef.onSnapshot(snapshot => {
-                  const data = snapshot.data() || {};
-                  if (data.status === 'pending') {
-                      setAssignmentNoticeFeedback({ tone: 'pending', text: `Aviso para ${responsibleName} na fila. Aguardando o PC da automação.` });
-                  } else if (data.status === 'processing') {
-                      setAssignmentNoticeFeedback({ tone: 'pending', text: `Enviando o aviso de WhatsApp para ${responsibleName}...` });
+                   const data = snapshot.data() || {};
+                   if (data.status === 'pending') {
+                       setAssignmentNoticeFeedback({ tone: 'pending', text: `Marcação de ${responsibleName} incluída no próximo lote das 12h ou 17h.` });
+                   } else if (data.status === 'processing') {
+                       setAssignmentNoticeFeedback({ tone: 'pending', text: `Preparando o lote de marcações para ${responsibleName}...` });
                   } else if (data.status === 'completed') {
                       setAssignmentNoticeFeedback({ tone: 'success', text: data.result?.message || `Aviso de WhatsApp enviado para ${responsibleName}.` });
                       setTimeout(unsubscribe, 0);
@@ -1726,9 +1726,10 @@
                       ? String(event.id).replace(event.sourceCompanyId ? /_clone$/ : /$^/, '')
                       : '';
                   await commandRef.set({
-                      schemaVersion: 1,
-                      type,
-                      status: 'pending',
+                       schemaVersion: 1,
+                       type,
+                       deliveryMode: 'immediate',
+                       status: 'pending',
                       companyId: isEventCommand ? sourceCompanyId : '',
                       eventId: isEventCommand ? canonicalEventId : '',
                       companyName: companies.find(company => company.id === sourceCompanyId)?.name || '',
@@ -1760,12 +1761,13 @@
                   return;
               }
               const commandRef = db.collection('automationCommands').doc();
-              setAssignmentNoticeFeedback({ tone: 'pending', text: `Registrando o aviso para ${event.responsible || 'o responsável'}...` });
+              setAssignmentNoticeFeedback({ tone: 'pending', text: `Incluindo a marcação de ${event.responsible || 'o responsável'} no próximo lote...` });
               try {
                   await commandRef.set({
-                      schemaVersion: 1,
-                      type: 'assignment_notice',
-                      status: 'pending',
+                       schemaVersion: 1,
+                       type: 'assignment_notice',
+                       deliveryMode: 'scheduled',
+                       status: 'pending',
                       companyId,
                       eventId: String(event.id).replace(/_clone$/, ''),
                       companyName: companies.find(company => company.id === companyId)?.name || '',
@@ -4216,7 +4218,8 @@
                               <p className="py-3 flex justify-between gap-3"><span>PCs ativos</span><strong>{activeAutomationMachines.length}</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Versão segura</span><strong className={automationFleetReady ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>{activeAutomationMachines.length - outdatedAutomationMachines.length} de {activeAutomationMachines.length} PC(s)</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Relat&oacute;rio semanal</span><strong>Segunda-feira, 9h</strong></p>
-                              <p className="py-3 flex justify-between gap-3"><span>Lembretes</span><strong>Diariamente, 9h05</strong></p>
+                              <p className="py-3 flex justify-between gap-3"><span>Lembretes (atrasadas e do dia)</span><strong>Diariamente, 9h e 17h</strong></p>
+                              <p className="py-3 flex justify-between gap-3"><span>Novas marcações agrupadas</span><strong>Diariamente, 12h e 17h</strong></p>
                               <p className="py-3 flex justify-between gap-3"><span>Formul&aacute;rios sem login</span><strong>{automationSettings.formBaseUrl ? 'Ativos' : <>N&atilde;o configurados</>}</strong></p>
                           </div>
                           {automationPaused && !automationFleetReady && (

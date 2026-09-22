@@ -29,10 +29,42 @@ class OpenBrowserTests(unittest.TestCase):
             result = agent.open_whatsapp_window()
         self.assertTrue(result['opened'])
         self.assertTrue(connect.call_args.args[1]['keep_whatsapp_open'])
+        self.assertTrue(connect.call_args.kwargs['show_browser'])
         page.bring_to_front.assert_called_once()
         context.close.assert_called_once()
         calendar.assert_not_called()
         send.assert_not_called()
+
+    def test_background_mode_keeps_whatsapp_loaded_without_showing_the_window(self):
+        context = MagicMock()
+        page = MagicMock()
+        with patch.object(agent, 'load_config', return_value={'keep_whatsapp_open': True}), \
+             patch.object(agent, 'load_json', return_value={}), \
+             patch.object(agent, 'save_json'), \
+             patch.object(agent, 'automation_lock', return_value=nullcontext()), \
+             patch.object(agent, 'sync_playwright'), \
+             patch.object(agent, 'browser_context', return_value=context) as connect, \
+             patch.object(agent, 'whatsapp_page_for_context', return_value=page), \
+             patch.object(agent, 'whatsapp_is_ready', return_value=True) as ready:
+            result = agent.keep_whatsapp_in_background()
+        self.assertTrue(result['running'])
+        self.assertTrue(result['background'])
+        self.assertNotIn('show_browser', connect.call_args.kwargs)
+        ready.assert_called_once_with(page, timeout_ms=90_000)
+        page.bring_to_front.assert_not_called()
+        context.close.assert_called_once()
+
+    def test_existing_automation_chrome_is_hidden_during_normal_cycles(self):
+        playwright = MagicMock()
+        browser = MagicMock()
+        playwright.chromium.connect_over_cdp.return_value = browser
+        host = {'profile': str(agent.PROFILE_DIR.resolve()), 'port': 9222, 'pid': 321}
+        with patch.object(agent, 'load_json', return_value=host), \
+             patch.object(agent, 'save_json'), \
+             patch.object(agent, 'set_chrome_window_visibility') as visibility:
+            result = agent.attach_open_chrome(playwright)
+        self.assertIs(result, browser)
+        visibility.assert_called_once_with(321, False)
 
     @unittest.skipUnless(agent.os.name == 'nt', 'Windows process flags')
     def test_chrome_launch_retries_without_breakaway_when_windows_denies_it(self):

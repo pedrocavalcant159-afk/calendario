@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Atualizar Automacao UPLI
+title Reinstalar e Atualizar Automacao UPLI
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0automation\install-new-pc.ps1" -SkipSetup
 set "RESULT=%ERRORLEVEL%"
 if not "%RESULT%"=="0" (

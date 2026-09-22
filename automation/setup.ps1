@@ -20,7 +20,9 @@ $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom
 Clear-Host
 Write-Host 'CONFIGURACAO DA AUTOMACAO UPLI' -ForegroundColor Cyan
 Write-Host ''
-Write-Host 'O relatorio sera enviado segunda-feira as 9h e os lembretes diariamente as 9h05.'
+Write-Host 'O relatorio sera enviado segunda-feira as 9h.'
+Write-Host 'Os lembretes de atrasadas e do dia serao enviados diariamente as 9h e 17h.'
+Write-Host 'As novas marcacoes serao agrupadas e enviadas diariamente as 12h e 17h.'
 Write-Host 'Digite exatamente o nome que aparece no WhatsApp.'
 Write-Host ''
 $currentGroup = [string]$config.group_name
@@ -52,6 +54,10 @@ Read-Host 'Depois de conectar as contas, pressione ENTER para verificar (deixe o
 
 & py -3.14 $verifyScript --skip-catchup | Out-Null
 $exitCode = $LASTEXITCODE
+if ($exitCode -eq 0) {
+    & py -3.14 $automationScript --background-whatsapp | Out-Null
+    if ($LASTEXITCODE -ne 0) { $exitCode = $LASTEXITCODE }
+}
 $statusPage = Join-Path $runtimeDir 'status.html'
 if (Test-Path -LiteralPath $statusPage) {
     Start-Process -FilePath $statusPage
