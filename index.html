@@ -295,6 +295,32 @@
         .desk-status-text strong { font-size: 12px; }
         .desk-status-text input { width: 72px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 
+        .desk-undo {
+            position: fixed; left: 50%; bottom: 24px; z-index: 300; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 14px; min-width: 300px; max-width: calc(100vw - 32px);
+            padding: 12px 10px 12px 16px; overflow: hidden;
+            border: 1px solid #0b1219; border-radius: 2px; background: #17212b; color: #eef3f7;
+            box-shadow: 8px 8px 0 rgba(23,33,43,.18);
+            animation: desk-undo-in .22s ease-out;
+        }
+        .dark .desk-undo { border-color: #566574; background: #eef3f7; color: #17212b; }
+        @keyframes desk-undo-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+        .desk-undo-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #f3b61f; }
+        .desk-undo-dot.is-done { background: #4fbf91; }
+        .desk-undo-label { flex: 1; font-size: 14px; font-weight: 700; }
+        .desk-undo-action {
+            min-height: 34px; padding: 0 14px; border: 1px solid #9fc0f2; border-radius: 2px;
+            background: transparent; color: #9fc0f2; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+        }
+        .desk-undo-action:hover { background: #9fc0f2; color: #17212b; }
+        .dark .desk-undo-action { border-color: var(--work); color: var(--work); }
+        .dark .desk-undo-action:hover { background: var(--work); color: #fff; }
+        .desk-undo-close { width: 30px; height: 30px; border: 0; background: transparent; color: inherit; font-size: 18px; opacity: .6; cursor: pointer; }
+        .desk-undo-close:hover { opacity: 1; }
+        .desk-undo-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: #f3b61f; transform-origin: left; animation: desk-undo-timer 12s linear forwards; }
+        @keyframes desk-undo-timer { to { transform: scaleX(0); } }
+        @media (prefers-reduced-motion: reduce) { .desk-undo, .desk-undo-timer { animation: none; } }
+
         .desk-link-notice {
             padding: 7px 11px; border: 1px solid #d9a441; border-left-width: 4px; border-radius: 2px;
             background: #fff8e7; color: #7a4a07; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer;
@@ -785,7 +811,7 @@
             firebase.initializeApp(firebaseConfig, 'ReminderPublic');
         const reminderPublicDb = reminderFirebaseApp.firestore();
 
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
         
         const Download = () => <span className="tool-icon" aria-hidden="true">↓</span>;
         const Upload = () => <span className="tool-icon" aria-hidden="true">↑</span>;
@@ -1578,6 +1604,23 @@
           const [selectedEvents, setSelectedEvents] = useState([]); 
           
           const [showImportModal, setShowImportModal] = useState(false);
+          const [undoState, setUndoState] = useState(null);
+          const [undoBusy, setUndoBusy] = useState(false);
+          const undoTimerRef = useRef(null);
+          const performUndoRef = useRef(null);
+          useEffect(() => {
+              const onUndoKey = keyEvent => {
+                  if (!(keyEvent.ctrlKey || keyEvent.metaKey) || keyEvent.shiftKey || String(keyEvent.key).toLowerCase() !== 'z') return;
+                  const target = keyEvent.target;
+                  if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+                  if (performUndoRef.current && performUndoRef.current(true)) keyEvent.preventDefault();
+              };
+              document.addEventListener('keydown', onUndoKey);
+              return () => {
+                  document.removeEventListener('keydown', onUndoKey);
+                  if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+              };
+          }, []);
           const [linkDrafts, setLinkDrafts] = useState(null);
           const [linkingCentral, setLinkingCentral] = useState(false);
           const [importTargetCompany, setImportTargetCompany] = useState('');
@@ -2051,9 +2094,11 @@
 
           const toggleEventStatus = (originalIndex, newStatus) => {
               if (!isAdmin) return;
+              const undoSnapshot = captureUndoSnapshot([events[originalIndex]?.id]);
               const updatedEvents = [...events];
               const evt = updatedEvents[originalIndex];
-              
+
+              offerUndo('Status alterado', undoSnapshot);
               if (evt.status === newStatus) evt.status = null;
               else evt.status = newStatus;
               
@@ -2185,6 +2230,78 @@
               if (currentEvents.some(item => canonicalEventId(item.id) === companyEvent.id)) return null;
               return [...currentEvents, companyEvent];
           });
+          // ===== Desfazer =====
+          // Antes de cada ação, guarda uma cópia dos posts afetados (em todos os calendários onde aparecem).
+          // Desfazer devolve só esses posts ao estado anterior, sem mexer no resto do calendário.
+          const UNDO_WINDOW_MS = 12000;
+          const captureUndoSnapshot = (rawIds, options = {}) => {
+              const ids = [...new Set((rawIds || []).filter(Boolean).map(canonicalEventId))];
+              const idSet = new Set(ids);
+              const docs = {};
+              companies.forEach(company => {
+                  const list = Array.isArray(company.events) ? company.events : [];
+                  docs[company.id] = list
+                      .map((item, index) => ({ index, item }))
+                      .filter(({ item }) => item && item.id && idSet.has(canonicalEventId(item.id)))
+                      .map(({ index, item }) => ({ index, event: JSON.parse(JSON.stringify(item)) }));
+              });
+              const categories = options.categoriesOf
+                  ? { docId: options.categoriesOf, list: JSON.parse(JSON.stringify(companies.find(c => c.id === options.categoriesOf)?.categories || [])) }
+                  : null;
+              return { ids, docs, categories };
+          };
+          const offerUndo = (label, snapshot) => {
+              if (!snapshot || (snapshot.ids.length === 0 && !snapshot.categories)) return;
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+              setUndoState({ label, snapshot, done: false, at: Date.now() });
+              undoTimerRef.current = setTimeout(() => setUndoState(null), UNDO_WINDOW_MS);
+          };
+          // fromShortcut: devolve true se havia algo para desfazer (para o Ctrl+Z não fazer nada à toa).
+          performUndoRef.current = (fromShortcut) => {
+              if (!undoState || undoState.done || undoBusy) return false;
+              performUndo();
+              return true;
+          };
+          const performUndo = async () => {
+              if (!undoState || undoState.done || undoBusy) return;
+              const { snapshot } = undoState;
+              const idSet = new Set(snapshot.ids);
+              const hasId = item => item && item.id && idSet.has(canonicalEventId(item.id));
+              const docIds = Object.keys(snapshot.docs).filter(docId => {
+                  if (snapshot.docs[docId].length > 0) return true;
+                  if (snapshot.categories && snapshot.categories.docId === docId) return true;
+                  const company = companies.find(c => c.id === docId);
+                  return (company?.events || []).some(hasId);
+              });
+              setUndoBusy(true);
+              try {
+                  for (const docId of docIds) {
+                      const ref = db.collection('companies').doc(docId);
+                      await db.runTransaction(async transaction => {
+                          const snap = await transaction.get(ref);
+                          if (!snap.exists) return;
+                          const data = snap.data() || {};
+                          const current = Array.isArray(data.events) ? data.events : [];
+                          const next = current.filter(item => !hasId(item));
+                          [...snapshot.docs[docId]]
+                              .sort((a, b) => a.index - b.index)
+                              .forEach(({ index, event }) => next.splice(Math.min(index, next.length), 0, event));
+                          const update = { events: next };
+                          if (snapshot.categories && snapshot.categories.docId === docId) update.categories = snapshot.categories.list;
+                          transaction.update(ref, update);
+                      });
+                  }
+                  if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+                  setEditingEventIndex(null);
+                  setUndoState({ label: 'Alteração desfeita', snapshot, done: true, at: Date.now() });
+                  undoTimerRef.current = setTimeout(() => setUndoState(null), 3500);
+              } catch (error) {
+                  alert('Não foi possível desfazer: ' + (error.message || error));
+              } finally {
+                  setUndoBusy(false);
+              }
+          };
+
           // Aplica uma mudança feita no UPLI Geral nas cópias das empresas. `change` devolve o evento atualizado ou null para apagar.
           const propagateCentralToCompanies = (centralEvents, change) => {
               if (selectedCompany !== UPLI_GERAL_ID) return Promise.resolve();
@@ -2245,6 +2362,7 @@
               const ready = (linkDrafts || []).filter(draft => draft.include && draft.companyId && draft.categoryId);
               if (ready.length === 0) return alert('Escolha a empresa e a categoria de pelo menos um post.');
               setLinkingCentral(true);
+              const linkUndoSnapshot = captureUndoSnapshot(ready.map(draft => events[draft.index]?.id));
               try {
                   const updatesByKey = {};
                   const additionsByCompany = {};
@@ -2300,6 +2418,7 @@
 
                   const skipped = (linkDrafts || []).length - Object.keys(updatesByKey).length;
                   setLinkDrafts(null);
+                  offerUndo(`${Object.keys(updatesByKey).length} post(s) enviados às empresas`, linkUndoSnapshot);
                   const failedNames = failedCompanies.map(id => companies.find(company => company.id === id)?.name || id);
                   alert(`${Object.keys(updatesByKey).length} post(s) enviados para as empresas.`
                       + (skipped > 0 ? ` ${skipped} continuam no UPLI Geral sem empresa.` : '')
@@ -2344,6 +2463,7 @@
                 await addCompanyCopy(companyId, companyEvent);
                 await queueAssignmentNotice(companyEvent, companyId);
                 setNewEvent({ day: '', text: '', color: '', categoryId: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+                offerUndo('Post criado', captureUndoSnapshot([eventId]));
                 return;
             }
 
@@ -2364,11 +2484,13 @@
                 }
             }
             setNewEvent({ day: '', text: '', color: selectedCompany === UPLI_GERAL_ID ? '' : (colorOptions.length > 0 ? colorOptions[0].id : ''), categoryId: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+            offerUndo('Post criado', captureUndoSnapshot([eventId]));
           };
 
           const removeEvent = (index) => {
               if (confirm("Tem certeza que quer apagar esse post?")) {
                   const evToRemove = events[index];
+                  offerUndo('Post apagado', captureUndoSnapshot([evToRemove?.id]));
                   const updatedEvents = events.filter((_, i) => i !== index);
                   saveToCloud({ events: updatedEvents });
                   setEditingEventIndex(null);
@@ -2466,6 +2588,7 @@
             }
 
             const previousEvt = events[editingEventIndex];
+            const editUndoSnapshot = captureUndoSnapshot([previousEvt?.id]);
             const updatedEvt = {
                 ...previousEvt,
                 ...centralFields,
@@ -2510,6 +2633,7 @@
                 if (companyEvent) await queueAssignmentNotice(companyEvent, updatedEvt.sourceCompanyId);
                 else await queueAssignmentNotice(updatedEvt);
             }
+            offerUndo('Post editado', editUndoSnapshot);
 
             if (selectedCompany !== UPLI_GERAL_ID) {
                 const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
@@ -2568,7 +2692,8 @@
               if(!isAdmin) return; 
               const originalIndex = e.dataTransfer.getData("eventIndex");
               if(originalIndex === null || originalIndex === '') return;
-              
+
+              offerUndo('Post movido', captureUndoSnapshot([events[originalIndex]?.id]));
               const updatedEvents = [...events];
               updatedEvents[originalIndex].day = targetDay;
               updatedEvents[originalIndex].updatedBy = currentUserName;
@@ -2599,6 +2724,11 @@
           const removeCategory = (id) => {
             const updatedCats = colorOptions.filter(c => c.id !== id);
             const updatedEvts = events.filter(e => e.color !== id);
+            const removedCount = events.length - updatedEvts.length;
+            offerUndo(
+                removedCount > 0 ? `Categoria apagada com ${removedCount} post(s)` : 'Categoria apagada',
+                captureUndoSnapshot(events.filter(e => e.color === id).map(e => e.id), { categoriesOf: selectedCompany })
+            );
             saveToCloud({ categories: updatedCats, events: updatedEvts });
           };
           const startEditCategory = (category) => {
@@ -2699,6 +2829,7 @@
               eventAction.preventDefault();
               const originalIndex = eventAction.dataTransfer.getData('eventIndex');
               if (originalIndex === null || originalIndex === '') return;
+              offerUndo('Post movido', captureUndoSnapshot([events[originalIndex]?.id]));
               const updatedEvents = [...events];
               const previousEvent = updatedEvents[originalIndex];
               let timeUpdate = {};
@@ -3339,6 +3470,7 @@
                   
                   const eventsToRemove = currentViewEvents.filter(e => selectedEvents.includes(e._key));
                   const keysToRemove = eventsToRemove.map(e => e._key);
+                  offerUndo(`${eventsToRemove.length} post(s) apagados`, captureUndoSnapshot(eventsToRemove.map(e => e.id)));
                   
                   const updatedEvents = safeEvents.filter((e, idx) => {
                       const key = e.id || `legacy_${idx}`;
@@ -3381,6 +3513,7 @@
                 }
 
                 let compData = allCompanies[importTargetCompany];
+                const importedIds = [];
                 if (!compData) throw new Error("Empresa de destino não encontrada.");
 
                 let updatesNeeded = {};
@@ -3486,6 +3619,7 @@
                     };
 
                     compData.events.push(newEvent);
+                    importedIds.push(eventId);
                     importedCount++;
 
                     const isEvento = category.id === 'cat_evento' || finalCatName.toLowerCase().includes('evento');
@@ -3521,6 +3655,7 @@
                 });
 
                 await batch.commit();
+                offerUndo(`${importedCount} post(s) importados`, captureUndoSnapshot(importedIds));
                 alert(`✅ ${importedCount} posts importados com sucesso!`);
                 setShowImportModal(false);
                 setImportFile(null);
@@ -4548,6 +4683,20 @@
                               </button>
                           </div>
                       </div>
+                  </div>
+              )}
+
+              {undoState && (
+                  <div className="desk-scope desk-undo" role="status" aria-live="polite">
+                      <span className={`desk-undo-dot ${undoState.done ? 'is-done' : ''}`} aria-hidden="true"></span>
+                      <span className="desk-undo-label">{undoState.label}</span>
+                      {!undoState.done && (
+                          <button type="button" onClick={performUndo} disabled={undoBusy} className="desk-undo-action" title="Desfazer (Ctrl+Z)">
+                              {undoBusy ? 'Desfazendo...' : 'Desfazer'}
+                          </button>
+                      )}
+                      <button type="button" onClick={() => setUndoState(null)} className="desk-undo-close" aria-label="Fechar aviso">×</button>
+                      {!undoState.done && <span key={undoState.at} className="desk-undo-timer" aria-hidden="true"></span>}
                   </div>
               )}
 
