@@ -595,6 +595,7 @@
             { id: 'cat_design', label: 'Design', color: '#405DE6' },
             { id: 'cat_evento', label: 'Evento', color: '#FFDC80' }
         ];
+        const STANDARD_CATEGORY_IDS = STANDARD_CATEGORIES.map(category => category.id);
 
         const DEFAULT_STATUS_PIPELINE = {
             'criacao': { label: 'Criação', bg: '#3B82F6', text: '#FFFFFF' }, 
@@ -1304,7 +1305,7 @@
           const [colorOptions, setColorOptions] = useState([]);
           const [statusPipeline, setStatusPipeline] = useState(DEFAULT_STATUS_PIPELINE);
           
-          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+          const [newEvent, setNewEvent] = useState({ day: '', text: '', color: '', categoryId: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           const [newCategory, setNewCategory] = useState({ label: '', color: '#3b82f6' });
           const [sendToUpliGeral, setSendToUpliGeral] = useState(true); 
           
@@ -1313,7 +1314,7 @@
           const [editColorValue, setEditColorValue] = useState('');
 
           const [editingEventIndex, setEditingEventIndex] = useState(null);
-          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+          const [editEventForm, setEditEventForm] = useState({ day: '', text: '', color: '', categoryId: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           
           const [eventStatuses, setEventStatuses] = useState({});
           const [companies, setCompanies] = useState([]);
@@ -1836,6 +1837,7 @@
               evt.updatedBy = currentUserName;
               evt.updatedAt = new Date().toISOString();
               saveToCloud({ events: updatedEvents });
+              propagateCentralToCompanies([evt], item => ({ ...item, status: evt.status, updatedBy: evt.updatedBy, updatedAt: evt.updatedAt }));
 
               if (selectedCompany !== UPLI_GERAL_ID) {
                   const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
@@ -1901,21 +1903,121 @@
             return ((r * 299 + g * 587 + b * 114) / 1000) > 155 ? '#000000' : '#ffffff';
           };
 
+          // UPLI Geral: empresa e categoria de serviço são escolhas separadas.
+          // O post continua usando `color` = id da empresa (cor/legenda/filtros) e guarda a categoria em `categoryId`.
+          const getCentralCompanyOptions = () => (Array.isArray(colorOptions) ? colorOptions : [])
+              .filter(option => !STANDARD_CATEGORY_IDS.includes(option.id));
+          const getCompanyCategoryOptions = (companyId) => {
+              const company = companies.find(item => item.id === companyId && item.id !== UPLI_GERAL_ID);
+              return company && Array.isArray(company.categories) && company.categories.length > 0
+                  ? company.categories
+                  : STANDARD_CATEGORIES;
+          };
+          const splitCentralCategoryPrefix = (text, companyId, preferredCategoryId) => {
+              const categories = getCompanyCategoryOptions(companyId);
+              let cleanText = text || '';
+              let categoryId = categories.some(category => category.id === preferredCategoryId) ? preferredCategoryId : '';
+              const lowerText = cleanText.toLowerCase();
+              const prefixed = [...categories]
+                  .filter(category => category.label)
+                  .sort((a, b) => b.label.length - a.label.length)
+                  .find(category => lowerText.startsWith(`${category.label.toLowerCase()}:`));
+              if (prefixed) {
+                  if (!categoryId) categoryId = prefixed.id;
+                  cleanText = cleanText.substring(prefixed.label.length + 1).trim();
+              }
+              return { text: cleanText, categoryId };
+          };
+          const buildCentralEventFields = (form) => {
+              if (!getCentralCompanyOptions().some(option => option.id === form.color)) {
+                  return { error: 'Escolha a empresa do post!' };
+              }
+              const category = getCompanyCategoryOptions(form.color).find(item => item.id === form.categoryId);
+              if (!category) return { error: 'Escolha a categoria do post!' };
+              const { text } = splitCentralCategoryPrefix(form.text, form.color, category.id);
+              return { text: `${category.label}: ${text}`, categoryId: category.id, categoryLabel: category.label };
+          };
+
+          // Ligação UPLI Geral -> empresa: a cópia na empresa usa o id sem "_clone".
+          const canonicalEventId = value => String(value || '').replace(/_clone$/, '');
+          const buildCompanyEventFromCentral = (centralEvent, companyId) => {
+              const { sourceCompanyId: _source, categoryId, categoryLabel: _label, _origIdx, _key, ...rest } = centralEvent;
+              const parsed = splitCentralCategoryPrefix(centralEvent.text, companyId, categoryId);
+              return { ...rest, id: canonicalEventId(centralEvent.id), text: parsed.text, color: parsed.categoryId || categoryId || '' };
+          };
+          const updateCompanyEvents = (companyId, mutate) => {
+              if (!companyId || companyId === UPLI_GERAL_ID) return Promise.resolve();
+              const ref = db.collection('companies').doc(companyId);
+              return db.runTransaction(async transaction => {
+                  const snapshot = await transaction.get(ref);
+                  if (!snapshot.exists) return;
+                  const currentEvents = Array.isArray(snapshot.data().events) ? snapshot.data().events : [];
+                  const nextEvents = mutate([...currentEvents]);
+                  if (nextEvents) transaction.update(ref, { events: nextEvents });
+              }).catch(error => console.error('Falha ao sincronizar com a empresa:', error));
+          };
+          const addCompanyCopy = (companyId, companyEvent) => updateCompanyEvents(companyId, currentEvents => {
+              if (currentEvents.some(item => canonicalEventId(item.id) === companyEvent.id)) return null;
+              return [...currentEvents, companyEvent];
+          });
+          // Aplica uma mudança feita no UPLI Geral nas cópias das empresas. `change` devolve o evento atualizado ou null para apagar.
+          const propagateCentralToCompanies = (centralEvents, change) => {
+              if (selectedCompany !== UPLI_GERAL_ID) return Promise.resolve();
+              const byCompany = {};
+              centralEvents.forEach(centralEvent => {
+                  const companyId = centralEvent?.sourceCompanyId;
+                  if (!companyId || companyId === UPLI_GERAL_ID) return;
+                  (byCompany[companyId] = byCompany[companyId] || []).push(centralEvent);
+              });
+              return Promise.all(Object.entries(byCompany).map(([companyId, linked]) => updateCompanyEvents(companyId, currentEvents => {
+                  let changed = false;
+                  const nextEvents = [];
+                  currentEvents.forEach(item => {
+                      const centralEvent = linked.find(entry => canonicalEventId(entry.id) === canonicalEventId(item.id));
+                      if (!centralEvent) { nextEvents.push(item); return; }
+                      changed = true;
+                      const result = change(item, centralEvent);
+                      if (result) nextEvents.push(result);
+                  });
+                  return changed ? nextEvents : null;
+              })));
+          };
+
           const addEvent = async () => {
             const dayNum = parseInt(newEvent.day);
             const daysInCurrentMonth = getDaysInMonth(year, month);
             if (!newEvent.day || !newEvent.text || !newEvent.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
-            
+
+            const { categoryId: _formCategoryId, ...baseNewEvent } = newEvent;
+            let centralFields = {};
+            if (selectedCompany === UPLI_GERAL_ID) {
+                centralFields = buildCentralEventFields(newEvent);
+                if (centralFields.error) return alert(centralFields.error);
+            }
+
             const eventId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-            const eventToAdd = { 
-                ...newEvent, 
+            const eventToAdd = {
+                ...baseNewEvent,
+                ...centralFields,
                 id: eventId,
-                status: null, 
+                status: null,
                 day: dayNum, month: month, year: year,
                 createdBy: currentUserName,
                 createdAt: new Date().toISOString()
             };
+
+            if (selectedCompany === UPLI_GERAL_ID) {
+                // Criado no UPLI Geral: salva aqui como cópia ligada e cria o original na aba da empresa.
+                const companyId = eventToAdd.color;
+                const centralEvent = { ...eventToAdd, id: `${eventId}_clone`, sourceCompanyId: companyId, createdInCentral: true };
+                const companyEvent = buildCompanyEventFromCentral(centralEvent, companyId);
+                await saveToCloud({ events: [...events, centralEvent] });
+                await addCompanyCopy(companyId, companyEvent);
+                await queueAssignmentNotice(companyEvent, companyId);
+                setNewEvent({ day: '', text: '', color: '', categoryId: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+                return;
+            }
 
             const updatedEvents = [...events, eventToAdd];
             await saveToCloud({ events: updatedEvents });
@@ -1933,7 +2035,7 @@
                     db.collection('companies').doc(UPLI_GERAL_ID).set({ events: [...upliGeral.events, clonedEvent] }, { merge: true });
                 }
             }
-            setNewEvent({ day: '', text: '', color: colorOptions.length > 0 ? colorOptions[0].id : '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
+            setNewEvent({ day: '', text: '', color: selectedCompany === UPLI_GERAL_ID ? '' : (colorOptions.length > 0 ? colorOptions[0].id : ''), categoryId: '', startTime: '', endTime: '', notes: '', imageUrl: '', responsibleId: '', responsible: '', responsiblePhone: '', responsibleEmail: '' });
           };
 
           const removeEvent = (index) => {
@@ -1941,8 +2043,9 @@
                   const evToRemove = events[index];
                   const updatedEvents = events.filter((_, i) => i !== index);
                   saveToCloud({ events: updatedEvents });
-                  setEditingEventIndex(null); 
-                  
+                  setEditingEventIndex(null);
+                  if (evToRemove?.createdInCentral) propagateCentralToCompanies([evToRemove], () => null);
+
                   if (selectedCompany !== UPLI_GERAL_ID) {
                       const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
                       if (upliGeral) {
@@ -1967,8 +2070,21 @@
                  }
             }
 
+            let colorToEdit = event.color || '';
+            let categoryToEdit = '';
+            if (selectedCompany === UPLI_GERAL_ID) {
+                // Posts antigos criados no UPLI Geral usavam a categoria no lugar da empresa.
+                if (STANDARD_CATEGORY_IDS.includes(colorToEdit)) {
+                    categoryToEdit = colorToEdit;
+                    colorToEdit = '';
+                }
+                const parsed = splitCentralCategoryPrefix(textToEdit, colorToEdit, event.categoryId || categoryToEdit);
+                textToEdit = parsed.text;
+                categoryToEdit = parsed.categoryId;
+            }
+
             setEditEventForm({
-                day: event.day || '', text: textToEdit, color: event.color || '', startTime: event.startTime || '', endTime: event.endTime || '', notes: event.notes || '', imageUrl: event.imageUrl || '',
+                day: event.day || '', text: textToEdit, color: colorToEdit, categoryId: categoryToEdit, startTime: event.startTime || '', endTime: event.endTime || '', notes: event.notes || '', imageUrl: event.imageUrl || '',
                 responsibleId: event.responsibleId || '', responsible: event.responsible || '', responsiblePhone: event.responsiblePhone || '', responsibleEmail: event.responsibleEmail || ''
             });
           };
@@ -2015,21 +2131,57 @@
             if (!editEventForm.day || !editEventForm.text || !editEventForm.color) return alert('Preencha os campos obrigatórios!');
             if (dayNum < 1 || dayNum > daysInCurrentMonth) return alert(`Dia inválido!`);
 
+            let centralFields = {};
+            if (selectedCompany === UPLI_GERAL_ID) {
+                centralFields = buildCentralEventFields(editEventForm);
+                if (centralFields.error) return alert(centralFields.error);
+            }
+
             const previousEvt = events[editingEventIndex];
             const updatedEvt = {
                 ...previousEvt,
-                day: dayNum, text: editEventForm.text, color: editEventForm.color, startTime: editEventForm.startTime || '', endTime: editEventForm.endTime || '', notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
+                ...centralFields,
+                day: dayNum, text: centralFields.text || editEventForm.text, color: editEventForm.color, startTime: editEventForm.startTime || '', endTime: editEventForm.endTime || '', notes: editEventForm.notes, imageUrl: editEventForm.imageUrl,
                 responsibleId: editEventForm.responsibleId || '', responsible: editEventForm.responsible.trim(),
                 responsiblePhone: editEventForm.responsiblePhone || '', responsibleEmail: editEventForm.responsibleEmail || '',
                 updatedBy: currentUserName, updatedAt: new Date().toISOString()
             };
 
+            const isCentralEdit = selectedCompany === UPLI_GERAL_ID;
+            const previousCompanyId = isCentralEdit ? (previousEvt.sourceCompanyId || '') : '';
+            if (isCentralEdit) {
+                // Posts antigos do UPLI Geral sem ligação passam a ter cópia na empresa escolhida.
+                if (!previousCompanyId) updatedEvt.createdInCentral = true;
+                updatedEvt.sourceCompanyId = updatedEvt.color;
+            }
+
             const updatedEvents = [...events];
             updatedEvents[editingEventIndex] = updatedEvt;
             await saveToCloud({ events: updatedEvents });
+
+            let companyEvent = null;
+            if (isCentralEdit) {
+                const companyId = updatedEvt.sourceCompanyId;
+                companyEvent = buildCompanyEventFromCentral(updatedEvt, companyId);
+                const linkedId = canonicalEventId(updatedEvt.id);
+                if (previousCompanyId && previousCompanyId !== companyId) {
+                    await updateCompanyEvents(previousCompanyId, currentEvents => currentEvents.filter(item => canonicalEventId(item.id) !== linkedId));
+                }
+                await updateCompanyEvents(companyId, currentEvents => {
+                    const index = currentEvents.findIndex(item => canonicalEventId(item.id) === linkedId);
+                    if (index === -1) return [...currentEvents, companyEvent];
+                    const { id: _id, status: _status, statusHistory: _history, trello: _trello, createdBy: _createdBy, createdAt: _createdAt, ...editableFields } = companyEvent;
+                    currentEvents[index] = { ...currentEvents[index], ...editableFields };
+                    return currentEvents;
+                });
+            }
+
             const responsibleChanged = previousEvt.responsibleId !== updatedEvt.responsibleId ||
                 previousEvt.responsible !== updatedEvt.responsible;
-            if (responsibleChanged) await queueAssignmentNotice(updatedEvt);
+            if (responsibleChanged) {
+                if (companyEvent) await queueAssignmentNotice(companyEvent, updatedEvt.sourceCompanyId);
+                else await queueAssignmentNotice(updatedEvt);
+            }
 
             if (selectedCompany !== UPLI_GERAL_ID) {
                 const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
@@ -2041,7 +2193,7 @@
                     const catName = selectedCat ? selectedCat.label : '';
                     const isEvento = editEventForm.color === 'cat_evento' || catName.toLowerCase().includes('evento');
 
-                    if (isEvento) {
+                    if (isEvento && !(linkedIdx !== -1 && upliEvents[linkedIdx].createdInCentral)) {
                         if (linkedIdx !== -1) {
                             upliEvents.splice(linkedIdx, 1);
                             db.collection('companies').doc(UPLI_GERAL_ID).set({ events: upliEvents }, { merge: true });
@@ -2054,6 +2206,7 @@
                             }
                             upliEvents[linkedIdx] = {
                                 ...upliEvents[linkedIdx],
+                                ...(selectedCat ? { categoryId: selectedCat.id, categoryLabel: selectedCat.label } : {}),
                                 day: updatedEvt.day,
                                 text: newText,
                                 startTime: updatedEvt.startTime || '',
@@ -2093,6 +2246,7 @@
               updatedEvents[originalIndex].updatedBy = currentUserName;
               updatedEvents[originalIndex].updatedAt = new Date().toISOString();
               saveToCloud({ events: updatedEvents });
+              propagateCentralToCompanies([updatedEvents[originalIndex]], item => ({ ...item, day: targetDay, updatedBy: currentUserName, updatedAt: updatedEvents[originalIndex].updatedAt }));
 
               if (selectedCompany !== UPLI_GERAL_ID) {
                   const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
@@ -2249,6 +2403,16 @@
                   updatedAt: new Date().toISOString()
               };
               saveToCloud({ events: updatedEvents });
+              const movedEvent = updatedEvents[originalIndex];
+              propagateCentralToCompanies([movedEvent], item => ({
+                  ...item,
+                  ...timeUpdate,
+                  day: movedEvent.day,
+                  month: movedEvent.month,
+                  year: movedEvent.year,
+                  updatedBy: movedEvent.updatedBy,
+                  updatedAt: movedEvent.updatedAt
+              }));
 
               if (selectedCompany !== UPLI_GERAL_ID) {
                   const centralCalendar = companies.find(company => company.id === UPLI_GERAL_ID);
@@ -2852,8 +3016,9 @@
                       const key = e.id || `legacy_${idx}`;
                       return !keysToRemove.includes(key);
                   });
-                  
+
                   saveToCloud({ events: updatedEvents });
+                  propagateCentralToCompanies(eventsToRemove.filter(item => item.createdInCentral), () => null);
 
                   if (selectedCompany !== UPLI_GERAL_ID) {
                       const upliGeral = companies.find(c => c.id === UPLI_GERAL_ID);
@@ -4111,12 +4276,31 @@
                                       <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center gap-1">🔗 Link da Arte</label>
                                       <input type="url" value={editEventForm.imageUrl} onChange={e=>setEditEventForm({...editEventForm, imageUrl: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg text-sm outline-none dark:bg-gray-700 dark:text-white" placeholder="https://..."/>
                                   </div>
-                                  <div>
-                                      <label className="block text-xs font-bold text-gray-500 mb-1">Categoria</label>
-                                      <select value={editEventForm.color} onChange={e=>setEditEventForm({...editEventForm, color: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
-                                          {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                      </select>
-                                  </div>
+                                  {isCentral ? (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          <div>
+                                              <label className="block text-xs font-bold text-gray-500 mb-1">Empresa</label>
+                                              <select value={getCentralCompanyOptions().some(c => c.id === editEventForm.color) ? editEventForm.color : ''} onChange={e=>setEditEventForm({...editEventForm, color: e.target.value, categoryId: getCompanyCategoryOptions(e.target.value).some(c => c.id === editEventForm.categoryId) ? editEventForm.categoryId : ''})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
+                                                  <option value="">Escolher empresa...</option>
+                                                  {getCentralCompanyOptions().map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                              </select>
+                                          </div>
+                                          <div>
+                                              <label className="block text-xs font-bold text-gray-500 mb-1">Categoria</label>
+                                              <select value={getCompanyCategoryOptions(editEventForm.color).some(c => c.id === editEventForm.categoryId) ? editEventForm.categoryId : ''} onChange={e=>setEditEventForm({...editEventForm, categoryId: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
+                                                  <option value="">Escolher categoria...</option>
+                                                  {getCompanyCategoryOptions(editEventForm.color).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                              </select>
+                                          </div>
+                                      </div>
+                                  ) : (
+                                      <div>
+                                          <label className="block text-xs font-bold text-gray-500 mb-1">Categoria</label>
+                                          <select value={editEventForm.color} onChange={e=>setEditEventForm({...editEventForm, color: e.target.value})} className="w-full border-2 border-gray-300 dark:border-gray-600 p-2 rounded-lg font-bold outline-none dark:bg-gray-700 dark:text-white">
+                                              {colorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                          </select>
+                                      </div>
+                                  )}
                               </div>
                           ) : (
                               <div className="space-y-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
@@ -4673,11 +4857,24 @@
                         )}
 
                         <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                            <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
-                              <option value="">Escolher categoria...</option>
-                              {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
-                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day} className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-8 py-2 font-black w-full sm:w-auto shadow-md hover:bg-green-700 transition uppercase tracking-wide">Postar</button>
+                            {isCentral ? (
+                              <>
+                                <select aria-label="Empresa" value={getCentralCompanyOptions().some(c => c.id === newEvent.color) ? newEvent.color : ''} onChange={e => setNewEvent({...newEvent, color: e.target.value, categoryId: getCompanyCategoryOptions(e.target.value).some(c => c.id === newEvent.categoryId) ? newEvent.categoryId : ''})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
+                                  <option value="">Escolher empresa...</option>
+                                  {getCentralCompanyOptions().map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                </select>
+                                <select aria-label="Categoria" value={getCompanyCategoryOptions(newEvent.color).some(c => c.id === newEvent.categoryId) ? newEvent.categoryId : ''} onChange={e => setNewEvent({...newEvent, categoryId: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
+                                  <option value="">Escolher categoria...</option>
+                                  {getCompanyCategoryOptions(newEvent.color).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                </select>
+                              </>
+                            ) : (
+                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
+                                <option value="">Escolher categoria...</option>
+                                {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                              </select>
+                            )}
+                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day || (isCentral && !newEvent.categoryId)}className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-8 py-2 font-black w-full sm:w-auto shadow-md hover:bg-green-700 transition uppercase tracking-wide">Postar</button>
                         </div>
                       </div>
                     </div>
