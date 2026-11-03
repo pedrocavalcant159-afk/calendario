@@ -110,19 +110,209 @@
             background-image: linear-gradient(rgba(23,33,43,.035) 1px, transparent 1px);
             background-size: 100% 32px;
         }
+        /* ===== Cabeçalho e bancada (mesmo sistema visual do calendário) ===== */
+        .dark .desk-scope { --surface: #17212b; --paper: #101820; --ink: #eef3f7; --muted: #aab7c3; --line: #33414e; --line-strong: #566574; }
         .studio-header {
             background: var(--surface);
+            color: var(--ink);
             border: 1px solid var(--line-strong);
             border-top: 5px solid var(--ink);
             border-radius: 2px;
-            box-shadow: none;
+            box-shadow: 10px 10px 0 rgba(23,33,43,.07);
         }
-        .admin-workbench [data-tutorial="companies"],
-        .admin-workbench [data-tutorial="categories"],
-        .admin-workbench [data-tutorial="add-post"] {
-            border-color: var(--line-strong) !important;
-            border-radius: 2px !important;
-            box-shadow: none !important;
+        .desk-header-top { display: flex; align-items: center; justify-content: space-between; gap: 20px 32px; flex-wrap: wrap; padding: 20px 24px; }
+        .desk-brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+        .desk-date-mark {
+            display: grid; grid-template-rows: auto 1fr; place-items: center; flex: none;
+            width: 50px; height: 56px; border: 2px solid var(--ink); color: var(--ink);
+            font-size: 22px; font-weight: 700; line-height: 1; box-shadow: 4px 4px 0 var(--line);
+        }
+        .desk-date-mark span { width: 100%; padding: 3px 0; background: var(--ink); color: var(--surface); font-size: 8px; letter-spacing: .14em; text-align: center; }
+        .desk-title { margin: 2px 0 4px; color: var(--ink); font-size: clamp(22px, 2.3vw, 30px); font-weight: 700; letter-spacing: -.035em; line-height: 1.05; }
+        .desk-online { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }
+        .desk-online::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #2e6b57; box-shadow: 0 0 0 3px rgba(46,107,87,.15); }
+        .desk-account { display: flex; align-items: center; gap: 8px; }
+
+        .desk-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            min-height: 38px; padding: 0 14px;
+            border: 1px solid var(--line-strong); border-radius: 2px;
+            background: var(--surface); color: var(--ink);
+            font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer;
+            transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+        }
+        .desk-btn:hover { border-color: var(--ink); background: var(--paper); }
+        .desk-btn.primary { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+        .desk-btn.primary:hover { border-color: var(--work); background: var(--work); color: #fff; transform: translateY(-1px); }
+        .desk-btn.icon { width: 38px; padding: 0; }
+        .desk-btn.danger:hover { border-color: #b94b4b; background: #fff4f4; color: #8d2929; }
+        .desk-btn:disabled { border-color: var(--line); background: var(--paper); color: var(--muted); cursor: not-allowed; transform: none; }
+
+        .desk-user {
+            display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 3px 12px 3px 3px;
+            border: 1px solid var(--line-strong); border-radius: 2px; background: var(--surface); color: var(--ink);
+            cursor: pointer; text-align: left; transition: border-color .16s ease, background .16s ease;
+        }
+        .desk-user:hover { border-color: var(--ink); background: var(--paper); }
+        .desk-avatar { display: grid; place-items: center; width: 32px; height: 32px; background: var(--ink); color: var(--surface); font-size: 14px; font-weight: 700; }
+        .desk-user-text { display: grid; line-height: 1.15; }
+        .desk-user-text strong { font-size: 13px; }
+        .desk-role { font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+        .desk-role.is-master { color: #a0670a; }
+        .desk-role.is-admin { color: var(--work); }
+        .desk-role.is-client { color: #2e6b57; }
+        .dark .desk-role.is-master { color: #f3c560; }
+        .dark .desk-role.is-admin { color: #8fb4ec; }
+        .desk-user-edit { margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 700; }
+
+        .desk-toolbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap;
+            padding: 10px 24px; border-top: 1px solid var(--line-strong);
+            background: linear-gradient(rgba(47,94,168,.035) 1px, transparent 1px), var(--paper);
+            background-size: 100% 24px;
+        }
+        .desk-toolgroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .desk-toolgroup-label, .desk-panel-index {
+            color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+        }
+        .desk-toolgroup-label { margin-right: 4px; }
+        .desk-segment { display: inline-flex; }
+        .desk-segment .desk-btn + .desk-btn { margin-left: -1px; }
+
+        .admin-workbench {
+            display: grid;
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+            grid-template-areas: "companies post" "settings settings";
+            gap: 24px;
+            align-items: stretch;
+        }
+        .desk-area-companies { grid-area: companies; display: flex; flex-direction: column; }
+        .desk-area-companies .desk-company-list { flex: 1; max-height: 460px; }
+        .desk-area-settings { align-self: start; }
+        .desk-area-post { grid-area: post; }
+        .desk-area-settings { grid-area: settings; }
+        .desk-panel {
+            background: var(--surface); color: var(--ink);
+            border: 1px solid var(--line-strong); border-radius: 2px;
+            box-shadow: 10px 10px 0 rgba(23,33,43,.05);
+        }
+        .desk-panel-head {
+            display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+            padding: 16px 20px 14px; border-bottom: 1px solid var(--line-strong);
+        }
+        .desk-panel-head h3 { margin: 3px 0 0; color: var(--ink); font-size: 19px; font-weight: 700; letter-spacing: -.025em; }
+        .desk-panel-meta { color: var(--muted); font-size: 12px; text-align: right; }
+        .desk-panel-body { padding: 18px 20px; }
+
+        .desk-input {
+            width: 100%; min-height: 40px; padding: 8px 11px;
+            border: 1px solid var(--line-strong); border-radius: 2px;
+            background: var(--surface); color: var(--ink); font-size: 14px;
+            transition: border-color .16s ease, box-shadow .16s ease;
+        }
+        .desk-input::placeholder { color: var(--muted); opacity: .75; }
+        .desk-input:hover { border-color: var(--ink); }
+        .desk-input:focus { border-color: var(--work); box-shadow: inset 0 0 0 1px var(--work); }
+        .desk-textarea { min-height: 64px; resize: vertical; }
+        .dark .desk-input { color-scheme: dark; }
+
+        .desk-form { display: grid; gap: 14px; }
+        .desk-row { display: grid; gap: 12px; }
+        .desk-row.cols-day { grid-template-columns: 84px minmax(0, 1fr); }
+        .desk-row.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .desk-row.cols-3 { grid-template-columns: 1fr 1fr minmax(0, 1.6fr); }
+        .desk-field { display: grid; gap: 6px; min-width: 0; }
+        .desk-field > span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+        .desk-field > span em { margin-left: 6px; font-style: normal; font-weight: 400; letter-spacing: .04em; text-transform: none; opacity: .8; }
+        .desk-submit-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            margin-top: 2px; padding-top: 14px; border-top: 1px solid var(--line);
+        }
+        .desk-submit { min-width: 150px; min-height: 42px; letter-spacing: .08em; text-transform: uppercase; }
+        .desk-hint { color: var(--muted); font-size: 12px; }
+        .desk-check-inline { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+        .desk-check-inline input { width: 16px; height: 16px; accent-color: var(--work); cursor: pointer; }
+        .desk-panel-body > .desk-check-inline { margin-top: 12px; }
+
+        .desk-inline-form { display: flex; gap: 8px; }
+        .desk-inline-form .desk-input { flex: 1; }
+        .desk-color {
+            display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 40px; padding: 0 8px;
+            border: 1px solid var(--line-strong); border-radius: 2px; background: var(--surface); cursor: pointer;
+        }
+        .desk-color input[type="color"], .desk-status-item input[type="color"], .desk-chip input[type="color"] {
+            width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 2px; background: none; cursor: pointer;
+        }
+        .desk-color input[type="text"] { width: 64px; border: 0; background: transparent; color: var(--ink); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .desk-color.compact { min-height: 36px; }
+        .desk-color.compact input[type="text"] { width: 58px; font-size: 11px; }
+
+        .desk-company-list { max-height: 330px; overflow-y: auto; border-top: 1px solid var(--line-strong); }
+        .desk-company { display: flex; align-items: center; min-height: 48px; padding-right: 10px; border-bottom: 1px solid var(--line); transition: background .16s ease; }
+        .desk-company:last-child { border-bottom: 0; }
+        .desk-company:hover { background: var(--paper); }
+        .desk-company.active { background: color-mix(in srgb, var(--work) 8%, var(--surface)); box-shadow: inset 4px 0 0 var(--work); }
+        .desk-company-open {
+            display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; padding: 13px 20px;
+            border: 0; background: transparent; color: var(--ink); font-size: 14px; font-weight: 700; text-align: left; cursor: pointer;
+        }
+        .desk-company-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(23,33,43,.15); }
+        .desk-company-dot.central { border-radius: 1px; background: var(--ink); transform: rotate(45deg); }
+        .desk-tag { flex: none; padding: 2px 6px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+        .desk-company-actions { display: flex; gap: 2px; opacity: .45; transition: opacity .16s ease; }
+        .desk-company:hover .desk-company-actions, .desk-company:focus-within .desk-company-actions, .desk-company.active .desk-company-actions { opacity: 1; }
+        .desk-company-edit { display: flex; align-items: center; gap: 6px; flex: 1; padding: 6px 0 6px 12px; }
+        .desk-company-edit .desk-btn { min-height: 36px; padding: 0 10px; }
+        .desk-company-edit .desk-input { min-height: 36px; }
+
+        .desk-mini {
+            display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none;
+            border: 1px solid transparent; border-radius: 2px; background: transparent; color: var(--muted);
+            font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer;
+            transition: border-color .16s ease, background .16s ease, color .16s ease;
+        }
+        .desk-mini:hover { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
+        .desk-mini.danger:hover { border-color: #b94b4b; background: #fff4f4; color: #8d2929; }
+
+        .desk-settings { display: grid; gap: 16px; }
+        .desk-settings .desk-inline-form { max-width: 620px; }
+        .desk-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .desk-chip {
+            display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 2px 2px 2px 10px;
+            border: 1px solid var(--line-strong); border-radius: 2px; background: var(--surface); color: var(--ink);
+            font-size: 13px; font-weight: 700;
+        }
+        .desk-chip .desk-mini { width: 26px; height: 26px; font-size: 13px; }
+        .desk-chip-swatch { width: 10px; height: 10px; margin-right: 4px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(23,33,43,.15); }
+        .desk-chip.editing { gap: 6px; padding-left: 6px; border-color: var(--work); }
+        .desk-chip-input { width: 110px; min-height: 26px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 700; }
+
+        .desk-status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+        .desk-status-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 2px; cursor: pointer; transition: border-color .16s ease; }
+        .desk-status-item:hover { border-color: var(--line-strong); }
+        .desk-status-item input[type="color"] { width: 26px; height: 26px; }
+        .desk-status-text { display: grid; line-height: 1.2; min-width: 0; }
+        .desk-status-text strong { font-size: 12px; }
+        .desk-status-text input { width: 72px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+
+        @media (max-width: 1023px) {
+            .admin-workbench { grid-template-columns: minmax(0, 1fr); grid-template-areas: "companies" "post" "settings"; }
+        }
+        @media (max-width: 640px) {
+            .desk-header-top, .desk-toolbar { padding-left: 16px; padding-right: 16px; }
+            .desk-account { width: 100%; }
+            .desk-account .desk-user { flex: 1; }
+            .desk-user-edit { display: none; }
+            .desk-toolgroup-label { width: 100%; }
+            .desk-panel { box-shadow: 5px 5px 0 rgba(23,33,43,.05); }
+            .desk-panel-head, .desk-panel-body { padding-left: 16px; padding-right: 16px; }
+            .desk-company-open { padding-left: 16px; }
+            .desk-row.cols-2, .desk-row.cols-3 { grid-template-columns: 1fr 1fr; }
+            .desk-row.cols-3 > :last-child { grid-column: 1 / -1; }
+            .desk-inline-form { flex-wrap: wrap; }
+            .desk-inline-form .desk-input { flex-basis: 100%; }
+            .desk-inline-form .desk-btn { flex: 1; }
+            .desk-submit { width: 100%; }
         }
 
         .system-page, .auth-shell, .system-loading {
@@ -3634,8 +3824,10 @@
                       {
                           target: '[data-tutorial="categories"]',
                           icon: '\uD83C\uDFA8',
-                          title: 'Categorias',
-                          text: 'Cadastre e personalize categorias como Reels, Fotos e Stories. Elas definem a identificação visual dos posts.'
+                          title: selectedCompany === UPLI_GERAL_ID ? 'Cores dos status' : 'Categorias',
+                          text: selectedCompany === UPLI_GERAL_ID
+                              ? 'No UPLI Geral, a categoria de cada post vem da empresa escolhida. Aqui você personaliza as cores dos status de produção.'
+                              : 'Cadastre e personalize categorias como Reels, Fotos e Stories. Elas definem a identificação visual dos posts.'
                       },
                       {
                           target: '[data-tutorial="add-post"]',
@@ -4628,257 +4820,274 @@
 
               <div className="max-w-[1600px] mx-auto space-y-6">
                 
-                <div data-tutorial="header" className="studio-header dark:bg-gray-800 p-4 md:p-6 transition-colors duration-300">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    
-                    <div className="flex items-center w-full justify-between">
-                        <div>
-                          <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 text-gray-800 dark:text-white">
-                            <CalendarDays /> Calendário UPLI
-                          </h1>
-                          <p className="text-xs text-green-600 font-bold mt-2 flex items-center gap-1"><DatabaseIcon /> Nuvem Online</p>
-                        </div>
-                        
-                        <div className="flex md:hidden items-center gap-2">
-                            <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition shadow-sm">
-                                {darkMode ? '☀️' : '🌙'}
-                            </button>
-                            <button onClick={() => setShowProfileModal(true)} className="p-2 rounded-full bg-blue-100 dark:bg-gray-700 text-blue-600 dark:text-blue-300 text-xl transition shadow-sm">
-                                👤
-                            </button>
-                            <button onClick={handleLogout} className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg p-2 transition shadow-sm"><LogOut /></button>
-                        </div>
+                <header data-tutorial="header" className="studio-header desk-scope">
+                  <div className="desk-header-top">
+                    <div className="desk-brand">
+                      <span className="desk-date-mark" aria-hidden="true">
+                        <span>{new Date().toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase()}</span>
+                        {new Date().getDate()}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="precision-eyebrow">Agenda de conteúdo</span>
+                        <h1 className="desk-title">Calendário UPLI</h1>
+                        <span className="desk-online">Nuvem online</span>
+                      </div>
                     </div>
-                    
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-start md:justify-end">
 
-                      <button onClick={() => setShowTutorialMenu(true)} className="w-full md:w-auto bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-sky-200 dark:hover:bg-sky-900 transition flex items-center justify-center gap-2" title="Abrir central de tutoriais">
-                          ❓ Tutorial
+                    <div className="desk-account">
+                      <button type="button" onClick={toggleDarkMode} className="desk-btn icon" title={darkMode ? 'Usar tema claro' : 'Usar tema escuro'} aria-label={darkMode ? 'Usar tema claro' : 'Usar tema escuro'}>
+                        {darkMode ? (
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
+                        ) : (
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+                        )}
                       </button>
-
-                      {userRole === 'master' && (
-                          <button onClick={() => setShowRolesModal(true)} className="w-full md:w-auto bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-yellow-500 transition flex items-center justify-center gap-2">
-                              <KeyIcon /> Acessos
-                          </button>
-                      )}
-
-                      {isAdmin && (
-                          <button onClick={() => setShowTeamModal(true)} className="w-full md:w-auto bg-blue-700 text-white font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-blue-800 transition flex items-center justify-center gap-2">
-                              👥 Equipe
-                          </button>
-                      )}
-
-                      <div className="hidden md:flex items-center gap-2">
-                          <button onClick={toggleDarkMode} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-xl transition hover:scale-110 shadow-sm" title="Alternar Tema">
-                              {darkMode ? '☀️' : '🌙'}
-                          </button>
-                          <div className="flex items-center gap-3 mr-2 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 px-4 py-2 rounded-xl shadow-sm">
-                              <div className="bg-blue-200 dark:bg-gray-600 text-blue-700 dark:text-blue-300 w-8 h-8 flex items-center justify-center rounded-full text-lg">👤</div>
-                              <div className="flex flex-col leading-tight">
-                                  <span className="text-sm font-black text-gray-800 dark:text-white">{currentUserName}</span>
-                                  <span className={`text-[10px] font-bold uppercase tracking-widest ${userRole === 'master' ? 'text-yellow-600 dark:text-yellow-400' : userRole === 'admin' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-                                      {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Admin' : 'Cliente'}
-                                  </span>
-                              </div>
-                              <button onClick={() => setShowProfileModal(true)} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition p-1 ml-1"><Edit2/></button>
-                          </div>
-                      </div>
-
-                      <div data-tutorial="image-exports" className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
-                          <button onClick={exportAsImage} className="flex-1 md:flex-none justify-center bg-purple-600 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-700 transition flex items-center gap-1 shadow-sm"><ImageIcon /> PNG</button>
-                          <button onClick={exportAsPDF} className="flex-1 md:flex-none justify-center bg-purple-800 text-white rounded-lg px-3 py-3 md:py-2 text-sm font-bold hover:bg-purple-900 transition flex items-center gap-1 shadow-sm"><PDFIcon /> PDF HD</button>
-                          <button onClick={handleLogout} className="hidden md:flex bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-sm font-bold hover:bg-red-200 dark:hover:bg-red-800 transition items-center gap-1 shadow-sm"><LogOut /> Sair</button>
-                      </div>
-
+                      <button type="button" onClick={() => setShowProfileModal(true)} className="desk-user" title="Editar perfil">
+                        <span className="desk-avatar" aria-hidden="true">{(currentUserName || '?').trim().charAt(0).toUpperCase()}</span>
+                        <span className="desk-user-text">
+                          <strong>{currentUserName}</strong>
+                          <span className={`desk-role ${userRole === 'master' ? 'is-master' : userRole === 'admin' ? 'is-admin' : 'is-client'}`}>
+                            {userRole === 'master' ? 'Master' : userRole === 'admin' ? 'Admin' : 'Cliente'}
+                          </span>
+                        </span>
+                        <span className="desk-user-edit" aria-hidden="true">Editar</span>
+                      </button>
+                      <button type="button" onClick={handleLogout} className="desk-btn danger">Sair</button>
                     </div>
                   </div>
-                </div>
+
+                  <div className="desk-toolbar">
+                    <div className="desk-toolgroup">
+                      <span className="desk-toolgroup-label">Ferramentas</span>
+                      <button type="button" onClick={() => setShowTutorialMenu(true)} className="desk-btn" title="Abrir central de tutoriais">Tutorial</button>
+                      {userRole === 'master' && (
+                        <button type="button" onClick={() => setShowRolesModal(true)} className="desk-btn">Acessos</button>
+                      )}
+                      {isAdmin && (
+                        <button type="button" onClick={() => setShowTeamModal(true)} className="desk-btn">Equipe</button>
+                      )}
+                    </div>
+                    <div data-tutorial="image-exports" className="desk-toolgroup">
+                      <span className="desk-toolgroup-label">Exportar</span>
+                      <div className="desk-segment">
+                        <button type="button" onClick={exportAsImage} className="desk-btn">PNG</button>
+                        <button type="button" onClick={exportAsPDF} className="desk-btn primary">PDF HD</button>
+                      </div>
+                    </div>
+                  </div>
+                </header>
 
                 {isAdmin && (
-                <div className="admin-workbench grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div data-tutorial="companies" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                      <h3 className="font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-2">🏢 Gerenciar Empresas</h3>
-                      <div className="flex flex-col gap-2 mb-4">
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
-                                <input type="color" value={newCompanyColor} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" title="Cor da Empresa no Calendário Central" />
-                                <input type="text" value={newCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                            </div>
-                            <input type="text" placeholder="Nome da nova empresa..." value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} className="flex-1 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                            <button onClick={addCompany} className="bg-gray-800 dark:bg-gray-600 text-white rounded-lg px-4 py-2 font-bold hover:bg-black dark:hover:bg-gray-500 transition w-full sm:w-auto">Adicionar</button>
-                        </div>
-                        {user.email.toLowerCase() === MEU_EMAIL_MASTER && (
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-300 cursor-pointer w-fit p-1">
-                                <input type="checkbox" checked={newCompanyIsPrivate} onChange={e => setNewCompanyIsPrivate(e.target.checked)} className="w-4 h-4 cursor-pointer accent-gray-800" />
-                                🔒 Criar como Calendário Oculto (Só eu vejo)
-                            </label>
-                        )}
+                <div className="admin-workbench desk-scope">
+                  <section data-tutorial="companies" className="desk-panel desk-area-companies">
+                    <div className="desk-panel-head">
+                      <div>
+                        <span className="desk-panel-index">01 · Calendários</span>
+                        <h3>Empresas</h3>
                       </div>
-                      <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                          {companies.map(company => (
-                                <div key={company.id} className={`flex items-center justify-between border-2 rounded-lg p-2 ${selectedCompany === company.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900' : 'border-gray-200 bg-gray-50 dark:bg-gray-900 dark:border-gray-700'}`}>
-                                    {editingCompany === company.id ? (
-                                        <div className="flex flex-1 items-center gap-2 mr-2">
-                                            {company.id !== UPLI_GERAL_ID && (
-                                                <div className="flex items-center gap-1 border-2 border-gray-300 dark:border-gray-600 rounded p-1 bg-white dark:bg-gray-700 shrink-0">
-                                                    <input type="color" value={editCompanyColor} onChange={e=>handleHexChange(e.target.value, setEditCompanyColor)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" title="Alterar Cor da Empresa" />
-                                                    <input type="text" value={editCompanyColor.toUpperCase()} onChange={e=>handleHexChange(e.target.value, setEditCompanyColor)} className="w-14 text-[10px] font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                                                </div>
-                                            )}
-                                            <input type="text" value={editCompanyName} onChange={e=>setEditCompanyName(e.target.value)} className="w-full border-2 border-blue-400 rounded px-2 py-1 text-black font-bold outline-none" />
-                                            <button onClick={saveEditCompany} className="bg-green-500 text-white px-3 py-1 rounded font-bold hover:bg-green-600">✓</button>
-                                            <button onClick={cancelEditCompany} className="bg-gray-400 text-white px-3 py-1 rounded font-bold hover:bg-gray-500">X</button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 font-bold cursor-pointer dark:text-white px-2 py-1 flex items-center gap-2" onClick={() => setSelectedCompany(company.id)}>
-                                            {company.id !== UPLI_GERAL_ID && (
-                                                <div className="w-4 h-4 rounded-full shadow-inner border border-gray-300 dark:border-gray-600" style={{backgroundColor: company.color}}></div>
-                                            )}
-                                            {company.id === UPLI_GERAL_ID ? '👑 ' : ''}{company.name}
-                                            {company.isPrivate && <span title="Calendário Oculto">🔒</span>}
-                                        </div>
-                                    )}
-                                    
-                                    <div className="flex items-center gap-1">
-                                        {company.id !== UPLI_GERAL_ID && (
-                                            <button onClick={() => startEditCompany(company)} className="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition"><Edit2 /></button>
-                                        )}
-                                        {company.id !== UPLI_GERAL_ID && (
-                                            <button onClick={() => removeCompany(company.id)} className="text-red-500 hover:text-red-700 bg-red-100 hover:bg-red-200 p-2 rounded-lg transition ml-1"><Trash2 /></button>
-                                        )}
-                                    </div>
-                                </div>
-                          ))}
-                      </div>
+                      <span className="desk-panel-meta">{companies.filter(c => c.id !== UPLI_GERAL_ID).length} empresas</span>
                     </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div data-tutorial="categories" className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-blue-200 dark:border-gray-700">
-                      <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">🎨 Categorias do Calendário</h3>
-                      {!isCentral ? (
-                          <>
-                              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                                <input type="text" placeholder="Nova Categoria..." value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} className="flex-1 border-2 border-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                                <div className="flex gap-2">
-                                    <div className="flex items-center gap-1 border-2 border-blue-200 dark:border-gray-600 rounded-lg p-1 bg-white dark:bg-gray-700 shrink-0">
-                                        <input type="color" value={newCategory.color} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
-                                        <input type="text" value={newCategory.color.toUpperCase()} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                                    </div>
-                                    <button onClick={addCategory} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-bold w-full sm:w-auto hover:bg-blue-700">Adicionar</button>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {safeColorOptions.map(color => {
-                                    if (editingColor === color.id) {
-                                        return (
-                                            <div key={color.id} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-blue-300 dark:border-blue-600 shadow-inner">
-                                                <input type="color" value={editColorValue} onChange={e => handleHexChange(e.target.value, setEditColorValue)} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
-                                                <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="w-24 text-xs font-bold border border-gray-300 dark:border-gray-600 rounded px-2 py-1 outline-none text-black dark:text-white dark:bg-gray-700" />
-                                                <button onClick={saveEditCategory} className="bg-green-500 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-green-600">✓</button>
-                                                <button onClick={cancelEditCategory} className="bg-gray-400 text-white rounded px-2 py-1 text-xs font-bold shadow-sm hover:bg-gray-500">X</button>
-                                            </div>
-                                        );
-                                    }
-                                    return (
-                                        <div key={color.id} style={{backgroundColor: color.color, color: getTextColor(color.color)}} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold shadow-sm group transition-transform hover:scale-105">
-                                          {color.label}
-                                          <div className="flex items-center ml-1 border-l border-white border-opacity-30 pl-1 gap-1">
-                                              <button onClick={() => startEditCategory(color)} className="opacity-70 hover:opacity-100 font-black text-[10px] drop-shadow-md" title="Editar Nome/Cor">✏️</button>
-                                              <button onClick={() => removeCategory(color.id)} className="opacity-70 hover:opacity-100 font-black text-[12px] drop-shadow-md" title="Apagar">×</button>
-                                          </div>
-                                        </div>
-                                    );
-                                })}
-                              </div>
-                          </>
-                      ) : (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 italic">As categorias do UPLI Geral são geradas automaticamente com base no nome das outras empresas criadas.</p>
+                    <div className="desk-panel-body">
+                      <div className="desk-inline-form">
+                        <label className="desk-color" title="Cor da empresa no calendário central">
+                          <input type="color" value={newCompanyColor} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} aria-label="Cor da nova empresa" />
+                          <input type="text" value={newCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setNewCompanyColor)} maxLength={7} aria-label="Código da cor" />
+                        </label>
+                        <input type="text" placeholder="Nome da nova empresa" value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCompany(); }} className="desk-input" />
+                        <button type="button" onClick={addCompany} className="desk-btn primary">Adicionar</button>
+                      </div>
+                      {user.email.toLowerCase() === MEU_EMAIL_MASTER && (
+                        <label className="desk-check-inline">
+                          <input type="checkbox" checked={newCompanyIsPrivate} onChange={e => setNewCompanyIsPrivate(e.target.checked)} />
+                          Criar como calendário oculto (só eu vejo)
+                        </label>
                       )}
                     </div>
-
-                    {isCentral && (
-                        <div className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-orange-200 dark:border-gray-700">
-                            <h3 className="font-bold text-orange-600 dark:text-orange-400 mb-3 flex items-center gap-2">🚥 Personalizar Cores dos Status</h3>
-                            <div className="flex flex-wrap gap-4">
-                                {Object.entries(statusPipeline).map(([key, val]) => (
-                                    <div key={key} className="flex flex-col gap-1">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">{val.label}</label>
-                                        <div className="flex items-center gap-1 border-2 border-gray-200 dark:border-gray-600 rounded-lg p-1 bg-gray-50 dark:bg-gray-900">
-                                            <input type="color" value={val.bg} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} className="w-6 h-6 rounded cursor-pointer border-0 p-0" />
-                                            <input type="text" value={val.bg.toUpperCase()} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} className="w-16 text-xs font-bold outline-none bg-transparent dark:text-white uppercase text-center" maxLength={7} />
-                                        </div>
-                                    </div>
-                                ))}
+                    <div className="desk-company-list">
+                      {companies.map(company => (
+                        <div key={company.id} className={`desk-company ${selectedCompany === company.id ? 'active' : ''}`}>
+                          {editingCompany === company.id ? (
+                            <div className="desk-company-edit">
+                              {company.id !== UPLI_GERAL_ID && (
+                                <label className="desk-color compact">
+                                  <input type="color" value={editCompanyColor} onChange={e => handleHexChange(e.target.value, setEditCompanyColor)} aria-label="Cor da empresa" />
+                                  <input type="text" value={editCompanyColor.toUpperCase()} onChange={e => handleHexChange(e.target.value, setEditCompanyColor)} maxLength={7} aria-label="Código da cor" />
+                                </label>
+                              )}
+                              <input type="text" value={editCompanyName} onChange={e => setEditCompanyName(e.target.value)} className="desk-input" aria-label="Nome da empresa" />
+                              <button type="button" onClick={saveEditCompany} className="desk-btn primary">Salvar</button>
+                              <button type="button" onClick={cancelEditCompany} className="desk-btn">Cancelar</button>
                             </div>
-                            <p className="text-xs text-gray-400 mt-3 italic">* As cores alteradas aqui refletirão em todos os calendários automaticamente.</p>
+                          ) : (
+                            <>
+                              <button type="button" className="desk-company-open" onClick={() => setSelectedCompany(company.id)} aria-pressed={selectedCompany === company.id}>
+                                {company.id === UPLI_GERAL_ID
+                                  ? <span className="desk-company-dot central" aria-hidden="true"></span>
+                                  : <span className="desk-company-dot" style={{ backgroundColor: company.color }} aria-hidden="true"></span>}
+                                <span className="truncate">{company.name}</span>
+                                {company.id === UPLI_GERAL_ID && <span className="desk-tag">Central</span>}
+                                {company.isPrivate && <span className="desk-tag">Oculto</span>}
+                              </button>
+                              {company.id !== UPLI_GERAL_ID && (
+                                <div className="desk-company-actions">
+                                  <button type="button" onClick={() => startEditCompany(company)} className="desk-mini" title={`Editar ${company.name}`} aria-label={`Editar ${company.name}`}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
+                                  </button>
+                                  <button type="button" onClick={() => removeCompany(company.id)} className="desk-mini danger" title={`Apagar ${company.name}`} aria-label={`Apagar ${company.name}`}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                    )}
+                      ))}
+                    </div>
+                  </section>
 
-                    <div data-tutorial="add-post" className="col-span-1 lg:col-span-2 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-md border border-green-200 dark:border-gray-700">
-                      <h3 className="font-bold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">📌 Adicionar Post</h3>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <input type="number" placeholder="Dia" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="w-full sm:w-20 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center font-bold outline-none" />
-                            <input type="text" placeholder="Título do Post..." value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none w-full" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">INÍCIO
-                                <input type="time" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} className="mt-1 block w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm outline-none" />
-                            </label>
-                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">FIM
-                                <input type="time" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} className="mt-1 block w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm outline-none" />
-                            </label>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">RESPONSÁVEL PELO POST</label>
-                            <select value={responsibleFormValue(newEvent)} onChange={e => assignResponsible(newEvent, setNewEvent, e.target.value)} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none">
-                                <option value="">Sem responsável</option>
-                                {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · {member.whatsappGroup || 'grupo não configurado'}</option>)}
+                  <section data-tutorial="add-post" className="desk-panel desk-area-post">
+                    <div className="desk-panel-head">
+                      <div>
+                        <span className="desk-panel-index">02 · Produção</span>
+                        <h3>Novo post</h3>
+                      </div>
+                      <span className="desk-panel-meta">em {companies.find(c => c.id === selectedCompany)?.name || 'calendário'}</span>
+                    </div>
+                    <div className="desk-panel-body desk-form">
+                      <div className="desk-row cols-day">
+                        <label className="desk-field">
+                          <span>Dia</span>
+                          <input type="number" min="1" max="31" placeholder="00" value={newEvent.day} onChange={e => setNewEvent({...newEvent, day: e.target.value})} className="desk-input text-center font-bold" />
+                        </label>
+                        <label className="desk-field">
+                          <span>Título do post</span>
+                          <input type="text" placeholder="Ex.: Bastidores da gravação" value={newEvent.text} onChange={e => setNewEvent({...newEvent, text: e.target.value})} className="desk-input" />
+                        </label>
+                      </div>
+
+                      {isCentral ? (
+                        <div className="desk-row cols-2">
+                          <label className="desk-field">
+                            <span>Empresa</span>
+                            <select value={getCentralCompanyOptions().some(c => c.id === newEvent.color) ? newEvent.color : ''} onChange={e => setNewEvent({...newEvent, color: e.target.value, categoryId: getCompanyCategoryOptions(e.target.value).some(c => c.id === newEvent.categoryId) ? newEvent.categoryId : ''})} className="desk-input">
+                              <option value="">Escolher empresa...</option>
+                              {getCentralCompanyOptions().map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                             </select>
+                          </label>
+                          <label className="desk-field">
+                            <span>Categoria</span>
+                            <select value={getCompanyCategoryOptions(newEvent.color).some(c => c.id === newEvent.categoryId) ? newEvent.categoryId : ''} onChange={e => setNewEvent({...newEvent, categoryId: e.target.value})} className="desk-input">
+                              <option value="">Escolher categoria...</option>
+                              {getCompanyCategoryOptions(newEvent.color).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                          </label>
                         </div>
-                        
-                        <textarea placeholder="Anotações / Roteiro..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="w-full border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 outline-none text-sm h-12 resize-none"></textarea>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border-2 border-green-200 dark:border-gray-600 flex items-center gap-2">
-                            <span className="text-xl">🔗</span>
-                            <div className="flex-1">
-                                <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400">Link da Imagem / Arte (Opcional)</label>
-                                <input type="url" placeholder="Cole o link do Drive, Canva, etc..." value={newEvent.imageUrl} onChange={(e) => setNewEvent({...newEvent, imageUrl: e.target.value})} className="w-full text-xs text-gray-800 dark:text-white p-1 border-b outline-none bg-transparent dark:border-gray-600" />
-                            </div>
-                        </div>
+                      ) : (
+                        <label className="desk-field">
+                          <span>Categoria</span>
+                          <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="desk-input">
+                            <option value="">Escolher categoria...</option>
+                            {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                          </select>
+                        </label>
+                      )}
 
-                        {!isCentral && (
-                            <label className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer bg-blue-50 dark:bg-gray-900 p-2 rounded-lg border border-blue-100 dark:border-gray-600">
-                                <input type="checkbox" checked={sendToUpliGeral} onChange={e => setSendToUpliGeral(e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                                Enviar cópia para o Calendário Central (UPLI Geral)
-                            </label>
+                      <div className="desk-row cols-3">
+                        <label className="desk-field">
+                          <span>Início</span>
+                          <input type="time" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} className="desk-input" />
+                        </label>
+                        <label className="desk-field">
+                          <span>Fim</span>
+                          <input type="time" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} className="desk-input" />
+                        </label>
+                        <label className="desk-field">
+                          <span>Responsável</span>
+                          <select value={responsibleFormValue(newEvent)} onChange={e => assignResponsible(newEvent, setNewEvent, e.target.value)} className="desk-input">
+                            <option value="">Sem responsável</option>
+                            {activeTeamMembers.map(member => <option key={member.id} value={member.id}>{member.name} · {member.whatsappGroup || 'grupo não configurado'}</option>)}
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className="desk-field">
+                        <span>Anotações / roteiro</span>
+                        <textarea placeholder="Ideias, roteiro, referências..." value={newEvent.notes} onChange={e => setNewEvent({...newEvent, notes: e.target.value})} className="desk-input desk-textarea"></textarea>
+                      </label>
+
+                      <label className="desk-field">
+                        <span>Link da arte <em>opcional</em></span>
+                        <input type="url" placeholder="Cole o link do Drive, Canva..." value={newEvent.imageUrl} onChange={e => setNewEvent({...newEvent, imageUrl: e.target.value})} className="desk-input" />
+                      </label>
+
+                      <div className="desk-submit-row">
+                        {!isCentral ? (
+                          <label className="desk-check-inline">
+                            <input type="checkbox" checked={sendToUpliGeral} onChange={e => setSendToUpliGeral(e.target.checked)} />
+                            Enviar cópia para o UPLI Geral
+                          </label>
+                        ) : (
+                          <span className="desk-hint">O post também aparece na aba da empresa escolhida.</span>
                         )}
-
-                        <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                            {isCentral ? (
-                              <>
-                                <select aria-label="Empresa" value={getCentralCompanyOptions().some(c => c.id === newEvent.color) ? newEvent.color : ''} onChange={e => setNewEvent({...newEvent, color: e.target.value, categoryId: getCompanyCategoryOptions(e.target.value).some(c => c.id === newEvent.categoryId) ? newEvent.categoryId : ''})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
-                                  <option value="">Escolher empresa...</option>
-                                  {getCentralCompanyOptions().map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                </select>
-                                <select aria-label="Categoria" value={getCompanyCategoryOptions(newEvent.color).some(c => c.id === newEvent.categoryId) ? newEvent.categoryId : ''} onChange={e => setNewEvent({...newEvent, categoryId: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
-                                  <option value="">Escolher categoria...</option>
-                                  {getCompanyCategoryOptions(newEvent.color).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                </select>
-                              </>
-                            ) : (
-                              <select value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} className="flex-1 border-2 border-green-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 font-bold w-full outline-none">
-                                <option value="">Escolher categoria...</option>
-                                {safeColorOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                              </select>
-                            )}
-                            <button onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day || (isCentral && !newEvent.categoryId)}className="bg-green-600 disabled:bg-gray-400 text-white rounded-lg px-8 py-2 font-black w-full sm:w-auto shadow-md hover:bg-green-700 transition uppercase tracking-wide">Postar</button>
-                        </div>
+                        <button type="button" onClick={addEvent} disabled={!newEvent.color || !newEvent.text || !newEvent.day || (isCentral && !newEvent.categoryId)} className="desk-btn primary desk-submit">Postar</button>
                       </div>
                     </div>
-                  </div>
+                  </section>
+
+                  <section data-tutorial="categories" className="desk-panel desk-area-settings">
+                    <div className="desk-panel-head">
+                      <div>
+                        <span className="desk-panel-index">03 · Identidade</span>
+                        <h3>{isCentral ? 'Cores dos status' : 'Categorias'}</h3>
+                      </div>
+                      <span className="desk-panel-meta">{isCentral ? 'Vale para todos os calendários' : 'Deste calendário'}</span>
+                    </div>
+                    <div className="desk-panel-body">
+                      {!isCentral ? (
+                        <div className="desk-settings">
+                          <div className="desk-inline-form">
+                            <input type="text" placeholder="Nova categoria" value={newCategory.label} onChange={e => setNewCategory({...newCategory, label: e.target.value})} onKeyDown={e => { if (e.key === 'Enter') addCategory(); }} className="desk-input" />
+                            <label className="desk-color">
+                              <input type="color" value={newCategory.color} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} aria-label="Cor da nova categoria" />
+                              <input type="text" value={newCategory.color.toUpperCase()} onChange={e => handleHexChange(e.target.value, val => setNewCategory({...newCategory, color: val}))} maxLength={7} aria-label="Código da cor" />
+                            </label>
+                            <button type="button" onClick={addCategory} className="desk-btn primary">Adicionar</button>
+                          </div>
+                          <div className="desk-chip-list">
+                            {safeColorOptions.map(color => editingColor === color.id ? (
+                              <div key={color.id} className="desk-chip editing">
+                                <input type="color" value={editColorValue} onChange={e => handleHexChange(e.target.value, setEditColorValue)} aria-label="Cor da categoria" />
+                                <input type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} className="desk-chip-input" aria-label="Nome da categoria" />
+                                <button type="button" onClick={saveEditCategory} className="desk-mini" title="Salvar" aria-label="Salvar categoria">✓</button>
+                                <button type="button" onClick={cancelEditCategory} className="desk-mini" title="Cancelar" aria-label="Cancelar edição">×</button>
+                              </div>
+                            ) : (
+                              <div key={color.id} className="desk-chip">
+                                <span className="desk-chip-swatch" style={{ backgroundColor: color.color }} aria-hidden="true"></span>
+                                {color.label}
+                                <button type="button" onClick={() => startEditCategory(color)} className="desk-mini" title={`Editar ${color.label}`} aria-label={`Editar ${color.label}`}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/></svg>
+                                </button>
+                                <button type="button" onClick={() => removeCategory(color.id)} className="desk-mini danger" title={`Apagar ${color.label}`} aria-label={`Apagar ${color.label}`}>×</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="desk-status-grid">
+                          {Object.entries(statusPipeline).map(([key, val]) => (
+                            <label key={key} className="desk-status-item">
+                              <input type="color" value={val.bg} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} aria-label={`Cor de ${val.label}`} />
+                              <span className="desk-status-text">
+                                <strong>{val.label}</strong>
+                                <input type="text" value={val.bg.toUpperCase()} onChange={(e) => handleHexChange(e.target.value, v => updateStatusColor(key, v))} maxLength={7} aria-label={`Código da cor de ${val.label}`} />
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
                 </div>
                 )}
 
