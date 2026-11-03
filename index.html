@@ -295,6 +295,37 @@
         .desk-status-text strong { font-size: 12px; }
         .desk-status-text input { width: 72px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 
+        .desk-link-notice {
+            padding: 7px 11px; border: 1px solid #d9a441; border-left-width: 4px; border-radius: 2px;
+            background: #fff8e7; color: #7a4a07; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer;
+        }
+        .desk-link-notice:hover { background: #fdefc8; }
+        .dark .desk-link-notice { background: #2a2112; color: #f7d899; }
+        .desk-link-modal { display: flex; flex-direction: column; width: 100%; max-width: 980px; max-height: calc(100vh - 32px); color: var(--ink); }
+        .desk-link-intro { margin: 0; padding: 14px 20px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.5; }
+        .desk-link-list { flex: 1; overflow-y: auto; }
+        .desk-link-row {
+            display: grid; grid-template-columns: 18px 82px minmax(0, 1fr) 190px 170px; align-items: center; gap: 12px;
+            padding: 9px 20px; border-bottom: 1px solid var(--line);
+        }
+        .desk-link-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--work); cursor: pointer; }
+        .desk-link-row .desk-input { min-height: 36px; padding: 6px 9px; font-size: 13px; }
+        .desk-link-row.is-off { opacity: .5; }
+        .desk-link-row.is-missing { background: #fff8e7; box-shadow: inset 4px 0 0 #d9a441; }
+        .dark .desk-link-row.is-missing { background: #2a2112; }
+        .desk-link-date { color: var(--muted); font-size: 12px; font-weight: 700; }
+        .desk-link-title { overflow: hidden; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        .desk-link-footer {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            padding: 14px 20px; border-top: 1px solid var(--line-strong); background: var(--paper);
+        }
+        @media (max-width: 760px) {
+            .desk-link-row { grid-template-columns: 18px minmax(0, 1fr); row-gap: 6px; padding: 12px 16px; }
+            .desk-link-date { grid-column: 2; }
+            .desk-link-title { grid-column: 2; white-space: normal; }
+            .desk-link-row select { grid-column: 2; }
+        }
+
         @media (max-width: 1023px) {
             .admin-workbench { grid-template-columns: minmax(0, 1fr); grid-template-areas: "companies" "post" "settings"; }
         }
@@ -1547,6 +1578,8 @@
           const [selectedEvents, setSelectedEvents] = useState([]); 
           
           const [showImportModal, setShowImportModal] = useState(false);
+          const [linkDrafts, setLinkDrafts] = useState(null);
+          const [linkingCentral, setLinkingCentral] = useState(false);
           const [importTargetCompany, setImportTargetCompany] = useState('');
           const [importFile, setImportFile] = useState(null);
           const [importToCentral, setImportToCentral] = useState(true); 
@@ -2135,17 +2168,19 @@
               const parsed = splitCentralCategoryPrefix(centralEvent.text, companyId, categoryId);
               return { ...rest, id: canonicalEventId(centralEvent.id), text: parsed.text, color: parsed.categoryId || categoryId || '' };
           };
-          const updateCompanyEvents = (companyId, mutate) => {
+          const runCompanyEventsTransaction = (companyId, mutate) => {
               if (!companyId || companyId === UPLI_GERAL_ID) return Promise.resolve();
               const ref = db.collection('companies').doc(companyId);
               return db.runTransaction(async transaction => {
                   const snapshot = await transaction.get(ref);
-                  if (!snapshot.exists) return;
+                  if (!snapshot.exists) throw new Error('A empresa não existe mais.');
                   const currentEvents = Array.isArray(snapshot.data().events) ? snapshot.data().events : [];
                   const nextEvents = mutate([...currentEvents]);
                   if (nextEvents) transaction.update(ref, { events: nextEvents });
-              }).catch(error => console.error('Falha ao sincronizar com a empresa:', error));
+              });
           };
+          const updateCompanyEvents = (companyId, mutate) => runCompanyEventsTransaction(companyId, mutate)
+              .catch(error => console.error('Falha ao sincronizar com a empresa:', error));
           const addCompanyCopy = (companyId, companyEvent) => updateCompanyEvents(companyId, currentEvents => {
               if (currentEvents.some(item => canonicalEventId(item.id) === companyEvent.id)) return null;
               return [...currentEvents, companyEvent];
@@ -2171,6 +2206,109 @@
                   });
                   return changed ? nextEvents : null;
               })));
+          };
+
+          // Posts antigos criados direto no UPLI Geral, sem cópia em nenhuma empresa.
+          const getUnlinkedCentralEvents = () => selectedCompany === UPLI_GERAL_ID
+              ? (Array.isArray(events) ? events : []).map((event, index) => ({ event, index })).filter(({ event }) => event && !event.sourceCompanyId)
+              : [];
+          const openCentralLinkTool = () => {
+              const companyOptions = getCentralCompanyOptions();
+              const drafts = getUnlinkedCentralEvents().map(({ event, index }) => {
+                  const companyId = companyOptions.some(option => option.id === event.color) ? event.color : '';
+                  const legacyCategory = STANDARD_CATEGORY_IDS.includes(event.color) ? event.color : '';
+                  const parsed = splitCentralCategoryPrefix(event.text, companyId, event.categoryId || legacyCategory);
+                  return {
+                      key: event.id || `legacy_${index}`,
+                      index,
+                      title: parsed.text || 'Post sem título',
+                      date: `${String(event.day || '').padStart(2, '0')}/${String(Number(event.month) + 1).padStart(2, '0')}/${event.year || ''}`,
+                      companyId,
+                      categoryId: parsed.categoryId,
+                      include: true
+                  };
+              }).sort((a, b) => {
+                  const ea = events[a.index], eb = events[b.index];
+                  return (Number(ea.year) - Number(eb.year)) || (Number(ea.month) - Number(eb.month)) || (Number(ea.day) - Number(eb.day));
+              });
+              setLinkDrafts(drafts);
+          };
+          const updateLinkDraft = (key, changes) => setLinkDrafts(current => (current || []).map(draft => {
+              if (draft.key !== key) return draft;
+              const next = { ...draft, ...changes };
+              if (changes.companyId !== undefined && !getCompanyCategoryOptions(next.companyId).some(category => category.id === next.categoryId)) {
+                  next.categoryId = '';
+              }
+              return next;
+          }));
+          const applyCentralLinks = async () => {
+              const ready = (linkDrafts || []).filter(draft => draft.include && draft.companyId && draft.categoryId);
+              if (ready.length === 0) return alert('Escolha a empresa e a categoria de pelo menos um post.');
+              setLinkingCentral(true);
+              try {
+                  const updatesByKey = {};
+                  const additionsByCompany = {};
+                  ready.forEach(draft => {
+                      const original = events[draft.index];
+                      if (!original) return;
+                      const category = getCompanyCategoryOptions(draft.companyId).find(item => item.id === draft.categoryId);
+                      if (!category) return;
+                      const id = original.id || (Date.now().toString() + Math.random().toString(36).substr(2, 5));
+                      const centralEvent = {
+                          ...original,
+                          id,
+                          color: draft.companyId,
+                          sourceCompanyId: draft.companyId,
+                          createdInCentral: true,
+                          categoryId: category.id,
+                          categoryLabel: category.label,
+                          text: `${category.label}: ${draft.title}`,
+                          updatedBy: currentUserName,
+                          updatedAt: new Date().toISOString()
+                      };
+                      updatesByKey[draft.key] = centralEvent;
+                      (additionsByCompany[draft.companyId] = additionsByCompany[draft.companyId] || []).push(buildCompanyEventFromCentral(centralEvent, draft.companyId));
+                  });
+
+                  // 1) Grava as cópias nas empresas (sem duplicar se já existir).
+                  //    Se uma empresa falhar, os posts dela continuam sem ligação no UPLI Geral.
+                  const failedCompanies = [];
+                  for (const [companyId, additions] of Object.entries(additionsByCompany)) {
+                      try {
+                          await runCompanyEventsTransaction(companyId, currentEvents => {
+                              const existing = new Set(currentEvents.map(item => canonicalEventId(item.id)));
+                              const fresh = additions.filter(item => !existing.has(item.id));
+                              return fresh.length ? [...currentEvents, ...fresh] : null;
+                          });
+                      } catch (error) {
+                          console.error('Falha ao enviar para a empresa', companyId, error);
+                          failedCompanies.push(companyId);
+                          Object.keys(updatesByKey).forEach(key => { if (updatesByKey[key].sourceCompanyId === companyId) delete updatesByKey[key]; });
+                      }
+                  }
+                  if (Object.keys(updatesByKey).length === 0) throw new Error('nenhuma empresa aceitou a gravação.');
+
+                  // 2) Marca os posts do UPLI Geral como ligados, relendo o documento para não perder mudanças recentes.
+                  const centralRef = db.collection('companies').doc(UPLI_GERAL_ID);
+                  await db.runTransaction(async transaction => {
+                      const snapshot = await transaction.get(centralRef);
+                      if (!snapshot.exists) return;
+                      const currentEvents = Array.isArray(snapshot.data().events) ? snapshot.data().events : [];
+                      const nextEvents = currentEvents.map((item, index) => updatesByKey[item.id || `legacy_${index}`] || item);
+                      transaction.update(centralRef, { events: nextEvents });
+                  });
+
+                  const skipped = (linkDrafts || []).length - Object.keys(updatesByKey).length;
+                  setLinkDrafts(null);
+                  const failedNames = failedCompanies.map(id => companies.find(company => company.id === id)?.name || id);
+                  alert(`${Object.keys(updatesByKey).length} post(s) enviados para as empresas.`
+                      + (skipped > 0 ? ` ${skipped} continuam no UPLI Geral sem empresa.` : '')
+                      + (failedNames.length ? ` Não foi possível gravar em: ${failedNames.join(', ')}.` : ''));
+              } catch (error) {
+                  alert('Não foi possível enviar os posts: ' + (error.message || error));
+              } finally {
+                  setLinkingCentral(false);
+              }
           };
 
           const addEvent = async () => {
@@ -4413,6 +4551,64 @@
                   </div>
               )}
 
+              {linkDrafts && (
+                  <div className="studio-overlay fixed inset-0 flex items-center justify-center z-[100] p-3 md:p-6">
+                      <div role="dialog" aria-modal="true" aria-label="Enviar posts antigos às empresas" className="studio-modal desk-scope desk-link-modal">
+                          <div className="desk-panel-head">
+                              <div>
+                                  <span className="desk-panel-index">UPLI Geral · Organização</span>
+                                  <h3>Enviar posts antigos às empresas</h3>
+                              </div>
+                              <button type="button" onClick={() => setLinkDrafts(null)} className="desk-mini" aria-label="Fechar">×</button>
+                          </div>
+                          {linkDrafts.length === 0 ? (
+                              <div className="desk-panel-body">
+                                  <p className="desk-hint">Todos os posts do UPLI Geral já estão ligados às empresas. Nada para enviar.</p>
+                              </div>
+                          ) : (
+                              <>
+                                  <p className="desk-link-intro">
+                                      Estes posts foram criados direto no UPLI Geral e não estão no calendário de nenhuma empresa.
+                                      Confira a empresa e a categoria de cada um. Os que ficarem desmarcados ou sem empresa continuam só no UPLI Geral.
+                                  </p>
+                                  <div className="desk-link-list">
+                                      {linkDrafts.map(draft => {
+                                          const missing = draft.include && (!draft.companyId || !draft.categoryId);
+                                          return (
+                                              <div key={draft.key} className={`desk-link-row ${draft.include ? '' : 'is-off'} ${missing ? 'is-missing' : ''}`}>
+                                                  <input type="checkbox" checked={draft.include} onChange={e => updateLinkDraft(draft.key, { include: e.target.checked })} aria-label={`Incluir ${draft.title}`} />
+                                                  <span className="desk-link-date">{draft.date}</span>
+                                                  <span className="desk-link-title" title={draft.title}>{draft.title}</span>
+                                                  <select value={draft.companyId} onChange={e => updateLinkDraft(draft.key, { companyId: e.target.value })} className="desk-input" aria-label="Empresa" disabled={!draft.include}>
+                                                      <option value="">Escolher empresa...</option>
+                                                      {getCentralCompanyOptions().map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                                  </select>
+                                                  <select value={draft.categoryId} onChange={e => updateLinkDraft(draft.key, { categoryId: e.target.value })} className="desk-input" aria-label="Categoria" disabled={!draft.include}>
+                                                      <option value="">Escolher categoria...</option>
+                                                      {getCompanyCategoryOptions(draft.companyId).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                                  </select>
+                                              </div>
+                                          );
+                                      })}
+                                  </div>
+                                  <div className="desk-link-footer">
+                                      <span className="desk-hint">
+                                          {linkDrafts.filter(d => d.include && d.companyId && d.categoryId).length} de {linkDrafts.length} prontos para enviar
+                                          {linkDrafts.some(d => d.include && (!d.companyId || !d.categoryId)) ? ' · os destacados precisam de empresa/categoria' : ''}
+                                      </span>
+                                      <div className="flex gap-2">
+                                          <button type="button" onClick={() => setLinkDrafts(null)} className="desk-btn">Cancelar</button>
+                                          <button type="button" onClick={applyCentralLinks} disabled={linkingCentral || !linkDrafts.some(d => d.include && d.companyId && d.categoryId)} className="desk-btn primary">
+                                              {linkingCentral ? 'Enviando...' : 'Enviar para as empresas'}
+                                          </button>
+                                      </div>
+                                  </div>
+                              </>
+                          )}
+                      </div>
+                  </div>
+              )}
+
               {editingEventIndex !== null && !isSelectionMode && (
                   <div className="studio-overlay fixed inset-0 flex items-center justify-center z-50 p-4 z-[100]">
                       <div role="dialog" aria-modal="true" aria-label="Detalhes do evento" className="studio-modal bg-white dark:bg-gray-800 p-6 max-w-md w-full relative max-h-[95vh] overflow-y-auto">
@@ -5026,6 +5222,10 @@
                             <input type="checkbox" checked={sendToUpliGeral} onChange={e => setSendToUpliGeral(e.target.checked)} />
                             Enviar cópia para o UPLI Geral
                           </label>
+                        ) : getUnlinkedCentralEvents().length > 0 ? (
+                          <button type="button" onClick={openCentralLinkTool} className="desk-link-notice">
+                            {getUnlinkedCentralEvents().length} post(s) antigos sem empresa · Revisar e enviar
+                          </button>
                         ) : (
                           <span className="desk-hint">O post também aparece na aba da empresa escolhida.</span>
                         )}
@@ -5194,6 +5394,7 @@
                                   <span className="precision-rail-label">Ferramentas</span>
                                   <button className="precision-filter" onClick={handleSelectionToggle}><span>□</span>{isSelectionMode ? 'Cancelar seleção' : 'Selecionar'}</button>
                                   <button className="precision-filter" onClick={() => setShowImportModal(true)}><span>↓</span>Importar arquivo</button>
+                                  {isCentral && <button className="precision-filter" onClick={openCentralLinkTool}><span>⇄</span>Posts sem empresa</button>}
                                   <button className="precision-filter" onClick={openTrelloIntegration}><span>↗</span>Enviar ao Trello</button>
                                   <button className="precision-filter" onClick={() => setShowAutomationModal(true)}><span>⚙</span>Automação</button>
                                   <button className="precision-filter text-red-700 dark:text-red-300" onClick={rescueUpliGeral}><span>↺</span>Recuperar central</button>
